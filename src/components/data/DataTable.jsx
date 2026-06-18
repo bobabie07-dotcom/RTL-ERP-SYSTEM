@@ -1,4 +1,5 @@
 import React from 'react';
+import { EmptyState } from '../core/EmptyState';
 
 /**
  * RTL Poultry Farming ERP — DataTable
@@ -27,7 +28,11 @@ export function DataTable({ columns = [], rows = [], rowKey = 'id', style = {} }
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => (
+          {rows.length === 0 ? (
+            <tr><td colSpan={columns.length} style={{ padding: 0, border: 'none' }}>
+              <EmptyState />
+            </td></tr>
+          ) : rows.map((row, i) => (
             <tr
               key={row[rowKey] != null ? row[rowKey] : i}
               style={{ transition: 'background var(--dur-fast)' }}

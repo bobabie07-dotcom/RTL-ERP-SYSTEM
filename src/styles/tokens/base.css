@@ -33,3 +33,12 @@ a:hover { color: var(--green-600); }
 .tnum { font-variant-numeric: tabular-nums; }
 
 ::selection { background: var(--green-100); color: var(--green-800); }
+
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes pageFadeIn { from { opacity: 1; } to { opacity: 1; } }
+}

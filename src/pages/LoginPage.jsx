@@ -40,6 +40,12 @@ export default function LoginPage() {
         overflow: 'hidden',
       }}>
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(7,31,17,0.86) 0%, rgba(7,31,17,0.62) 100%)' }} />
+        {/* Subtle dot pattern */}
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.06,
+          backgroundImage: `radial-gradient(circle, #4ade80 1px, transparent 1px)`,
+          backgroundSize: '28px 28px',
+        }} />
         <div style={{ position: 'relative' }}>
           <img src="/logo-lockup-dark.png" alt="RTL Poultry Farming ERP" style={{ height: 56 }} />
         </div>
