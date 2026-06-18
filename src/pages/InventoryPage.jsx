@@ -10,18 +10,7 @@ import Icons from '../icons';
 
 const I = Icons;
 
-const ITEMS = [
-  { id: 1, name: 'Broiler Starter Feed (50kg)', category: 'Feed', qty: 340, unit: 'bags', reorder: 50, lastUpdated: 'May 12, 2025', status: 'In Stock' },
-  { id: 2, name: 'Broiler Finisher Feed (50kg)', category: 'Feed', qty: 210, unit: 'bags', reorder: 50, lastUpdated: 'May 12, 2025', status: 'In Stock' },
-  { id: 3, name: 'Newcastle Disease Vaccine', category: 'Medicine', qty: 18, unit: 'vials', reorder: 20, lastUpdated: 'May 10, 2025', status: 'Low Stock' },
-  { id: 4, name: 'Vitamin Supplement (1L)', category: 'Medicine', qty: 45, unit: 'bottles', reorder: 10, lastUpdated: 'May 09, 2025', status: 'In Stock' },
-  { id: 5, name: 'Antibiotics (Amoxicillin)', category: 'Medicine', qty: 0, unit: 'boxes', reorder: 5, lastUpdated: 'May 08, 2025', status: 'Out of Stock' },
-  { id: 6, name: 'Wood Shavings (Litter)', category: 'Supplies', qty: 120, unit: 'bags', reorder: 30, lastUpdated: 'May 07, 2025', status: 'In Stock' },
-  { id: 7, name: 'Drinking Nipples', category: 'Equipment', qty: 8, unit: 'pcs', reorder: 10, lastUpdated: 'May 06, 2025', status: 'Low Stock' },
-  { id: 8, name: 'Disinfectant (20L)', category: 'Supplies', qty: 22, unit: 'containers', reorder: 5, lastUpdated: 'May 05, 2025', status: 'In Stock' },
-  { id: 9, name: 'IB Vaccine', category: 'Medicine', qty: 12, unit: 'vials', reorder: 15, lastUpdated: 'May 04, 2025', status: 'Low Stock' },
-  { id: 10, name: 'Feeders (Pan Type)', category: 'Equipment', qty: 30, unit: 'pcs', reorder: 10, lastUpdated: 'May 03, 2025', status: 'In Stock' },
-];
+const ITEMS = [];
 
 const statusTone = { 'In Stock': 'success', 'Low Stock': 'warning', 'Out of Stock': 'danger' };
 
@@ -49,10 +38,10 @@ export default function InventoryPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        <StatCard label="Total Items" value={String(ITEMS.length)} icon={<I.box w={22} />} caption="in inventory" />
-        <StatCard label="In Stock" value={String(ITEMS.filter(i => i.status === 'In Stock').length)} icon={<I.check w={22} />} caption="items available" />
-        <StatCard label="Low Stock Alerts" value={String(lowStock)} tone="amber" icon={<I.alertTri w={22} />} caption="items" />
-        <StatCard label="Out of Stock" value={String(outOfStock)} tone="red" icon={<I.trash w={22} />} caption="items" />
+        <StatCard label="Total Items" value={"0"} icon={<I.box w={22} />} caption="in inventory" />
+        <StatCard label="In Stock" value={"0"} icon={<I.check w={22} />} caption="items available" />
+        <StatCard label="Low Stock Alerts" value={"0"} tone="amber" icon={<I.alertTri w={22} />} caption="items" />
+        <StatCard label="Out of Stock" value={"0"} tone="red" icon={<I.trash w={22} />} caption="items" />
       </div>
 
       <Card>

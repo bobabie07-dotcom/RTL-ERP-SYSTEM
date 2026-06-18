@@ -12,31 +12,7 @@ import Icons from '../icons';
 
 const I = Icons;
 
-const HEALTH_LOGS = {
-  'BATCH-2025-08': [
-    { date: 'May 12', type: 'Vaccination', detail: 'Newcastle Disease (B1)', by: 'Dr. Santos', status: 'Done' },
-    { date: 'May 09', type: 'Medication', detail: 'Vitamin supplement in water', by: 'J. Cruz', status: 'Done' },
-    { date: 'May 05', type: 'Weighing', detail: 'Avg. weight 1.18 kg', by: 'M. Reyes', status: 'Done' },
-    { date: 'May 14', type: 'Vaccination', detail: 'Infectious Bronchitis', by: 'Scheduled', status: 'Upcoming' },
-  ],
-  'BATCH-2025-07': [
-    { date: 'May 11', type: 'Medication', detail: 'Respiratory treatment started', by: 'Dr. Santos', status: 'Done' },
-    { date: 'May 08', type: 'Weighing', detail: 'Avg. weight 1.54 kg', by: 'M. Reyes', status: 'Done' },
-    { date: 'May 06', type: 'Vaccination', detail: 'Newcastle Disease (B1)', by: 'Dr. Santos', status: 'Done' },
-    { date: 'May 15', type: 'Vaccination', detail: 'Gumboro Disease', by: 'Scheduled', status: 'Upcoming' },
-  ],
-  'BATCH-2025-06': [
-    { date: 'May 10', type: 'Weighing', detail: 'Avg. weight 2.05 kg', by: 'J. Cruz', status: 'Done' },
-    { date: 'May 07', type: 'Vaccination', detail: 'Infectious Bronchitis', by: 'Dr. Santos', status: 'Done' },
-    { date: 'May 03', type: 'Medication', detail: 'Vitamin E + Selenium', by: 'M. Santos', status: 'Done' },
-  ],
-};
-
-const DEFAULT_LOG = [
-  { date: 'May 12', type: 'Vaccination', detail: 'Newcastle Disease (B1)', by: 'Dr. Santos', status: 'Done' },
-  { date: 'May 09', type: 'Medication', detail: 'Vitamin supplement in water', by: 'J. Cruz', status: 'Done' },
-  { date: 'May 14', type: 'Vaccination', detail: 'Infectious Bronchitis', by: 'Scheduled', status: 'Upcoming' },
-];
+const HEALTH_LOGS = {};
 
 const typeColor = { Vaccination: 'info', Medication: 'warning', Weighing: 'neutral' };
 const statusTone = { Done: 'success', Upcoming: 'neutral' };
@@ -45,7 +21,17 @@ export default function BatchDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const batch = getBatch(id);
-  const logs = HEALTH_LOGS[batch.id] || DEFAULT_LOG;
+
+  if (!batch) {
+    return (
+      <div style={{ padding: 24 }}>
+        <Button variant="ghost" size="sm" icon={<I.chevronRight w={15} style={{ transform: 'rotate(180deg)' }} />} onClick={() => navigate('/batches')}>Back</Button>
+        <div style={{ marginTop: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>Batch not found.</div>
+      </div>
+    );
+  }
+
+  const logs = HEALTH_LOGS[batch.id] || [];
   const progress = Math.round((batch.dayOfCycle / batch.cycleLength) * 100);
 
   return (

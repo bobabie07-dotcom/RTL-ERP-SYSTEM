@@ -28,12 +28,7 @@ const iconMap = {
   settings: Icons.settings,
 };
 
-const NOTIFICATIONS = [
-  { id: 1, tone: 'warning', title: 'Low Stock Alert', body: 'Newcastle Disease Vaccine — 18 vials left', time: '2 min ago' },
-  { id: 2, tone: 'danger', title: 'High Mortality', body: 'BATCH-2025-07 — 11 birds today (disease suspected)', time: '1 hr ago' },
-  { id: 3, tone: 'info', title: 'Harvest Due', body: 'BATCH-2025-06 — ready in 4 days', time: '3 hr ago' },
-  { id: 4, tone: 'success', title: 'Sale Completed', body: 'SO-2025-018 — ₱336,000 confirmed', time: 'Yesterday' },
-];
+const NOTIFICATIONS = [];
 
 function NotificationsDropdown({ onClose }) {
   return (

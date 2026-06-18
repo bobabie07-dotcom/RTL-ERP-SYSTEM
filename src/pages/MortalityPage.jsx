@@ -10,16 +10,7 @@ import Icons from '../icons';
 
 const I = Icons;
 
-const RECORDS = [
-  { date: 'May 12, 2025', batch: 'BATCH-2025-08', house: 'House A-1', count: 12, cause: 'Heat Stress', notes: 'Ventilation issue resolved', recordedBy: 'J. Cruz', severity: 'warning' },
-  { date: 'May 12, 2025', batch: 'BATCH-2025-07', house: 'House B-2', count: 8, cause: 'Disease', notes: 'Newcastle suspected — vet notified', recordedBy: 'M. Reyes', severity: 'danger' },
-  { date: 'May 11, 2025', batch: 'BATCH-2025-06', house: 'House C-1', count: 6, cause: 'Normal Culling', notes: 'Underweight birds culled', recordedBy: 'M. Santos', severity: 'neutral' },
-  { date: 'May 11, 2025', batch: 'BATCH-2025-05', house: 'House A-2', count: 4, cause: 'Normal Culling', notes: '', recordedBy: 'J. Cruz', severity: 'neutral' },
-  { date: 'May 10, 2025', batch: 'BATCH-2025-08', house: 'House A-1', count: 9, cause: 'Heat Stress', notes: 'High temp recorded: 34°C', recordedBy: 'M. Santos', severity: 'warning' },
-  { date: 'May 09, 2025', batch: 'BATCH-2025-04', house: 'House B-1', count: 5, cause: 'Injury', notes: 'Piling behavior observed', recordedBy: 'M. Reyes', severity: 'warning' },
-  { date: 'May 08, 2025', batch: 'BATCH-2025-07', house: 'House B-2', count: 11, cause: 'Disease', notes: 'Respiratory signs, meds started', recordedBy: 'J. Cruz', severity: 'danger' },
-  { date: 'May 07, 2025', batch: 'BATCH-2025-06', house: 'House C-1', count: 3, cause: 'Normal Culling', notes: '', recordedBy: 'M. Santos', severity: 'neutral' },
-];
+const RECORDS = [];
 
 const causeColor = { 'Heat Stress': 'warning', 'Disease': 'danger', 'Normal Culling': 'neutral', 'Injury': 'warning' };
 
@@ -35,10 +26,10 @@ export default function MortalityPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        <StatCard label="Total Mortality (7d)" value="58" tone="red" icon={<I.mortality w={22} />} delta="12" deltaDir="up" deltaGood={false} caption="vs last 7 days" />
-        <StatCard label="Avg. Mortality Rate" value="4.21%" tone="red" icon={<I.percent w={22} />} delta="0.6%" deltaDir="down" deltaGood caption="vs last month" />
-        <StatCard label="Active Batches" value="5" icon={<I.birds w={22} />} caption="being monitored" />
-        <StatCard label="High Alerts" value="2" tone="amber" icon={<I.alertTri w={22} />} caption="batches flagged" />
+        <StatCard label="Total Mortality (7d)" value="0" tone="red" icon={<I.mortality w={22} />} delta="12" deltaDir="up" deltaGood={false} caption="vs last 7 days" />
+        <StatCard label="Avg. Mortality Rate" value="0%" tone="red" icon={<I.percent w={22} />} delta="0.6%" deltaDir="down" deltaGood caption="vs last month" />
+        <StatCard label="Active Batches" value="0" icon={<I.birds w={22} />} caption="being monitored" />
+        <StatCard label="High Alerts" value="0" tone="amber" icon={<I.alertTri w={22} />} caption="batches flagged" />
       </div>
 
       <Card title="Mortality Trend (%) — Last 7 Days" action={<Select options={['Last 7 days', 'Last 30 days', 'This month']} />}>

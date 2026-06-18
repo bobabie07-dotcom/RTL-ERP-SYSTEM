@@ -9,16 +9,7 @@ import Icons from '../icons';
 
 const I = Icons;
 
-const FEED_LOGS = [
-  { date: 'May 12, 2025', batch: 'BATCH-2025-08', house: 'House A-1', feedType: 'Starter (22% CP)', qty: '420', fcr: '1.62', recordedBy: 'J. Cruz' },
-  { date: 'May 12, 2025', batch: 'BATCH-2025-07', house: 'House B-2', feedType: 'Grower (20% CP)', qty: '390', fcr: '1.65', recordedBy: 'M. Reyes' },
-  { date: 'May 12, 2025', batch: 'BATCH-2025-06', house: 'House C-1', feedType: 'Finisher (18% CP)', qty: '340', fcr: '1.70', recordedBy: 'J. Cruz' },
-  { date: 'May 11, 2025', batch: 'BATCH-2025-08', house: 'House A-1', feedType: 'Starter (22% CP)', qty: '415', fcr: '1.61', recordedBy: 'M. Santos' },
-  { date: 'May 11, 2025', batch: 'BATCH-2025-05', house: 'House A-2', feedType: 'Starter (22% CP)', qty: '310', fcr: '1.58', recordedBy: 'M. Reyes' },
-  { date: 'May 10, 2025', batch: 'BATCH-2025-07', house: 'House B-2', feedType: 'Grower (20% CP)', qty: '385', fcr: '1.64', recordedBy: 'J. Cruz' },
-  { date: 'May 10, 2025', batch: 'BATCH-2025-06', house: 'House C-1', feedType: 'Finisher (18% CP)', qty: '338', fcr: '1.71', recordedBy: 'M. Santos' },
-  { date: 'May 09, 2025', batch: 'BATCH-2025-04', house: 'House B-1', feedType: 'Grower (20% CP)', qty: '302', fcr: '1.67', recordedBy: 'J. Cruz' },
-];
+const FEED_LOGS = [];
 
 export default function FeedPage() {
   return (
@@ -32,10 +23,10 @@ export default function FeedPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        <StatCard label="Total Feed Stock (kg)" value="17,000" icon={<I.feed w={22} />} delta="3 tons" deltaDir="down" deltaGood={false} caption="used this week" />
-        <StatCard label="Today's Consumption (kg)" value="2,900" tone="amber" icon={<I.box w={22} />} delta="4.2%" deltaDir="up" deltaGood={false} />
-        <StatCard label="Average FCR" value="1.64" tone="blue" icon={<I.scale w={22} />} delta="0.02" deltaDir="down" deltaGood caption="vs target 1.70" />
-        <StatCard label="Low Stock Alerts" value="2" tone="red" icon={<I.alertTri w={22} />} caption="feed types" />
+        <StatCard label="Total Feed Stock (kg)" value="0" icon={<I.feed w={22} />} delta="3 tons" deltaDir="down" deltaGood={false} caption="used this week" />
+        <StatCard label="Today's Consumption (kg)" value="0" tone="amber" icon={<I.box w={22} />} delta="4.2%" deltaDir="up" deltaGood={false} />
+        <StatCard label="Average FCR" value="0" tone="blue" icon={<I.scale w={22} />} delta="0.02" deltaDir="down" deltaGood caption="vs target 1.70" />
+        <StatCard label="Low Stock Alerts" value="0" tone="red" icon={<I.alertTri w={22} />} caption="feed types" />
       </div>
 
       <Card title="Feed Consumption by House (kg)" action={<Select options={['This week', 'Last week', 'This month']} />}>
