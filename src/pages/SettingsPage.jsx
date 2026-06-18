@@ -28,8 +28,18 @@ export default function SettingsPage() {
     weeklyReport: true,
     securityAlert: true,
   });
+  const [cleared, setCleared] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const toggle = (key) => setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const handleClearData = () => {
+    if (!confirmClear) { setConfirmClear(true); return; }
+    localStorage.clear();
+    setCleared(true);
+    setConfirmClear(false);
+    setTimeout(() => { window.location.reload(); }, 1200);
+  };
 
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -111,6 +121,33 @@ export default function SettingsPage() {
         </div>
         <div style={{ marginTop: 18, display: 'flex', gap: 10 }}>
           <Button variant="primary" size="md" icon={<I.lock w={15} />}>Update Password</Button>
+        </div>
+      </Card>
+
+      {/* Danger Zone */}
+      <Card title="Danger Zone" style={{ borderColor: 'var(--danger-bg)', borderWidth: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-strong)' }}>Clear All Data</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>
+              Permanently removes all records — batches, inventory, feed logs, mortality, sales. This cannot be undone.
+            </div>
+          </div>
+          {cleared ? (
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <I.check w={15} /> Data cleared — reloading...
+            </div>
+          ) : confirmClear ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, color: 'var(--danger)', fontWeight: 600 }}>Are you sure?</span>
+              <Button variant="danger" size="sm" onClick={handleClearData}>Yes, clear everything</Button>
+              <Button variant="secondary" size="sm" onClick={() => setConfirmClear(false)}>Cancel</Button>
+            </div>
+          ) : (
+            <Button variant="danger" size="md" icon={<I.trash w={15} />} onClick={handleClearData}>
+              Clear All Data
+            </Button>
+          )}
         </div>
       </Card>
     </div>
