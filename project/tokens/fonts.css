@@ -1,0 +1,8 @@
+/* RTL Poultry Farming ERP — Webfonts
+   The product UI uses a rounded geometric sans for headings and a clean
+   neutral sans for UI/body. The exact licensed faces are unknown from the
+   screenshots; Poppins (display/headings) + Inter (body/UI) are the closest
+   widely-available matches. SUBSTITUTION FLAGGED — see readme.md.
+   Loaded from Google Fonts so consumers pick them up online. */
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');

@@ -1,0 +1,23 @@
+<!-- @dsCard group="Type" viewport="700x180" name="Stat Numbers & Peso" subtitle="Big bold metrics, tabular figures, signed deltas" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--surface-card); font-family: var(--font-body); }
+  .row { display: flex; gap: 40px; align-items: flex-end; }
+  .item .lbl { font-size: 13px; color: var(--text-secondary); }
+  .item .val { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--text-strong); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .up { color: var(--success); font-size: 12px; font-weight: 600; }
+  .down { color: var(--danger); font-size: 12px; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="lbl">Total Birds</div><div class="val">48,250</div><div class="up">↑ 5.6% vs last month</div></div>
+    <div class="item"><div class="lbl">Revenue (₱)</div><div class="val">₱6,780,000</div><div class="up">↑ 12.4% vs last month</div></div>
+    <div class="item"><div class="lbl">Mortality Rate</div><div class="val">4.21%</div><div class="down">↓ 0.6% vs last month</div></div>
+  </div>
+</body>
+</html>

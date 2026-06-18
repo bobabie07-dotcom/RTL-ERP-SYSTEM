@@ -1,0 +1,30 @@
+/* RTL Poultry Farming ERP — Base resets & element defaults.
+   Light-touch: sets the workspace background, default font, sane box model. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--lh-normal);
+  color: var(--text-strong);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  color: var(--text-strong);
+  margin: 0;
+  line-height: var(--lh-snug);
+}
+
+a { color: var(--text-brand); text-decoration: none; }
+a:hover { color: var(--green-600); }
+
+/* Tabular figures for stats/tables */
+.tnum { font-variant-numeric: tabular-nums; }
+
+::selection { background: var(--green-100); color: var(--green-800); }

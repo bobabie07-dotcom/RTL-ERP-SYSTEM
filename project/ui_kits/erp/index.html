@@ -1,0 +1,89 @@
+<!-- @dsCard group="ERP" viewport="1320x860" name="ERP — Login → Dashboard → Batch" subtitle="Interactive poultry farm management dashboard" -->
+<!-- @startingPoint section="ERP" subtitle="Full poultry ERP: login, dashboard, batch detail" viewport="1320x860" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RTL Poultry Farming ERP</title>
+<meta name="ext-resource-dependency" content="../../assets/hero-poultry.png" data-resource-id="heroPoultry" />
+<meta name="ext-resource-dependency" content="../../assets/logo-lockup-dark.png" data-resource-id="logoLockup" />
+<meta name="ext-resource-dependency" content="../../assets/logo-mark.png" data-resource-id="logoMark" />
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  html, body { margin: 0; height: 100%; background: var(--surface-page); }
+  #root { height: 100vh; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#071F11">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#071F11"/>
+    <g transform="translate(600 360)" fill="none" stroke="#2FAC64" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M120 -40 h0.01"/>
+      <path d="M-170 130 H10 a200 200 0 0 0 200 -200 V-70 a100 100 0 0 0 -182 -57 L-260 200"/>
+      <path d="M150 -70 l50 12 -50 13"/>
+      <path d="M-90 130 v60"/>
+      <path d="M10 124 V196"/>
+    </g>
+    <text x="600" y="560" text-anchor="middle" font-family="Poppins, sans-serif" font-size="58" font-weight="700" fill="#ffffff">RTL POULTRY</text>
+    <text x="600" y="612" text-anchor="middle" font-family="Inter, sans-serif" font-size="26" letter-spacing="8" fill="#9BD8B4">FARMING ERP</text>
+  </svg>
+</template>
+<div id="root"></div>
+<script type="text/babel" src="icons.jsx"></script>
+<script type="text/babel" src="charts.jsx"></script>
+<script type="text/babel" src="LoginScreen.jsx"></script>
+<script type="text/babel" src="AppShell.jsx"></script>
+<script type="text/babel" src="DashboardScreen.jsx"></script>
+<script type="text/babel" src="BatchDetailScreen.jsx"></script>
+<script type="text/babel">
+const TITLES = {
+  dashboard: 'Dashboard', farms: 'Farm Management', houses: 'Poultry Houses',
+  batches: 'Batch Management', inventory: 'Inventory', feed: 'Feed Management',
+  mortality: 'Mortality Tracker', sales: 'Sales & Procurement',
+  reports: 'Reports & Analytics', settings: 'Settings',
+};
+
+function App() {
+  const [authed, setAuthed] = React.useState(false);
+  const [view, setView] = React.useState('dashboard');     // nav key
+  const [batch, setBatch] = React.useState(null);           // open batch detail
+
+  if (!authed) return <window.LoginScreen onLogin={() => setAuthed(true)} />;
+
+  let content, title;
+  if (batch) {
+    title = batch.batch;
+    content = <window.BatchDetailScreen batch={batch} onBack={() => setBatch(null)} />;
+  } else if (view === 'dashboard') {
+    title = 'Dashboard';
+    content = <window.DashboardScreen onOpenBatch={(b) => setBatch(b)} />;
+  } else if (view === 'batches') {
+    title = 'Batch Management';
+    content = <window.DashboardScreen onOpenBatch={(b) => setBatch(b)} />;
+  } else {
+    title = TITLES[view] || 'RTL ERP';
+    content = (
+      <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--text-secondary)' }}>{title}</div>
+        <p style={{ marginTop: 8, fontSize: 14 }}>This module is not part of the UI-kit recreation. See Dashboard and Batch Management.</p>
+      </div>
+    );
+  }
+
+  return (
+    <window.AppShell active={batch ? 'batches' : view} onSelect={(k) => { setBatch(null); setView(k); }} title={title}>
+      {content}
+    </window.AppShell>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

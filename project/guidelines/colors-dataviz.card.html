@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Data-Viz Palette" subtitle="Fixed categorical hues for charts & expense breakdown" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 18px; background: var(--surface-card); font-family: var(--font-body); }
+  .row { display: flex; gap: 12px; }
+  .sw { flex: 1; text-align:center; }
+  .dot { width: 40px; height: 40px; border-radius: var(--radius-pill); margin: 0 auto; }
+  .name { font-size: 12px; font-weight: 600; color: var(--text-strong); margin-top: 9px; }
+  .hex { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="dot" style="background:var(--viz-feed)"></div><div class="name">Feed</div><div class="hex">#22C55E</div></div>
+    <div class="sw"><div class="dot" style="background:var(--viz-labor)"></div><div class="name">Labor</div><div class="hex">#3B82F6</div></div>
+    <div class="sw"><div class="dot" style="background:var(--viz-medicine)"></div><div class="name">Medicine</div><div class="hex">#F59E0B</div></div>
+    <div class="sw"><div class="dot" style="background:var(--viz-utilities)"></div><div class="name">Utilities</div><div class="hex">#8B5CF6</div></div>
+    <div class="sw"><div class="dot" style="background:var(--viz-others)"></div><div class="name">Others</div><div class="hex">#64748B</div></div>
+    <div class="sw"><div class="dot" style="background:var(--viz-mortality)"></div><div class="name">Mortality</div><div class="hex">#EF4444</div></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Dark & Tint Surfaces" subtitle="Farmhouse-green sidebar / hero ink + pale tint backing" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 18px; background: var(--surface-card); font-family: var(--font-body); }
+  .row { display: flex; gap: 12px; }
+  .sw { flex: 1; }
+  .chip { height: 64px; border-radius: var(--radius-md); display:flex; align-items:center; padding:0 14px; font-size:12px; font-weight:600; border:1px solid var(--border); }
+  .name { font-size: 12px; font-weight: 600; color: var(--text-strong); margin-top: 8px; }
+  .hex { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--ink-900); color:var(--text-on-dark)">Sidebar / Hero</div><div class="name">ink-900</div><div class="hex">#071F11</div></div>
+    <div class="sw"><div class="chip" style="background:var(--ink-800); color:var(--text-on-dark)">Raised dark</div><div class="name">ink-800</div><div class="hex">#0C2A18</div></div>
+    <div class="sw"><div class="chip" style="background:var(--surface-tint); color:var(--green-700)">Icon backing / chip</div><div class="name">green-50 tint</div><div class="hex">#E7F5EC</div></div>
+    <div class="sw"><div class="chip" style="background:var(--surface-page); color:var(--text-secondary)">Workspace page</div><div class="name">gray-50</div><div class="hex">#F9FAFB</div></div>
+  </div>
+</body>
+</html>

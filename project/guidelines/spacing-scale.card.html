@@ -1,0 +1,29 @@
+<!-- @dsCard group="Spacing" viewport="700x170" name="Spacing Scale" subtitle="4px base — padding, gaps, layout rhythm" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--surface-card); font-family: var(--font-body); }
+  .row { display: flex; align-items: flex-end; gap: 18px; }
+  .item { text-align: center; }
+  .bar { background: var(--green-400); border-radius: var(--radius-sm); width: 100%; }
+  .box { width: 44px; }
+  .n { font-size: 12px; font-weight: 600; color: var(--text-strong); margin-top: 8px; }
+  .px { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item box"><div class="bar" style="height:4px"></div><div class="n">1</div><div class="px">4px</div></div>
+    <div class="item box"><div class="bar" style="height:8px"></div><div class="n">2</div><div class="px">8px</div></div>
+    <div class="item box"><div class="bar" style="height:12px"></div><div class="n">3</div><div class="px">12px</div></div>
+    <div class="item box"><div class="bar" style="height:16px"></div><div class="n">4</div><div class="px">16px</div></div>
+    <div class="item box"><div class="bar" style="height:24px"></div><div class="n">6</div><div class="px">24px</div></div>
+    <div class="item box"><div class="bar" style="height:32px"></div><div class="n">8</div><div class="px">32px</div></div>
+    <div class="item box"><div class="bar" style="height:48px"></div><div class="n">12</div><div class="px">48px</div></div>
+    <div class="item box"><div class="bar" style="height:64px"></div><div class="n">16</div><div class="px">64px</div></div>
+  </div>
+</body>
+</html>

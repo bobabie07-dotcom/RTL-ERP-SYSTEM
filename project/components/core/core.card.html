@@ -1,0 +1,64 @@
+<!-- @dsCard group="Components" viewport="700x320" name="Core — Buttons, Badges, Avatar" subtitle="Button variants & sizes, IconButton, Badge, Tag, Avatar" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin:0; padding:22px 24px; background:var(--surface-card); font-family:var(--font-body); }
+  .grid { display:flex; flex-direction:column; gap:18px; }
+  .row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .lbl { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; width:100%; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { Button, IconButton, Badge, Tag, Avatar } = window.RTLPoultryFarmingERPDesignSystem_698a73;
+const S = ({d,w=18}) => <svg width={w} height={w} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:d}}/>;
+const Plus = <S d='<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'/>;
+const Bell = <S d='<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'/>;
+const Pencil = <S d='<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'/>;
+const Trash = <S d='<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'/>;
+const Chevron = <S d='<polyline points="6 9 12 15 18 9"/>'/>;
+
+function Demo() {
+  return (
+    <div className="grid">
+      <div className="row"><span className="lbl">Variants</span>
+        <Button variant="primary">Login</Button>
+        <Button variant="secondary" icon={Plus}>Add Item</Button>
+        <Button variant="ghost">Cancel</Button>
+        <Button variant="danger" icon={Trash}>Delete</Button>
+      </div>
+      <div className="row"><span className="lbl">Sizes & states</span>
+        <Button size="sm">Small</Button>
+        <Button size="md">Medium</Button>
+        <Button size="lg" trailingIcon={Chevron}>Large</Button>
+        <Button disabled>Disabled</Button>
+      </div>
+      <div className="row"><span className="lbl">Icon buttons</span>
+        <IconButton title="Notifications" badge={4}>{Bell}</IconButton>
+        <IconButton tone="brand" title="Edit">{Pencil}</IconButton>
+        <IconButton tone="danger" title="Delete">{Trash}</IconButton>
+      </div>
+      <div className="row"><span className="lbl">Badges & tags</span>
+        <Badge tone="success" dot>Active</Badge>
+        <Badge tone="warning">Low Stock</Badge>
+        <Badge tone="danger" variant="solid">Critical</Badge>
+        <Badge tone="info">Vaccination Due</Badge>
+        <Badge tone="neutral">Pending</Badge>
+        <Tag color="green">Starter Mash</Tag>
+        <Avatar name="Admin User" role="Farm Manager" showText />
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script>
+</body>
+</html>

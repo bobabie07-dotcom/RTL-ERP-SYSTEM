@@ -1,0 +1,54 @@
+<!-- @dsCard group="Components" viewport="700x420" name="Navigation — Sidebar & Topbar" subtitle="Dark-green sidebar with active state + app header bar" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  html,body { margin:0; height:100%; background:var(--surface-page); font-family:var(--font-body); }
+  #root { height:420px; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { SidebarNav, Topbar, IconButton, Avatar, Select } = window.RTLPoultryFarmingERPDesignSystem_698a73;
+const S = ({d,w=19}) => <svg width={w} height={w} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:d}}/>;
+const items = [
+  { key:'dashboard', label:'Dashboard', icon:<S d='<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'/> },
+  { key:'farms', label:'Farm Management', icon:<S d='<path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/>'/> },
+  { key:'houses', label:'Poultry Houses', icon:<S d='<path d="M3 9l9-7 9 7v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>'/> },
+  { key:'batches', label:'Batch Management', icon:<S d='<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>'/> },
+  { key:'inventory', label:'Inventory', icon:<S d='<path d="M20 7H4M20 7l-2-3H6L4 7M20 7v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7"/>'/> },
+  { key:'feed', label:'Feed Management', icon:<S d='<path d="M3 3h18v4H3zM5 7v13h14V7M9 11h6"/>'/> },
+];
+const Bell = <S w={18} d='<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'/>;
+
+function Demo() {
+  const [active, setActive] = React.useState('dashboard');
+  return (
+    <div style={{display:'flex',height:420,border:'1px solid var(--border)',borderRadius:12,overflow:'hidden'}}>
+      <SidebarNav
+        brand={<img src="../../assets/logo-lockup-dark.png" style={{height:38}} alt="RTL"/>}
+        items={items} active={active} onSelect={setActive}
+        footer={<Select options={['RTL Main Farm','RTL North Farm']} />}
+      />
+      <div style={{flex:1,display:'flex',flexDirection:'column',background:'var(--surface-page)'}}>
+        <Topbar title="Dashboard" onMenu={()=>{}} right={<>
+          <IconButton title="Notifications" badge={4}>{Bell}</IconButton>
+          <Select options={['May 12, 2025']} />
+          <Avatar name="Admin User" role="Farm Manager" showText />
+        </>}/>
+        <div style={{padding:24,color:'var(--text-secondary)',fontSize:14}}>Content area — active: <b style={{color:'var(--text-strong)'}}>{active}</b></div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script>
+</body>
+</html>
