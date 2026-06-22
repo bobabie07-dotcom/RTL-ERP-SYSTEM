@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/core/Button';
 import { IconButton } from '../components/core/IconButton';
 import { Input } from '../components/forms/Input';
@@ -7,45 +8,48 @@ import { Checkbox } from '../components/forms/Checkbox';
 import Icons from '../icons';
 
 export default function LoginPage() {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const { login } = useAuth();
   const I = Icons;
-  const [show, setShow] = useState(false);
-  const [user, setUser] = useState('admin');
-  const [pass, setPass] = useState('rtl-poultry');
+
+  const [show, setShow]       = useState(false);
+  const [email, setEmail]     = useState('admin@rtl-poultry.com');
+  const [pass, setPass]       = useState('');
   const [remember, setRemember] = useState(true);
+  const [error, setError]     = useState('');
+  const [loading, setLoading] = useState(false);
 
   const features = [
     ['birds', 'Track flocks, batches & poultry houses'],
     ['scale', 'Monitor feed, weight & FCR in real time'],
-    ['pie', 'Expenses, sales & profit analytics'],
+    ['pie',   'Expenses, sales & profit analytics'],
   ];
 
-  const handleSubmit = (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
-    navigate('/dashboard');
-  };
+    setError('');
+    setLoading(true);
+    try {
+      await login(email, pass);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.message || 'Invalid credentials');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', minHeight: 560, fontFamily: 'var(--font-body)' }}>
       {/* Hero */}
-      <div style={{
-        flex: '1 1 52%',
-        position: 'relative',
+      <div className="login-hero" style={{
+        flex: '1 1 52%', position: 'relative',
         background: 'linear-gradient(135deg, #0c2a18 0%, #071F11 100%)',
-        color: 'var(--text-on-dark)',
-        padding: '48px 52px',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        overflow: 'hidden',
+        color: 'var(--text-on-dark)', padding: '48px 52px',
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden',
       }}>
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(7,31,17,0.86) 0%, rgba(7,31,17,0.62) 100%)' }} />
-        {/* Subtle dot pattern */}
-        <div style={{
-          position: 'absolute', inset: 0, opacity: 0.06,
-          backgroundImage: `radial-gradient(circle, #4ade80 1px, transparent 1px)`,
-          backgroundSize: '28px 28px',
-        }} />
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.06, backgroundImage: 'radial-gradient(circle, #4ade80 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
         <div style={{ position: 'relative' }}>
           <img src="/logo-lockup-dark.png" alt="RTL Poultry Farming ERP" style={{ height: 56 }} />
         </div>
@@ -75,10 +79,7 @@ export default function LoginPage() {
 
       {/* Sign-in card */}
       <div style={{ flex: '1 1 48%', background: 'var(--surface-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-        <form
-          onSubmit={handleSubmit}
-          style={{ width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 18 }}
-        >
+        <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, marginBottom: 6 }}>
             <span style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--green-50)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
               <img src="/logo-mark.png" alt="" style={{ width: 46, height: 46, objectFit: 'contain' }} />
@@ -89,23 +90,27 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <Input label="Username" placeholder="Enter your username" icon={<I.user />} value={user} onChange={(e) => setUser(e.target.value)} />
+          {error && (
+            <div style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: 13 }}>
+              {error}
+            </div>
+          )}
+
+          <Input label="Email" type="email" placeholder="Enter your email" icon={<I.user />} value={email} onChange={(e) => setEmail(e.target.value)} required />
           <Input
             label="Password" type={show ? 'text' : 'password'} placeholder="Enter your password" icon={<I.lock />}
-            value={pass} onChange={(e) => setPass(e.target.value)}
+            value={pass} onChange={(e) => setPass(e.target.value)} required
             trailing={<IconButton size="sm" onClick={() => setShow((s) => !s)} title={show ? 'Hide' : 'Show'}>{show ? <I.eyeOff /> : <I.eye />}</IconButton>}
           />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Checkbox label="Remember me" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-            <a href="#" onClick={(e) => e.preventDefault()} style={{ fontSize: 13, fontWeight: 600 }}>Forgot password?</a>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Contact admin to reset password</span>
           </div>
-          <Button type="submit" variant="primary" size="lg" fullWidth>Login</Button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-muted)', fontSize: 12 }}>
-            <span style={{ flex: 1, height: 1, background: 'var(--border)' }} /> OR <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-          </div>
-          <Button type="button" variant="secondary" size="lg" fullWidth icon={<I.google w={18} />}>Sign in with Google</Button>
+          <Button type="submit" variant="primary" size="lg" fullWidth disabled={loading}>
+            {loading ? 'Signing in...' : 'Login'}
+          </Button>
           <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-            Don't have an account? <a href="#" onClick={(e) => e.preventDefault()} style={{ fontWeight: 600 }}>Contact your administrator</a>
+            Don't have an account? <span style={{ fontWeight: 600, color: 'var(--text-body)' }}>Contact your administrator</span>
           </p>
         </form>
       </div>

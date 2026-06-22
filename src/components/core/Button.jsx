@@ -31,19 +31,19 @@ export function Button({
   const palettes = {
     primary: {
       base: { background: 'var(--green-500)', color: 'var(--white)', border: '1px solid var(--green-500)' },
-      hover: { background: 'var(--green-600)', borderColor: 'var(--green-600)' },
+      hover: { background: 'var(--green-600)', border: '1px solid var(--green-600)' },
     },
     secondary: {
       base: { background: 'var(--white)', color: 'var(--text-strong)', border: '1px solid var(--border)' },
-      hover: { background: 'var(--gray-50)', borderColor: 'var(--border-strong)' },
+      hover: { background: 'var(--gray-50)', border: '1px solid var(--border-strong)' },
     },
     ghost: {
       base: { background: 'transparent', color: 'var(--text-body)', border: '1px solid transparent' },
-      hover: { background: 'var(--gray-100)' },
+      hover: { background: 'var(--gray-100)', border: '1px solid transparent' },
     },
     danger: {
       base: { background: 'var(--danger)', color: 'var(--white)', border: '1px solid var(--danger)' },
-      hover: { background: '#D63A3A', borderColor: '#D63A3A' },
+      hover: { background: '#D63A3A', border: '1px solid #D63A3A' },
     },
   };
   const p = palettes[variant] || palettes.primary;

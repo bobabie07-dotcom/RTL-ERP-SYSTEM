@@ -3,3 +3,20 @@
 @import './tokens/typography.css';
 @import './tokens/spacing.css';
 @import './tokens/base.css';
+
+/* ─── Responsive utilities ─── */
+@media (min-width: 769px) {
+  .topbar-menu-btn { display: none !important; }
+}
+
+@media (max-width: 768px) {
+  .login-hero       { display: none !important; }
+  .stat-grid        { grid-template-columns: repeat(2, 1fr) !important; }
+  .chart-split      { grid-template-columns: 1fr !important; }
+  .rpt-select-grid  { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+@media (max-width: 480px) {
+  .stat-grid       { grid-template-columns: 1fr !important; }
+  .rpt-select-grid { grid-template-columns: 1fr !important; }
+}

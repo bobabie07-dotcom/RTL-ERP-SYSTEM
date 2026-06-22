@@ -1,23 +1,25 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { FarmProvider } from './context/FarmContext';
 import { AppLayout } from './components/navigation/AppLayout';
+import { ErrorBoundary } from './components/core/ErrorBoundary';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import BatchesPage from './pages/BatchesPage';
 import BatchDetailPage from './pages/BatchDetailPage';
+import FarmsPage from './pages/FarmsPage';
+import HousesPage from './pages/HousesPage';
 import InventoryPage from './pages/InventoryPage';
 import FeedPage from './pages/FeedPage';
 import MortalityPage from './pages/MortalityPage';
 import SalesPage from './pages/SalesPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 function PageWrapper({ children }) {
-  return (
-    <div style={{ animation: 'pageFadeIn 150ms ease-out both' }}>
-      {children}
-    </div>
-  );
+  return <div style={{ animation: 'pageFadeIn 150ms ease-out backwards' }}>{children}</div>;
 }
 
 function PlaceholderPage({ title }) {
@@ -29,24 +31,48 @@ function PlaceholderPage({ title }) {
   );
 }
 
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text-muted)', fontSize: 14 }}>
+        Loading...
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  return (
+    <FarmProvider>
+      <AppLayout>
+        <PageWrapper>
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </PageWrapper>
+      </AppLayout>
+    </FarmProvider>
+  );
+}
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/dashboard" element={<AppLayout><PageWrapper><DashboardPage /></PageWrapper></AppLayout>} />
-        <Route path="/batches" element={<AppLayout><PageWrapper><BatchesPage /></PageWrapper></AppLayout>} />
-        <Route path="/batches/:id" element={<AppLayout><PageWrapper><BatchDetailPage /></PageWrapper></AppLayout>} />
-        <Route path="/inventory" element={<AppLayout><PageWrapper><InventoryPage /></PageWrapper></AppLayout>} />
-        <Route path="/feed" element={<AppLayout><PageWrapper><FeedPage /></PageWrapper></AppLayout>} />
-        <Route path="/mortality" element={<AppLayout><PageWrapper><MortalityPage /></PageWrapper></AppLayout>} />
-        <Route path="/sales" element={<AppLayout><PageWrapper><SalesPage /></PageWrapper></AppLayout>} />
-        <Route path="/reports" element={<AppLayout><PageWrapper><ReportsPage /></PageWrapper></AppLayout>} />
-        <Route path="/settings" element={<AppLayout><PageWrapper><SettingsPage /></PageWrapper></AppLayout>} />
-        <Route path="/farms" element={<AppLayout><PageWrapper><PlaceholderPage title="Farm Management" /></PageWrapper></AppLayout>} />
-        <Route path="/houses" element={<AppLayout><PageWrapper><PlaceholderPage title="Poultry Houses" /></PageWrapper></AppLayout>} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/"        element={<Navigate to="/dashboard" replace />} />
+          <Route path="/login"   element={<LoginPage />} />
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/batches"   element={<ProtectedRoute><BatchesPage /></ProtectedRoute>} />
+          <Route path="/batches/:id" element={<ProtectedRoute><BatchDetailPage /></ProtectedRoute>} />
+          <Route path="/farms"       element={<ProtectedRoute><FarmsPage /></ProtectedRoute>} />
+          <Route path="/houses"      element={<ProtectedRoute><HousesPage /></ProtectedRoute>} />
+          <Route path="/inventory"   element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
+          <Route path="/feed"        element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
+          <Route path="/mortality"   element={<ProtectedRoute><MortalityPage /></ProtectedRoute>} />
+          <Route path="/sales"       element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
+          <Route path="/reports"     element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+          <Route path="/settings"       element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/notifications"  element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

@@ -1,4 +1,21 @@
+# Frontend
 node_modules/
 dist/
 .DS_Store
 *.local
+
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.env
+
+# Logs
+*.log
+uvicorn_out.log
+uvicorn_err.log
+
+# Sensitive / local only
+.env
+*.pem

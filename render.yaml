@@ -1,0 +1,41 @@
+services:
+  # ── FastAPI backend ────────────────────────────────────────────────────────
+  - type: web
+    name: rtl-poultry-erp-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health-check
+    envVars:
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSL_CA
+        sync: false          # paste full Aiven ca.pem contents here
+      - key: JWT_SECRET
+        generateValue: true  # Render auto-generates a secure random value
+      - key: JWT_EXPIRE_MINUTES
+        value: "480"
+      - key: CORS_ORIGINS
+        sync: false          # set to your Render frontend URL, e.g. https://rtl-poultry-erp-ui.onrender.com
+
+  # ── React / Vite frontend ─────────────────────────────────────────────────
+  - type: static
+    name: rtl-poultry-erp-ui
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false          # set to your Render backend URL, e.g. https://rtl-poultry-erp-api.onrender.com

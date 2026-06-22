@@ -5,7 +5,7 @@ import React from 'react';
  * The app header: menu toggle + page title on the left; right-aligned actions
  * slot (date picker, notifications, account). Sits above the content area.
  */
-export function Topbar({ title, onMenu, left = null, right = null, style = {} }) {
+export function Topbar({ title, subtitle, onMenu, left = null, right = null, style = {} }) {
   return (
     <header style={{
       height: 'var(--topbar-h)',
@@ -25,12 +25,18 @@ export function Topbar({ title, onMenu, left = null, right = null, style = {} })
             type="button"
             onClick={onMenu}
             aria-label="Toggle menu"
+            className="topbar-menu-btn"
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-body)', display: 'inline-flex', padding: 4 }}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
         ) : null}
-        {title ? <h1 style={{ font: 'var(--type-h1)', fontSize: 'var(--text-xl)', color: 'var(--text-strong)' }}>{title}</h1> : null}
+        {title ? (
+          <div>
+            <h1 style={{ font: 'var(--type-h1)', fontSize: 'var(--text-xl)', color: 'var(--text-strong)', margin: 0, lineHeight: subtitle ? 1.1 : undefined }}>{title}</h1>
+            {subtitle ? <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.02em' }}>{subtitle}</span> : null}
+          </div>
+        ) : null}
         {left}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>{right}</div>

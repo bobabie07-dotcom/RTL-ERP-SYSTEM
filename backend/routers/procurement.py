@@ -1,0 +1,223 @@
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from database import get_db
+from models import PurchaseOrder, Supplier
+from routers.auth import get_current_user, require_permission
+from schemas.schemas import (
+    ApprovalAction,
+    PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
+    SupplierOut,
+)
+
+router = APIRouter(prefix="/procurement", tags=["procurement"])
+
+
+# ── Suppliers ────────────────────────────────────────────────────────────────
+
+@router.get("/suppliers", response_model=list[SupplierOut])
+def list_suppliers(db: Session = Depends(get_db), _=Depends(get_current_user)):
+    return db.query(Supplier).filter(Supplier.is_active == True).all()
+
+
+# ── Purchase Orders ───────────────────────────────────────────────────────────
+
+@router.get("/orders", response_model=list[PurchaseOrderRow])
+def list_purchase_orders(
+    farm_id: Optional[int] = Query(None),
+    status:  Optional[str] = Query(None),
+    limit:   int           = Query(100, le=500),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    sql = """
+        SELECT
+            po.id,
+            po.po_no,
+            po.order_date,
+            po.expected_date,
+            s.name      AS supplier,
+            po.total_amount,
+            po.status,
+            au.full_name AS approved_by_name,
+            po.notes
+        FROM purchase_orders po
+        LEFT JOIN suppliers s ON po.supplier_id = s.id
+        LEFT JOIN users     au ON po.approved_by = au.id
+        WHERE 1=1
+    """
+    params: dict = {"limit": limit}
+    if farm_id:
+        sql += " AND po.farm_id = :farm_id"
+        params["farm_id"] = farm_id
+    if status:
+        sql += " AND po.status = :status"
+        params["status"] = status
+    sql += " ORDER BY po.order_date DESC LIMIT :limit"
+
+    rows = db.execute(text(sql), params).mappings().all()
+    return [PurchaseOrderRow(**dict(r)) for r in rows]
+
+
+@router.post("/orders", response_model=PurchaseOrderRow, status_code=status.HTTP_201_CREATED)
+def create_purchase_order(
+    body: PurchaseOrderCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission("write", "procurement")),
+):
+    count = db.query(PurchaseOrder).count()
+    po_no = f"PO-{(count + 1):06d}"
+
+    po = PurchaseOrder(
+        **body.model_dump(),
+        po_no=po_no,
+        status="pending_approval",
+        created_by=current_user.id,
+    )
+    db.add(po)
+    db.commit()
+    db.refresh(po)
+
+    row = db.execute(text("""
+        SELECT po.id, po.po_no, po.order_date, po.expected_date,
+               s.name AS supplier, po.total_amount, po.status,
+               au.full_name AS approved_by_name, po.notes
+        FROM purchase_orders po
+        LEFT JOIN suppliers s ON po.supplier_id = s.id
+        LEFT JOIN users    au ON po.approved_by = au.id
+        WHERE po.id = :id
+    """), {"id": po.id}).mappings().one()
+    return PurchaseOrderRow(**dict(row))
+
+
+@router.patch("/orders/{po_id}", response_model=PurchaseOrderRow)
+def update_purchase_order(
+    po_id: int,
+    body: PurchaseOrderUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("write", "procurement")),
+):
+    po = db.get(PurchaseOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    for field, value in body.model_dump(exclude_none=True).items():
+        setattr(po, field, value)
+    db.commit()
+
+    row = db.execute(text("""
+        SELECT po.id, po.po_no, po.order_date, po.expected_date,
+               s.name AS supplier, po.total_amount, po.status,
+               au.full_name AS approved_by_name, po.notes
+        FROM purchase_orders po
+        LEFT JOIN suppliers s ON po.supplier_id = s.id
+        LEFT JOIN users    au ON po.approved_by = au.id
+        WHERE po.id = :id
+    """), {"id": po_id}).mappings().one()
+    return PurchaseOrderRow(**dict(row))
+
+
+@router.post("/orders/{po_id}/approve", response_model=PurchaseOrderRow)
+def approve_purchase_order(
+    po_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission("write", "procurement")),
+):
+    if current_user.role_id not in (1, 2):
+        raise HTTPException(status_code=403, detail="Only managers and admins can approve purchase orders")
+    po = db.get(PurchaseOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    if po.status != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Purchase order is already {po.status}")
+    po.status      = "ordered"
+    po.approved_by = current_user.id
+    po.approved_at = datetime.utcnow()
+    db.commit()
+
+    row = db.execute(text("""
+        SELECT po.id, po.po_no, po.order_date, po.expected_date,
+               s.name AS supplier, po.total_amount, po.status,
+               au.full_name AS approved_by_name, po.notes
+        FROM purchase_orders po
+        LEFT JOIN suppliers s ON po.supplier_id = s.id
+        LEFT JOIN users    au ON po.approved_by = au.id
+        WHERE po.id = :id
+    """), {"id": po_id}).mappings().one()
+    return PurchaseOrderRow(**dict(row))
+
+
+@router.post("/orders/{po_id}/reject", response_model=PurchaseOrderRow)
+def reject_purchase_order(
+    po_id: int,
+    body: ApprovalAction,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission("write", "procurement")),
+):
+    if current_user.role_id not in (1, 2):
+        raise HTTPException(status_code=403, detail="Only managers and admins can reject purchase orders")
+    po = db.get(PurchaseOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    if po.status != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Purchase order is already {po.status}")
+    po.status           = "cancelled"
+    po.rejection_reason = body.rejection_reason
+    po.approved_by      = current_user.id
+    po.approved_at      = datetime.utcnow()
+    db.commit()
+
+    row = db.execute(text("""
+        SELECT po.id, po.po_no, po.order_date, po.expected_date,
+               s.name AS supplier, po.total_amount, po.status,
+               au.full_name AS approved_by_name, po.notes
+        FROM purchase_orders po
+        LEFT JOIN suppliers s ON po.supplier_id = s.id
+        LEFT JOIN users    au ON po.approved_by = au.id
+        WHERE po.id = :id
+    """), {"id": po_id}).mappings().one()
+    return PurchaseOrderRow(**dict(row))
+
+
+@router.delete("/orders/{po_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_purchase_order(
+    po_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission("delete")),
+):
+    if current_user.role_id not in (1, 2):
+        raise HTTPException(status_code=403, detail="Only managers and admins can delete purchase orders")
+    po = db.get(PurchaseOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    db.delete(po)
+    db.commit()
+
+
+@router.post("/orders/{po_id}/receive", response_model=PurchaseOrderRow)
+def receive_purchase_order(
+    po_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("write", "procurement")),
+):
+    po = db.get(PurchaseOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    if po.status not in ("ordered", "partial"):
+        raise HTTPException(status_code=400, detail="Only ordered POs can be marked received")
+    po.status = "received"
+    db.commit()
+
+    row = db.execute(text("""
+        SELECT po.id, po.po_no, po.order_date, po.expected_date,
+               s.name AS supplier, po.total_amount, po.status,
+               au.full_name AS approved_by_name, po.notes
+        FROM purchase_orders po
+        LEFT JOIN suppliers s ON po.supplier_id = s.id
+        LEFT JOIN users    au ON po.approved_by = au.id
+        WHERE po.id = :id
+    """), {"id": po_id}).mappings().one()
+    return PurchaseOrderRow(**dict(row))

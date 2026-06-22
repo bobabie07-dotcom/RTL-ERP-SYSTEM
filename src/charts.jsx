@@ -5,7 +5,17 @@ import React from 'react';
 
 export function LineChart({ data, color = 'var(--green-500)', height = 180, labels = [], yTicks = [], dotted = false }) {
   const w = 560, h = height, padL = 36, padB = 26, padT = 10, padR = 8;
-  const max = Math.max(...data) * 1.15 || 1;
+
+  if (!data || data.length < 2) {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        <text x={w / 2} y={h / 2} textAnchor="middle" fill="var(--text-muted)" fontSize="13" fontFamily="var(--font-body)">No data yet</text>
+      </svg>
+    );
+  }
+
+  const rawMax = Math.max(...data);
+  const max = (isFinite(rawMax) && rawMax > 0) ? rawMax * 1.15 : 1;
   const min = 0;
   const ix = (i) => padL + (i / (data.length - 1)) * (w - padL - padR);
   const iy = (v) => padT + (1 - (v - min) / (max - min)) * (h - padT - padB);
@@ -55,7 +65,15 @@ export function DonutChart({ segments, size = 168, thickness = 30 }) {
 
 export function BarChart({ data, height = 180, labels = [], ranks = [] }) {
   const w = 560, h = height, padL = 30, padB = 40, padT = 16, padR = 8;
-  const max = Math.max(...data.map(d => d.value)) * 1.18 || 1;
+  if (!data || data.length === 0) {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        <text x={w / 2} y={h / 2} textAnchor="middle" fill="var(--text-muted)" fontSize="13" fontFamily="var(--font-body)">No data yet</text>
+      </svg>
+    );
+  }
+  const rawMax = Math.max(...data.map(d => d.value));
+  const max = (isFinite(rawMax) && rawMax > 0) ? rawMax * 1.18 : 1;
   const n = data.length;
   const slot = (w - padL - padR) / n;
   const bw = slot * 0.46;
