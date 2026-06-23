@@ -39,7 +39,10 @@ async function request(method, path, body) {
 }
 
 const get    = (path, params) => {
-  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+  const clean = params
+    ? Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    : null;
+  const qs = clean && Object.keys(clean).length ? '?' + new URLSearchParams(clean).toString() : '';
   return request('GET', path + qs);
 };
 const post   = (path, body) => request('POST', path, body);
