@@ -187,6 +187,23 @@ def update_user(
     return user
 
 
+@router.post("/users/{user_id}/reset-password")
+def reset_user_password(
+    user_id: int,
+    current_user: User = Depends(require_permission("delete")),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Use the change password form to update your own password")
+    user.password_hash = _hash("Welcome@123")
+    user.is_first_login = True
+    db.commit()
+    return {"message": "Password reset successfully", "temp_password": "Welcome@123"}
+
+
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,

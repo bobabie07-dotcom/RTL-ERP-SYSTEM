@@ -4,18 +4,54 @@ from sqlalchemy import text
 
 from config import settings
 from database import engine
-from routers import alerts, auth, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales
+from routers import alerts, auth, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support
+
+
+def _safe_add_column(conn, sql: str):
+    try:
+        conn.execute(text(sql))
+    except Exception:
+        pass  # column already exists
 
 
 def run_startup_migrations():
     with engine.begin() as conn:
-        try:
-            conn.execute(text(
-                "ALTER TABLE users ADD COLUMN "
-                "is_first_login BOOLEAN NOT NULL DEFAULT FALSE"
-            ))
-        except Exception:
-            pass  # column already exists
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN is_first_login BOOLEAN NOT NULL DEFAULT FALSE")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN department VARCHAR(100) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN phone VARCHAR(50) DEFAULT NULL")
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS support_tickets (
+                id               INT AUTO_INCREMENT PRIMARY KEY,
+                ticket_no        VARCHAR(20) UNIQUE NOT NULL,
+                user_id          INT NOT NULL,
+                farm_id          SMALLINT NOT NULL,
+                subject          VARCHAR(255) NOT NULL,
+                category         ENUM('bug','access_request','feature_request','general') NOT NULL DEFAULT 'general',
+                priority         ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
+                description      TEXT NOT NULL,
+                status           ENUM('open','in_progress','waiting_on_user','resolved','closed') NOT NULL DEFAULT 'open',
+                assigned_to      INT NULL,
+                resolution_notes TEXT NULL,
+                created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                resolved_at      DATETIME NULL,
+                FOREIGN KEY (user_id)     REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (farm_id)     REFERENCES farms(id),
+                FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS ticket_comments (
+                id          INT AUTO_INCREMENT PRIMARY KEY,
+                ticket_id   INT NOT NULL,
+                user_id     INT NOT NULL,
+                comment     TEXT NOT NULL,
+                is_internal BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id)   REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
 
 
 app = FastAPI(
@@ -50,6 +86,7 @@ app.include_router(batch_plans.router, prefix=API)
 app.include_router(harvest.router,     prefix=API)
 app.include_router(alerts.router,       prefix=API)
 app.include_router(maintenance.router,  prefix=API)
+app.include_router(support.router,      prefix=API)
 
 
 run_startup_migrations()

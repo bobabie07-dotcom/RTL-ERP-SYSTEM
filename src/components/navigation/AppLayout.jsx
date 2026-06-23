@@ -11,17 +11,20 @@ import { alertsApi } from '../../api/client';
 import Icons from '../../icons';
 
 const navItems = [
-  { key: 'dashboard', label: 'Dashboard',         path: '/dashboard' },
-  { key: 'farms',     label: 'Farm Management',   path: '/farms' },
-  { key: 'houses',    label: 'Poultry Houses',    path: '/houses' },
-  { key: 'batches',   label: 'Batch Management',  path: '/batches' },
-  { key: 'inventory', label: 'Inventory',         path: '/inventory' },
-  { key: 'feed',      label: 'Feed Management',   path: '/feed' },
-  { key: 'mortality', label: 'Mortality Tracker', path: '/mortality' },
-  { key: 'sales',     label: 'Sales & Procurement', path: '/sales' },
-  { key: 'reports',   label: 'Reports & Analytics', path: '/reports' },
+  { key: 'dashboard',  label: 'Dashboard',           path: '/dashboard' },
+  { key: 'farms',      label: 'Farm Management',      path: '/farms' },
+  { key: 'houses',     label: 'Poultry Houses',       path: '/houses' },
+  { key: 'batches',    label: 'Batch Management',     path: '/batches' },
+  { key: 'inventory',  label: 'Inventory',            path: '/inventory' },
+  { key: 'feed',       label: 'Feed Management',      path: '/feed' },
+  { key: 'mortality',  label: 'Mortality Tracker',    path: '/mortality' },
+  { key: 'sales',      label: 'Sales & Procurement',  path: '/sales' },
+  { key: 'reports',    label: 'Reports & Analytics',  path: '/reports' },
   { key: 'notifications', label: 'Notifications',     path: '/notifications' },
-  { key: 'settings',     label: 'Settings',           path: '/settings' },
+  { key: 'usermgmt',   label: 'User Management',      path: '/user-management' },
+  { key: 'support',    label: 'IT Support',           path: '/support' },
+  { key: 'helpdesk',   label: 'Helpdesk',             path: '/helpdesk' },
+  { key: 'settings',   label: 'Settings',             path: '/settings' },
 ];
 
 const iconMap = {
@@ -29,6 +32,7 @@ const iconMap = {
   batches: Icons.batch, inventory: Icons.inventory, feed: Icons.feed,
   mortality: Icons.mortality, sales: Icons.sales, reports: Icons.reports,
   notifications: Icons.bell, settings: Icons.settings,
+  usermgmt: Icons.users, support: Icons.mail, helpdesk: Icons.wrench,
 };
 
 const SEVERITY_TONE = { info: 'info', warning: 'warning', danger: 'danger' };

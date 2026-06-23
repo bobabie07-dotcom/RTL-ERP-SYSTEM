@@ -7,6 +7,9 @@ import { ErrorBoundary } from './components/core/ErrorBoundary';
 import LoginPage from './pages/LoginPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import DashboardPage from './pages/DashboardPage';
+import UserManagementPage from './pages/UserManagementPage';
+import SupportPage from './pages/SupportPage';
+import HelpdeskPage from './pages/HelpdeskPage';
 import BatchesPage from './pages/BatchesPage';
 import BatchDetailPage from './pages/BatchDetailPage';
 import FarmsPage from './pages/FarmsPage';
@@ -87,7 +90,10 @@ export default function App() {
           <Route path="/sales"       element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
           <Route path="/reports"     element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/settings"       element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-          <Route path="/notifications"  element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+          <Route path="/notifications"   element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+          <Route path="/user-management" element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>} />
+          <Route path="/support"         element={<ProtectedRoute><SupportPage /></ProtectedRoute>} />
+          <Route path="/helpdesk"        element={<ProtectedRoute><HelpdeskPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

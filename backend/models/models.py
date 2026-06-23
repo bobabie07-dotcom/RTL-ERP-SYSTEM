@@ -50,12 +50,51 @@ class User(Base):
     full_name       = Column(String(150), nullable=False)
     email           = Column(String(150), nullable=False, unique=True)
     password_hash   = Column(String(255), nullable=False)
+    department      = Column(String(100), nullable=True)
+    phone           = Column(String(50), nullable=True)
     is_active       = Column(Boolean, nullable=False, default=True)
     is_first_login  = Column(Boolean, nullable=False, default=False)
     created_at      = Column(DateTime, default=func.now())
 
     farm: Farm = relationship("Farm", back_populates="users")
     role: Role = relationship("Role", back_populates="users")
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    ticket_no        = Column(String(20), unique=True, nullable=False)
+    user_id          = Column(Integer, ForeignKey("users.id"), nullable=False)
+    farm_id          = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
+    subject          = Column(String(255), nullable=False)
+    category         = Column(Enum("bug", "access_request", "feature_request", "general"), nullable=False, default="general")
+    priority         = Column(Enum("low", "medium", "high", "critical"), nullable=False, default="medium")
+    description      = Column(Text, nullable=False)
+    status           = Column(Enum("open", "in_progress", "waiting_on_user", "resolved", "closed"), nullable=False, default="open")
+    assigned_to      = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+    created_at       = Column(DateTime, default=func.now())
+    updated_at       = Column(DateTime, default=func.now(), onupdate=func.now())
+    resolved_at      = Column(DateTime, nullable=True)
+
+    submitter = relationship("User", foreign_keys=[user_id])
+    assignee  = relationship("User", foreign_keys=[assigned_to])
+    comments  = relationship("TicketComment", back_populates="ticket", order_by="TicketComment.created_at")
+
+
+class TicketComment(Base):
+    __tablename__ = "ticket_comments"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    ticket_id   = Column(Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False)
+    user_id     = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    comment     = Column(Text, nullable=False)
+    is_internal = Column(Boolean, nullable=False, default=False)
+    created_at  = Column(DateTime, default=func.now())
+
+    ticket = relationship("SupportTicket", back_populates="comments")
+    author = relationship("User")
 
 
 # ── Flocks / Batches ─────────────────────────────────────────────────────────

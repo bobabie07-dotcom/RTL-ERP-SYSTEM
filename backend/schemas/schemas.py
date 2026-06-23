@@ -31,8 +31,11 @@ class UserOut(OrmBase):
     email:          str
     farm_id:        int
     role_id:        int
+    department:     Optional[str]
+    phone:          Optional[str]
     is_active:      bool
     is_first_login: bool
+    created_at:     datetime
 
 
 class UserCreate(BaseModel):
@@ -41,6 +44,8 @@ class UserCreate(BaseModel):
     password:     str
     role_id:      int = 3
     farm_id:      int = 1
+    department:   Optional[str] = None
+    phone:        Optional[str] = None
     is_active:    bool = True
 
 
@@ -48,6 +53,8 @@ class UserUpdate(BaseModel):
     full_name:  Optional[str] = None
     email:      Optional[str] = None
     role_id:    Optional[int] = None
+    department: Optional[str] = None
+    phone:      Optional[str] = None
     is_active:  Optional[bool] = None
 
 
@@ -59,6 +66,55 @@ class ChangePasswordRequest(BaseModel):
 class FirstPasswordRequest(BaseModel):
     new_password:     str
     confirm_password: str
+
+
+# ── Support Tickets ───────────────────────────────────────────────────────────
+
+class TicketCreate(BaseModel):
+    subject:     str
+    category:    str
+    priority:    str = "medium"
+    description: str
+
+
+class TicketUpdate(BaseModel):
+    status:           Optional[str] = None
+    assigned_to:      Optional[int] = None
+    resolution_notes: Optional[str] = None
+    priority:         Optional[str] = None
+
+
+class TicketCommentCreate(BaseModel):
+    comment:     str
+    is_internal: bool = False
+
+
+class TicketCommentOut(OrmBase):
+    id:          int
+    ticket_id:   int
+    user_id:     int
+    comment:     str
+    is_internal: bool
+    created_at:  datetime
+    author_name: Optional[str] = None
+
+
+class TicketOut(OrmBase):
+    id:               int
+    ticket_no:        str
+    user_id:          int
+    farm_id:          int
+    subject:          str
+    category:         str
+    priority:         str
+    description:      str
+    status:           str
+    assigned_to:      Optional[int]
+    resolution_notes: Optional[str]
+    created_at:       datetime
+    updated_at:       datetime
+    resolved_at:      Optional[datetime]
+    submitter_name:   Optional[str] = None
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────

@@ -56,6 +56,7 @@ export const authApi = {
   createUser:     (data)                  => post('/api/auth/users', data),
   updateUser:     (id, data)              => patch(`/api/auth/users/${id}`, data),
   deleteUser:     (id)                    => del(`/api/auth/users/${id}`),
+  resetPassword:  (id)                    => post(`/api/auth/users/${id}/reset-password`),
 };
 
 export const batchesApi = {
@@ -182,4 +183,13 @@ export const maintenanceApi = {
   create: (data)   => post('/api/maintenance', data),
   update: (id, data) => patch(`/api/maintenance/${id}`, data),
   delete: (id)     => del(`/api/maintenance/${id}`),
+};
+
+export const supportApi = {
+  listTickets:   (params)       => get('/api/support/tickets', params),
+  createTicket:  (data)         => post('/api/support/tickets', data),
+  getTicket:     (id)           => get(`/api/support/tickets/${id}`),
+  updateTicket:  (id, data)     => patch(`/api/support/tickets/${id}`, data),
+  getComments:   (id)           => get(`/api/support/tickets/${id}/comments`),
+  addComment:    (id, data)     => post(`/api/support/tickets/${id}/comments`, data),
 };
