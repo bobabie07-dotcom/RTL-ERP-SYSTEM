@@ -12,7 +12,7 @@ from config import settings
 from database import get_db
 from models import User
 from schemas.schemas import (
-    ChangePasswordRequest, LoginRequest, TokenResponse,
+    ChangePasswordRequest, FirstPasswordRequest, LoginRequest, TokenResponse,
     UserCreate, UserOut, UserUpdate,
 )
 
@@ -102,6 +102,24 @@ def me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.put("/first-password")
+def set_first_password(
+    body: FirstPasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not current_user.is_first_login:
+        raise HTTPException(status_code=400, detail="Password already set")
+    if body.new_password != body.confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    current_user.password_hash = _hash(body.new_password)
+    current_user.is_first_login = False
+    db.commit()
+    return {"message": "Password updated successfully"}
+
+
 @router.put("/password")
 def change_password(
     body: ChangePasswordRequest,
@@ -144,6 +162,7 @@ def create_user(
         role_id=body.role_id,
         farm_id=body.farm_id,
         is_active=body.is_active,
+        is_first_login=True,
     )
     db.add(user)
     db.commit()

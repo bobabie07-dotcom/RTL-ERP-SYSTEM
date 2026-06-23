@@ -1,8 +1,22 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from config import settings
+from database import engine
 from routers import alerts, auth, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales
+
+
+def run_startup_migrations():
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN "
+                "is_first_login BOOLEAN NOT NULL DEFAULT FALSE"
+            ))
+        except Exception:
+            pass  # column already exists
+
 
 app = FastAPI(
     title="RTL Poultry Farming ERP",
@@ -36,6 +50,9 @@ app.include_router(batch_plans.router, prefix=API)
 app.include_router(harvest.router,     prefix=API)
 app.include_router(alerts.router,       prefix=API)
 app.include_router(maintenance.router,  prefix=API)
+
+
+run_startup_migrations()
 
 
 @app.get("/api/health-check")

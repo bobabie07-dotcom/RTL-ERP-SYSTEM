@@ -30,8 +30,8 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(email, pass);
-      navigate('/dashboard');
+      const me = await login(email, pass);
+      navigate(me.is_first_login ? '/change-password' : '/dashboard');
     } catch (err) {
       setError(err.message || 'Invalid credentials');
     } finally {

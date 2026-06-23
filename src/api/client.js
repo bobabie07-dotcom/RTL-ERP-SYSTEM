@@ -48,9 +48,10 @@ const patch  = (path, body) => request('PATCH', path, body);
 const del    = (path)       => request('DELETE', path);
 
 export const authApi = {
-  login:          (email, password)       => post('/api/auth/login', { email, password }),
-  me:             ()                      => get('/api/auth/me'),
-  changePassword: (current, next)         => put('/api/auth/password', { current_password: current, new_password: next }),
+  login:             (email, password)          => post('/api/auth/login', { email, password }),
+  me:                ()                         => get('/api/auth/me'),
+  changePassword:    (current, next)            => put('/api/auth/password', { current_password: current, new_password: next }),
+  setFirstPassword:  (newPass, confirmPass)     => put('/api/auth/first-password', { new_password: newPass, confirm_password: confirmPass }),
   users:          ()                      => get('/api/auth/users'),
   createUser:     (data)                  => post('/api/auth/users', data),
   updateUser:     (id, data)              => patch(`/api/auth/users/${id}`, data),

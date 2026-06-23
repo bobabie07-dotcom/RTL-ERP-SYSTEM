@@ -26,12 +26,13 @@ class TokenResponse(BaseModel):
 
 
 class UserOut(OrmBase):
-    id:        int
-    full_name: str
-    email:     str
-    farm_id:   int
-    role_id:   int
-    is_active: bool
+    id:             int
+    full_name:      str
+    email:          str
+    farm_id:        int
+    role_id:        int
+    is_active:      bool
+    is_first_login: bool
 
 
 class UserCreate(BaseModel):
@@ -53,6 +54,11 @@ class UserUpdate(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password:     str
+
+
+class FirstPasswordRequest(BaseModel):
+    new_password:     str
+    confirm_password: str
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────

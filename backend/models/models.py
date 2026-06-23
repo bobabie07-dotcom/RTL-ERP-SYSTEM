@@ -44,14 +44,15 @@ class Farm(Base):
 class User(Base):
     __tablename__ = "users"
 
-    id            = Column(Integer, primary_key=True, autoincrement=True)
-    farm_id       = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
-    role_id       = Column(SmallInteger, ForeignKey("roles.id"), nullable=False)
-    full_name     = Column(String(150), nullable=False)
-    email         = Column(String(150), nullable=False, unique=True)
-    password_hash = Column(String(255), nullable=False)
-    is_active     = Column(Boolean, nullable=False, default=True)
-    created_at    = Column(DateTime, default=func.now())
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    farm_id         = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
+    role_id         = Column(SmallInteger, ForeignKey("roles.id"), nullable=False)
+    full_name       = Column(String(150), nullable=False)
+    email           = Column(String(150), nullable=False, unique=True)
+    password_hash   = Column(String(255), nullable=False)
+    is_active       = Column(Boolean, nullable=False, default=True)
+    is_first_login  = Column(Boolean, nullable=False, default=False)
+    created_at      = Column(DateTime, default=func.now())
 
     farm: Farm = relationship("Farm", back_populates="users")
     role: Role = relationship("Role", back_populates="users")

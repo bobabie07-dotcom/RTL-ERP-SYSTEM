@@ -5,6 +5,7 @@ import { FarmProvider } from './context/FarmContext';
 import { AppLayout } from './components/navigation/AppLayout';
 import { ErrorBoundary } from './components/core/ErrorBoundary';
 import LoginPage from './pages/LoginPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import BatchesPage from './pages/BatchesPage';
 import BatchDetailPage from './pages/BatchDetailPage';
@@ -41,6 +42,7 @@ function ProtectedRoute({ children }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  if (user.is_first_login) return <Navigate to="/change-password" replace />;
   return (
     <FarmProvider>
       <AppLayout>
@@ -52,6 +54,20 @@ function ProtectedRoute({ children }) {
   );
 }
 
+function FirstLoginRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text-muted)', fontSize: 14 }}>
+        Loading...
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.is_first_login) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -59,6 +75,7 @@ export default function App() {
         <Routes>
           <Route path="/"        element={<Navigate to="/dashboard" replace />} />
           <Route path="/login"   element={<LoginPage />} />
+          <Route path="/change-password" element={<FirstLoginRoute><ChangePasswordPage /></FirstLoginRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/batches"   element={<ProtectedRoute><BatchesPage /></ProtectedRoute>} />
           <Route path="/batches/:id" element={<ProtectedRoute><BatchDetailPage /></ProtectedRoute>} />
