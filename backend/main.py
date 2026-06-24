@@ -34,9 +34,7 @@ def run_startup_migrations():
                 resolution_notes TEXT NULL,
                 created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                resolved_at      DATETIME NULL,
-                FOREIGN KEY (user_id)     REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
+                resolved_at      DATETIME NULL
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
         conn.execute(text("""
@@ -46,9 +44,7 @@ def run_startup_migrations():
                 user_id     INT NOT NULL,
                 comment     TEXT NOT NULL,
                 is_internal BOOLEAN NOT NULL DEFAULT FALSE,
-                created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id)   REFERENCES users(id) ON DELETE CASCADE
+                created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
 
