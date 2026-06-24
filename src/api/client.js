@@ -78,11 +78,15 @@ export const batchesApi = {
 };
 
 export const feedApi = {
-  stock:          ()        => get('/api/feed/stock'),
-  issues:         (params)  => get('/api/feed/issues', params),
-  weekly:         (farm_id) => get('/api/feed/weekly', { farm_id }),
-  createPurchase: (data)    => post('/api/feed/purchases', data),
-  createIssue:    (data)    => post('/api/feed/issues', data),
+  types:          ()             => get('/api/feed/types'),
+  stock:          ()             => get('/api/feed/stock'),
+  purchases:      (params)       => get('/api/feed/purchases', params),
+  issues:         (params)       => get('/api/feed/issues', params),
+  weekly:         (farm_id)      => get('/api/feed/weekly', { farm_id }),
+  createPurchase: (data)         => post('/api/feed/purchases', data),
+  createIssue:    (data)         => post('/api/feed/issues', data),
+  linkInventory:  (typeId, itemId) => patch(`/api/feed/types/${typeId}`, { inventory_item_id: itemId }),
+  unlinkInventory:(typeId)        => patch(`/api/feed/types/${typeId}`, { inventory_item_id: null }),
 };
 
 export const mortalityApi = {
@@ -106,6 +110,7 @@ export const healthApi = {
 export const inventoryApi = {
   items:      (params)   => get('/api/inventory/items', params),
   categories: ()         => get('/api/inventory/categories'),
+  suppliers:  ()         => get('/api/inventory/suppliers'),
   createItem: (data)     => post('/api/inventory/items', data),
   updateItem: (id, data) => patch(`/api/inventory/items/${id}`, data),
   deleteItem: (id)       => del(`/api/inventory/items/${id}`),

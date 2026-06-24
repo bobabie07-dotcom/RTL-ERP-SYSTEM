@@ -183,13 +183,14 @@ class BatchDailyLog(Base):
 class FeedType(Base):
     __tablename__ = "feed_types"
 
-    id          = Column(SmallInteger, primary_key=True, autoincrement=True)
-    name        = Column(String(100), nullable=False)
-    name_ar     = Column(String(200))
-    protein_pct = Column(Numeric(5, 2))
-    energy_kcal = Column(SmallInteger)
-    unit        = Column(Enum("kg", "ton"), nullable=False, default="kg")
-    notes       = Column(Text)
+    id                 = Column(SmallInteger, primary_key=True, autoincrement=True)
+    name               = Column(String(100), nullable=False)
+    name_ar            = Column(String(200))
+    protein_pct        = Column(Numeric(5, 2))
+    energy_kcal        = Column(SmallInteger)
+    unit               = Column(Enum("kg", "ton"), nullable=False, default="kg")
+    notes              = Column(Text)
+    inventory_item_id  = Column(Integer, nullable=True)
 
     stock:     Optional[FeedStock]   = relationship("FeedStock",    back_populates="feed_type", uselist=False)
     purchases: list[FeedPurchase]    = relationship("FeedPurchase", back_populates="feed_type")

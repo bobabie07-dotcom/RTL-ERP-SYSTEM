@@ -279,16 +279,17 @@ class DailyLogUpdate(BaseModel):
 # ── Feed ─────────────────────────────────────────────────────────────────────
 
 class FeedTypeOut(OrmBase):
-    id:          int
-    name:        str
-    name_ar:     Optional[str]
-    protein_pct: Optional[Decimal]
-    energy_kcal: Optional[int]
-    unit:        str
+    id:                int
+    name:              str
+    name_ar:           Optional[str]
+    protein_pct:       Optional[Decimal]
+    energy_kcal:       Optional[int]
+    unit:              str
+    inventory_item_id: Optional[int] = None
 
 
 class FeedStockRow(BaseModel):
-    """Row from v_feed_stock_status view."""
+    """Row from v_feed_stock_status view joined with feed_types."""
     id:                      int
     name:                    str
     name_ar:                 Optional[str]
@@ -297,6 +298,44 @@ class FeedStockRow(BaseModel):
     avg_daily_kg:            float
     days_remaining:          Optional[int]
     stock_status:            str
+    inventory_item_id:       Optional[int]   = None
+    inventory_item_name:     Optional[str]   = None
+
+
+class FeedTypePatch(BaseModel):
+    inventory_item_id: Optional[int] = None
+
+
+class FeedPurchaseCreate(BaseModel):
+    feed_type_id:  int
+    supplier_id:   Optional[int] = None
+    purchase_date: date
+    qty_kg:        Decimal
+    cost_per_kg:   Decimal
+    received_date: Optional[date] = None
+    invoice_no:    Optional[str]  = None
+    notes:         Optional[str]  = None
+
+
+class FeedPurchaseOut(OrmBase):
+    id:            int
+    feed_type_id:  int
+    purchase_date: date
+    qty_kg:        Decimal
+    cost_per_kg:   Decimal
+    invoice_no:    Optional[str]
+    created_at:    datetime
+
+
+class FeedPurchaseRow(BaseModel):
+    id:            int
+    purchase_date: date
+    feed_type:     str
+    supplier:      Optional[str]
+    qty_kg:        float
+    cost_per_kg:   float
+    total_cost:    float
+    invoice_no:    Optional[str]
 
 
 class FeedIssueCreate(BaseModel):

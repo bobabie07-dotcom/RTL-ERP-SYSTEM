@@ -5,11 +5,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Batch, FeedIssue, FeedStock, FeedType, House
+from models import Batch, FeedIssue, FeedPurchase, FeedStock, FeedType, House, InventoryItem, InventoryMovement
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
     FeedIssueCreate, FeedIssueOut, FeedIssueRow,
-    FeedStockRow, FeedTypeOut,
+    FeedPurchaseCreate, FeedPurchaseOut, FeedPurchaseRow,
+    FeedStockRow, FeedTypePatch, FeedTypeOut,
 )
 
 router = APIRouter(prefix="/feed", tags=["feed"])
@@ -22,8 +23,101 @@ def list_feed_types(db: Session = Depends(get_db), _=Depends(get_current_user)):
 
 @router.get("/stock", response_model=list[FeedStockRow])
 def get_feed_stock(db: Session = Depends(get_db), _=Depends(get_current_user)):
-    rows = db.execute(text("SELECT * FROM v_feed_stock_status ORDER BY id")).mappings().all()
+    rows = db.execute(text("""
+        SELECT
+            v.*,
+            ft.inventory_item_id,
+            ii.name AS inventory_item_name
+        FROM v_feed_stock_status v
+        JOIN feed_types ft ON ft.id = v.id
+        LEFT JOIN inventory_items ii ON ii.id = ft.inventory_item_id
+        ORDER BY v.id
+    """)).mappings().all()
     return [FeedStockRow(**dict(r)) for r in rows]
+
+
+@router.patch("/types/{type_id}", response_model=FeedTypeOut)
+def update_feed_type(
+    type_id: int,
+    body: FeedTypePatch,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("write", "feed")),
+):
+    ft = db.get(FeedType, type_id)
+    if not ft:
+        raise HTTPException(status_code=404, detail="Feed type not found")
+    ft.inventory_item_id = body.inventory_item_id
+    db.commit()
+    db.refresh(ft)
+    return ft
+
+
+@router.get("/purchases", response_model=list[FeedPurchaseRow])
+def list_feed_purchases(
+    farm_id: Optional[int] = Query(None),
+    limit:   int = Query(100, le=500),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    sql = """
+        SELECT
+            fp.id,
+            fp.purchase_date,
+            ft.name         AS feed_type,
+            s.name          AS supplier,
+            fp.qty_kg,
+            fp.cost_per_kg,
+            fp.qty_kg * fp.cost_per_kg AS total_cost,
+            fp.invoice_no
+        FROM feed_purchases fp
+        JOIN feed_types ft ON fp.feed_type_id = ft.id
+        LEFT JOIN suppliers s ON fp.supplier_id = s.id
+        ORDER BY fp.purchase_date DESC
+        LIMIT :limit
+    """
+    rows = db.execute(text(sql), {"limit": limit}).mappings().all()
+    return [FeedPurchaseRow(**dict(r)) for r in rows]
+
+
+@router.post("/purchases", response_model=FeedPurchaseOut, status_code=status.HTTP_201_CREATED)
+def create_feed_purchase(
+    body: FeedPurchaseCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission("write", "feed")),
+):
+    ft = db.get(FeedType, body.feed_type_id)
+    if not ft:
+        raise HTTPException(status_code=404, detail="Feed type not found")
+
+    purchase = FeedPurchase(**body.model_dump(), created_by=current_user.id)
+    db.add(purchase)
+    db.flush()  # get purchase.id before commit
+
+    # Update feed stock
+    stock = db.get(FeedStock, body.feed_type_id)
+    if stock:
+        stock.qty_on_hand_kg = float(stock.qty_on_hand_kg) + float(body.qty_kg)
+    else:
+        db.add(FeedStock(feed_type_id=body.feed_type_id, qty_on_hand_kg=float(body.qty_kg), reorder_qty_kg=0))
+
+    # Sync IN to inventory if this feed type is linked to an inventory item
+    if ft.inventory_item_id:
+        inv_item = db.get(InventoryItem, ft.inventory_item_id)
+        if inv_item:
+            inv_item.qty_on_hand = float(inv_item.qty_on_hand) + float(body.qty_kg)
+            db.add(InventoryMovement(
+                item_id=ft.inventory_item_id,
+                movement_type="in",
+                qty=body.qty_kg,
+                reference_type="purchase",
+                reference_id=purchase.id,
+                notes=f"Feed purchase — {ft.name}" + (f" | Inv: {body.invoice_no}" if body.invoice_no else ""),
+                created_by=current_user.id,
+            ))
+
+    db.commit()
+    db.refresh(purchase)
+    return purchase
 
 
 @router.get("/issues", response_model=list[FeedIssueRow])
@@ -72,16 +166,33 @@ def create_feed_issue(
 ):
     if not db.get(Batch, body.batch_id):
         raise HTTPException(status_code=404, detail="Batch not found")
-    if not db.get(FeedType, body.feed_type_id):
+    ft = db.get(FeedType, body.feed_type_id)
+    if not ft:
         raise HTTPException(status_code=404, detail="Feed type not found")
 
     issue = FeedIssue(**body.model_dump(), recorded_by=current_user.id)
     db.add(issue)
+    db.flush()  # get issue.id
 
-    # Decrement stock
+    # Decrement feed stock
     stock = db.get(FeedStock, body.feed_type_id)
     if stock:
         stock.qty_on_hand_kg = float(stock.qty_on_hand_kg) - float(body.qty_kg)
+
+    # Sync OUT to inventory if linked
+    if ft.inventory_item_id:
+        inv_item = db.get(InventoryItem, ft.inventory_item_id)
+        if inv_item:
+            inv_item.qty_on_hand = float(inv_item.qty_on_hand) - float(body.qty_kg)
+            db.add(InventoryMovement(
+                item_id=ft.inventory_item_id,
+                movement_type="out",
+                qty=body.qty_kg,
+                reference_type="issue",
+                reference_id=issue.id,
+                notes=f"Feed issue — {ft.name} to batch",
+                created_by=current_user.id,
+            ))
 
     db.commit()
     db.refresh(issue)
@@ -94,7 +205,6 @@ def weekly_consumption(
     db: Session = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    """Feed consumption per house for the last 7 days — feeds the BarChart on FeedPage."""
     rows = db.execute(text("""
         SELECT
             h.name          AS house,

@@ -6,7 +6,7 @@ import { Select } from '../components/forms/Select';
 import { StatCard } from '../components/data/StatCard';
 import { BarChart } from '../charts';
 import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Modal';
-import { feedApi, batchesApi } from '../api/client';
+import { feedApi, batchesApi, inventoryApi } from '../api/client';
 import { exportCsv } from '../utils/exportCsv';
 import { useFarm } from '../context/FarmContext';
 import Icons from '../icons';
@@ -50,7 +50,8 @@ const I = Icons;
 const STOCK_TONE = { ok: 'success', low: 'warning', out_of_stock: 'danger' };
 
 const TODAY = new Date().toISOString().split('T')[0];
-const BLANK_ISSUE = { batch_id: '', house_id: '', feed_type_id: '', issue_date: TODAY, qty_kg: '', fcr_snapshot: '' };
+const BLANK_ISSUE    = { batch_id: '', house_id: '', feed_type_id: '', issue_date: TODAY, qty_kg: '', fcr_snapshot: '' };
+const BLANK_PURCHASE = { feed_type_id: '', supplier_id: '', purchase_date: TODAY, qty_kg: '', cost_per_kg: '', invoice_no: '' };
 
 export default function FeedPage() {
   const { farmId } = useFarm();
@@ -68,21 +69,81 @@ export default function FeedPage() {
   const [batchFilter, setBatchFilter] = useState('All Batches');
   const [guideOpen, setGuideOpen] = useState(false);
 
+  // purchases
+  const [purchases,    setPurchases]    = useState([]);
+  const [purchaseModal,setPurchaseModal]= useState(false);
+  const [purchaseForm, setPurchaseForm] = useState(BLANK_PURCHASE);
+  const [purchaseErr,  setPurchaseErr]  = useState('');
+  const [suppliers,    setSuppliers]    = useState([]);
+
+  // link to inventory
+  const [linkModal,    setLinkModal]    = useState(false);
+  const [linkTarget,   setLinkTarget]   = useState(null); // { id, name }
+  const [linkItemId,   setLinkItemId]   = useState('');
+  const [invItems,     setInvItems]     = useState([]);
+  const [linkSaving,   setLinkSaving]   = useState(false);
+
   function loadFeed() {
     return Promise.all([
       feedApi.stock(),
       feedApi.issues({ limit: 50, farm_id: farmId }),
       feedApi.weekly(farmId),
-    ]).then(([s, iss, w]) => { setStock(s || []); setIssues(iss || []); setWeekly(w || []); });
+      feedApi.purchases({ limit: 50 }),
+    ]).then(([s, iss, w, p]) => { setStock(s || []); setIssues(iss || []); setWeekly(w || []); setPurchases(p || []); });
   }
 
   useEffect(() => {
     loadFeed().catch(e => setLoadError(e.message || 'Failed to load feed data.')).finally(() => setLoading(false));
     batchesApi.list({ farm_id: farmId }).then(setBatches).catch(() => {});
     batchesApi.houses({ farm_id: farmId }).then(setHouses).catch(() => {});
+    inventoryApi.items({ farm_id: farmId }).then(setInvItems).catch(() => {});
+    inventoryApi.suppliers().then(setSuppliers).catch(() => {});
   }, [farmId]);
 
   function openModal() { setForm(BLANK_ISSUE); setFormErr(''); setModal(true); }
+
+  function openPurchaseModal() { setPurchaseForm(BLANK_PURCHASE); setPurchaseErr(''); setPurchaseModal(true); }
+
+  async function handlePurchaseSave() {
+    const pf = purchaseForm;
+    if (!pf.feed_type_id || !pf.qty_kg || !pf.cost_per_kg || !pf.purchase_date) {
+      setPurchaseErr('Feed type, quantity, cost, and date are required.'); return;
+    }
+    setSaving(true); setPurchaseErr('');
+    try {
+      await feedApi.createPurchase({
+        feed_type_id:  Number(pf.feed_type_id),
+        supplier_id:   pf.supplier_id ? Number(pf.supplier_id) : null,
+        purchase_date: pf.purchase_date,
+        qty_kg:        parseFloat(pf.qty_kg),
+        cost_per_kg:   parseFloat(pf.cost_per_kg),
+        invoice_no:    pf.invoice_no || null,
+      });
+      await loadFeed();
+      setPurchaseModal(false);
+    } catch (err) { setPurchaseErr(err.message || 'Failed to save purchase.'); }
+    finally { setSaving(false); }
+  }
+
+  function openLinkModal(stockRow) {
+    setLinkTarget(stockRow);
+    setLinkItemId(stockRow.inventory_item_id ? String(stockRow.inventory_item_id) : '');
+    setLinkModal(true);
+  }
+
+  async function handleLinkSave() {
+    setLinkSaving(true);
+    try {
+      if (linkItemId) {
+        await feedApi.linkInventory(linkTarget.id, Number(linkItemId));
+      } else {
+        await feedApi.unlinkInventory(linkTarget.id);
+      }
+      await loadFeed();
+      setLinkModal(false);
+    } catch (err) { alert(err.message || 'Failed to save link.'); }
+    finally { setLinkSaving(false); }
+  }
 
   async function handleSave() {
     if (!form.batch_id || !form.house_id || !form.feed_type_id || !form.qty_kg) {
@@ -133,7 +194,10 @@ export default function FeedPage() {
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Feed Management</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Monitor feed consumption, FCR, and stock levels.</p>
         </div>
-        <Button variant="primary" size="md" icon={<I.plus w={16} />} onClick={openModal}>Issue Feed</Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button variant="secondary" size="md" icon={<I.box w={16} />} onClick={openPurchaseModal}>Record Purchase</Button>
+          <Button variant="primary"   size="md" icon={<I.plus w={16} />} onClick={openModal}>Issue Feed</Button>
+        </div>
       </div>
 
       <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
@@ -147,12 +211,13 @@ export default function FeedPage() {
       <Card title="Feed Stock Levels">
         <DataTable
           columns={[
-            { key: 'name',          header: 'Feed Type',     strong: true },
-            { key: 'qty_on_hand',   header: 'On Hand (kg)',  align: 'right', numeric: true },
-            { key: 'reorder_qty',   header: 'Reorder (kg)',  align: 'right', numeric: true },
-            { key: 'avg_daily',     header: 'Avg Daily (kg)',align: 'right', numeric: true },
-            { key: 'days_left',     header: 'Days Left',     align: 'right', numeric: true },
+            { key: 'name',          header: 'Feed Type',      strong: true },
+            { key: 'qty_on_hand',   header: 'On Hand (kg)',   align: 'right', numeric: true },
+            { key: 'reorder_qty',   header: 'Reorder (kg)',   align: 'right', numeric: true },
+            { key: 'avg_daily',     header: 'Avg Daily (kg)', align: 'right', numeric: true },
+            { key: 'days_left',     header: 'Days Left',      align: 'right', numeric: true },
             { key: 'status_badge',  header: 'Status' },
+            { key: 'inv_link',      header: 'Inventory Link' },
           ]}
           rows={stock.map((s) => ({
             ...s,
@@ -169,6 +234,18 @@ export default function FeedPage() {
               }}>
                 {s.stock_status === 'ok' ? 'In Stock' : s.stock_status === 'low' ? 'Low' : 'Out of Stock'}
               </span>
+            ),
+            inv_link: s.inventory_item_id ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: '#dbeafe', color: '#1e40af' }}>
+                  ✓ {s.inventory_item_name || `Item #${s.inventory_item_id}`}
+                </span>
+                <button onClick={() => openLinkModal(s)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', padding: '2px 4px', borderRadius: 4 }}>change</button>
+              </div>
+            ) : (
+              <button onClick={() => openLinkModal(s)} style={{ border: '1px dashed var(--border)', background: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', padding: '3px 10px', borderRadius: 6 }}>
+                + Link to Inventory
+              </button>
             ),
           }))}
           rowKey="id"
@@ -204,6 +281,40 @@ export default function FeedPage() {
             { key: 'recordedBy', header: 'Recorded By' },
           ]}
           rows={filteredIssueRows}
+          rowKey="id"
+        />
+      </Card>
+
+      {/* Feed Purchase Log */}
+      <Card title="Feed Purchase Log" action={
+        <Button variant="secondary" size="sm" icon={<I.download w={14} />} onClick={() => exportCsv(purchases, [
+          { key: 'purchase_date', header: 'Date' },
+          { key: 'feed_type',     header: 'Feed Type' },
+          { key: 'supplier',      header: 'Supplier' },
+          { key: 'qty_kg',        header: 'Qty (kg)' },
+          { key: 'cost_per_kg',   header: 'Cost/kg' },
+          { key: 'total_cost',    header: 'Total Cost' },
+          { key: 'invoice_no',    header: 'Invoice No' },
+        ], 'feed-purchases.csv')}>Export</Button>
+      }>
+        <DataTable
+          columns={[
+            { key: 'purchase_date', header: 'Date',       strong: true },
+            { key: 'feed_type',     header: 'Feed Type' },
+            { key: 'supplier',      header: 'Supplier' },
+            { key: 'qty_kg',        header: 'Qty (kg)',   align: 'right', numeric: true },
+            { key: 'cost_per_kg',   header: 'Cost/kg',    align: 'right', numeric: true },
+            { key: 'total_cost',    header: 'Total Cost', align: 'right', numeric: true },
+            { key: 'invoice_no',    header: 'Invoice No' },
+          ]}
+          rows={purchases.map(p => ({
+            ...p,
+            qty_kg:     Number(p.qty_kg).toLocaleString(),
+            cost_per_kg:Number(p.cost_per_kg).toFixed(2),
+            total_cost: Number(p.total_cost).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+            supplier:   p.supplier   || '—',
+            invoice_no: p.invoice_no || '—',
+          }))}
           rowKey="id"
         />
       </Card>
@@ -283,6 +394,65 @@ export default function FeedPage() {
           </div>
         )}
       </div>
+
+      {/* Record Purchase Modal */}
+      <Modal open={purchaseModal} title="Record Feed Purchase" onClose={() => setPurchaseModal(false)} onConfirm={handlePurchaseSave} confirmLabel="Save Purchase" loading={saving}>
+        {purchaseErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{purchaseErr}</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          <FormRow label="Feed Type" required>
+            <FieldSelect value={purchaseForm.feed_type_id} onChange={e => setPurchaseForm(p => ({ ...p, feed_type_id: e.target.value }))}>
+              <option value="">Select feed type…</option>
+              {stock.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </FieldSelect>
+          </FormRow>
+          <FormRow label="Supplier">
+            <FieldSelect value={purchaseForm.supplier_id} onChange={e => setPurchaseForm(p => ({ ...p, supplier_id: e.target.value }))}>
+              <option value="">No supplier</option>
+              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </FieldSelect>
+          </FormRow>
+          <FormRow label="Purchase Date" required>
+            <FieldInput type="date" value={purchaseForm.purchase_date} onChange={e => setPurchaseForm(p => ({ ...p, purchase_date: e.target.value }))} />
+          </FormRow>
+          <FormRow label="Invoice No">
+            <FieldInput value={purchaseForm.invoice_no} onChange={e => setPurchaseForm(p => ({ ...p, invoice_no: e.target.value }))} placeholder="e.g. INV-2026-001" />
+          </FormRow>
+          <FormRow label="Quantity (kg)" required>
+            <FieldInput type="number" value={purchaseForm.qty_kg} onChange={e => setPurchaseForm(p => ({ ...p, qty_kg: e.target.value }))} placeholder="e.g. 500" min="0.1" step="0.1" />
+          </FormRow>
+          <FormRow label="Cost per kg" required>
+            <FieldInput type="number" value={purchaseForm.cost_per_kg} onChange={e => setPurchaseForm(p => ({ ...p, cost_per_kg: e.target.value }))} placeholder="e.g. 28.50" step="0.01" />
+          </FormRow>
+        </div>
+        {purchaseForm.qty_kg && purchaseForm.cost_per_kg && (
+          <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--success-bg)', borderRadius: 8, fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>
+            Total Cost: {(parseFloat(purchaseForm.qty_kg || 0) * parseFloat(purchaseForm.cost_per_kg || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
+        )}
+        {stock.find(s => s.id === Number(purchaseForm.feed_type_id))?.inventory_item_id && (
+          <div style={{ marginTop: 8, padding: '8px 14px', background: '#dbeafe', borderRadius: 8, fontSize: 12, color: '#1e40af' }}>
+            This feed type is linked to inventory — stock will be updated automatically.
+          </div>
+        )}
+      </Modal>
+
+      {/* Link to Inventory Modal */}
+      <Modal open={linkModal} title={`Link "${linkTarget?.name}" to Inventory`} onClose={() => setLinkModal(false)} onConfirm={handleLinkSave} confirmLabel="Save Link" loading={linkSaving}>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+          Select an inventory item to sync with. When feed is issued or purchased, the linked inventory item qty will update automatically.
+        </p>
+        <FormRow label="Inventory Item">
+          <FieldSelect value={linkItemId} onChange={e => setLinkItemId(e.target.value)}>
+            <option value="">— Remove link / No link —</option>
+            {invItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.qty_on_hand} {i.unit} on hand)</option>)}
+          </FieldSelect>
+        </FormRow>
+        {linkTarget?.inventory_item_id && (
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            Currently linked to: <strong>{linkTarget.inventory_item_name || `Item #${linkTarget.inventory_item_id}`}</strong>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={modal} title="Issue Feed" onClose={() => setModal(false)} onConfirm={handleSave} confirmLabel="Record Issue" loading={saving}>
         {formErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{formErr}</div>}
