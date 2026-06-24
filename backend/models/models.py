@@ -66,7 +66,7 @@ class SupportTicket(Base):
     id               = Column(Integer, primary_key=True, autoincrement=True)
     ticket_no        = Column(String(20), unique=True, nullable=False)
     user_id          = Column(Integer, ForeignKey("users.id"), nullable=False)
-    farm_id          = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
+    farm_id          = Column(Integer, nullable=True)
     subject          = Column(String(255), nullable=False)
     category         = Column(Enum("bug", "access_request", "feature_request", "general"), nullable=False, default="general")
     priority         = Column(Enum("low", "medium", "high", "critical"), nullable=False, default="medium")

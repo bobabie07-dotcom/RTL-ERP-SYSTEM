@@ -24,7 +24,7 @@ def run_startup_migrations():
                 id               INT AUTO_INCREMENT PRIMARY KEY,
                 ticket_no        VARCHAR(20) UNIQUE NOT NULL,
                 user_id          INT NOT NULL,
-                farm_id          SMALLINT NOT NULL,
+                farm_id          INT NULL,
                 subject          VARCHAR(255) NOT NULL,
                 category         ENUM('bug','access_request','feature_request','general') NOT NULL DEFAULT 'general',
                 priority         ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
@@ -36,7 +36,6 @@ def run_startup_migrations():
                 updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 resolved_at      DATETIME NULL,
                 FOREIGN KEY (user_id)     REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (farm_id)     REFERENCES farms(id),
                 FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
