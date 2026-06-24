@@ -26,6 +26,11 @@ DB_URL = (
     f"/{os.environ['DB_NAME']}?charset=utf8mb4"
 )
 
+connect_args = {}
+ca_path = Path(__file__).parent / "ca.pem"
+if ca_path.exists():
+    connect_args["ssl"] = {"ca": str(ca_path)}
+
 USERS = [
     {"email": "admin@rtl-poultry.com",   "password": "admin123",   "name": "Ahmad Al-Rashidi"},
     {"email": "manager@rtl-poultry.com", "password": "manager123", "name": "Mariam Khalil"},
@@ -33,7 +38,7 @@ USERS = [
     {"email": "vet@rtl-poultry.com",     "password": "vet123",     "name": "Dr. Lina Haddad"},
 ]
 
-engine = create_engine(DB_URL)
+engine = create_engine(DB_URL, connect_args=connect_args)
 with engine.begin() as conn:
     for u in USERS:
         hashed = bcrypt.hashpw(u["password"].encode(), bcrypt.gensalt()).decode()

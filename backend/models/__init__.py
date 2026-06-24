@@ -11,6 +11,7 @@ from models.models import (
     Alert,
     BatchFinancialPlan, BatchFeedPhase, BatchExpenseItem,
     HarvestRecord,
+    SupportTicket, TicketComment,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "Alert",
     "BatchFinancialPlan", "BatchFeedPhase", "BatchExpenseItem",
     "HarvestRecord",
+    "SupportTicket", "TicketComment",
 ]
