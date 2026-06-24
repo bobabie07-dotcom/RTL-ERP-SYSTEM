@@ -11,6 +11,40 @@ import { exportCsv } from '../utils/exportCsv';
 import { useFarm } from '../context/FarmContext';
 import Icons from '../icons';
 
+const LAYER_GUIDE = [
+  { week: '1',     bw: 65,    budget: '10',      feed: 'Chick Booster',                phase: 'booster',  remarks: 'Chick arrival — provide vitamins & electrolytes in water' },
+  { week: '2',     bw: 120,   budget: '16',      feed: 'Chick Booster + Chick Starter',phase: 'booster',  remarks: 'Beak trimming (day 6–10); give multivitamins after' },
+  { week: '3',     bw: 180,   budget: '22',      feed: 'Chick Starter',                phase: 'starter',  remarks: '1st Newcastle Disease + Infectious Bronchitis vaccination' },
+  { week: '4',     bw: 250,   budget: '28',      feed: 'Chick Starter',                phase: 'starter',  remarks: '—' },
+  { week: '5',     bw: 331,   budget: '33',      feed: 'Chick Starter',                phase: 'starter',  remarks: '1st Fowl Pox vaccination' },
+  { week: '6',     bw: 418,   budget: '39',      feed: 'Chick Starter',                phase: 'starter',  remarks: '—' },
+  { week: '7',     bw: 508,   budget: '43',      feed: 'Chick Starter',                phase: 'starter',  remarks: '1st Deworming; give multivitamins on deworming day' },
+  { week: '8',     bw: 597,   budget: '48',      feed: 'Chick Starter + Chick Grower', phase: 'starter',  remarks: '2nd Newcastle Disease vaccination; plain water 3 days after' },
+  { week: '9',     bw: 682,   budget: '52',      feed: 'Chick Grower',                 phase: 'grower',   remarks: '—' },
+  { week: '10',    bw: 763,   budget: '55',      feed: 'Chick Grower',                 phase: 'grower',   remarks: '—' },
+  { week: '11',    bw: 841,   budget: '58',      feed: 'Chick Grower',                 phase: 'grower',   remarks: '—' },
+  { week: '12',    bw: 915,   budget: '61',      feed: 'Chick Grower',                 phase: 'grower',   remarks: '2nd Deworming; give multivitamins on deworming day' },
+  { week: '13',    bw: 986,   budget: '64',      feed: 'Chick Grower',                 phase: 'grower',   remarks: '—' },
+  { week: '14',    bw: 1055,  budget: '67',      feed: 'Chick Grower',                 phase: 'grower',   remarks: '—' },
+  { week: '15',    bw: 1122,  budget: '69',      feed: 'Chick Grower',                 phase: 'grower',   remarks: '—' },
+  { week: '16',    bw: 1190,  budget: '73',      feed: 'Chick Grower',                 phase: 'grower',   remarks: '3rd Newcastle Disease booster vaccination' },
+  { week: '17',    bw: 1260,  budget: '77',      feed: 'Pre-Lay',                      phase: 'prelay',   remarks: 'Transfer to laying house; begin pre-lay preparation' },
+  { week: '18',    bw: 1329,  budget: '81',      feed: 'Pre-Lay',                      phase: 'prelay',   remarks: 'Monitor body weight; supplement calcium; 3rd Deworming' },
+  { week: '19',    bw: 1393,  budget: '85',      feed: 'Chicken Layer',                phase: 'layer',    remarks: 'Laying period begins; increase feed gradually' },
+  { week: '20',    bw: 1448,  budget: '92',      feed: 'Chicken Layer',                phase: 'layer',    remarks: '—' },
+  { week: '21',    bw: 1496,  budget: '97',      feed: 'Chicken Layer',                phase: 'layer',    remarks: '—' },
+  { week: '22',    bw: 1537,  budget: '99',      feed: 'Chicken Layer',                phase: 'layer',    remarks: '—' },
+  { week: '23-up', bw: 1571,  budget: '100–109', feed: 'Chicken Layer',                phase: 'layer',    remarks: 'Maintain full feed; monitor egg production & FCR' },
+];
+
+const PHASE_STYLE = {
+  booster: { bg: '#fef9c3', color: '#854d0e', label: 'Booster' },
+  starter: { bg: '#dcfce7', color: '#166534', label: 'Starter' },
+  grower:  { bg: '#d1fae5', color: '#065f46', label: 'Grower'  },
+  prelay:  { bg: '#ede9fe', color: '#5b21b6', label: 'Pre-Lay' },
+  layer:   { bg: '#dbeafe', color: '#1e40af', label: 'Layer'   },
+};
+
 const I = Icons;
 
 const STOCK_TONE = { ok: 'success', low: 'warning', out_of_stock: 'danger' };
@@ -32,6 +66,7 @@ export default function FeedPage() {
   const [formErr,   setFormErr]   = useState('');
   const [loadError, setLoadError] = useState('');
   const [batchFilter, setBatchFilter] = useState('All Batches');
+  const [guideOpen, setGuideOpen] = useState(false);
 
   function loadFeed() {
     return Promise.all([
@@ -172,6 +207,82 @@ export default function FeedPage() {
           rowKey="id"
         />
       </Card>
+
+      {/* Layer Feeding Guide */}
+      <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--white)' }}>
+        <button
+          onClick={() => setGuideOpen(v => !v)}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer', gap: 12 }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <I.feed w={18} style={{ color: 'var(--text-brand)' }} />
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: 'var(--text-strong)' }}>
+              Layer Feeding Guide
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>Unifeeds Program — Week 1 to 23+</span>
+          </div>
+          <span style={{ fontSize: 18, color: 'var(--text-muted)', lineHeight: 1, transform: guideOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }}>▾</span>
+        </button>
+
+        {guideOpen && (
+          <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            {/* Phase legend */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '12px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--gray-50)' }}>
+              {Object.entries(PHASE_STYLE).map(([k, s]) => (
+                <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600, background: s.bg, color: s.color }}>
+                  {s.label}
+                </span>
+              ))}
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center', marginLeft: 4 }}>— feed phase color coding</span>
+            </div>
+
+            {/* Notes */}
+            <div style={{ padding: '10px 20px', background: '#fffbeb', borderBottom: '1px solid var(--border-subtle)', fontSize: 12, color: '#78350f', display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <strong>Notes:</strong>
+              <span>1. Give Vitamin C 3 days before every vaccination and multi-vitamins.</span>
+              <span>2. Under normal conditions, plain water is advised 3 consecutive days after vaccination.</span>
+              <span>3. Give multi-vitamins on the day during deworming until 3 consecutive days.</span>
+              <span style={{ fontStyle: 'italic' }}>* Please consult your veterinarian for vaccination and medication programs.</span>
+            </div>
+
+            {/* Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#7c3b1e', color: '#fff' }}>
+                    {['Week', 'Body Weight Avg (g)', 'Daily Feed Budget (g/head)', 'Feed Type', 'Remarks'].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Week' || h === 'Body Weight Avg (g)' || h === 'Daily Feed Budget (g/head)' ? 'center' : 'left', fontWeight: 700, fontSize: 12, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {LAYER_GUIDE.map((row, i) => {
+                    const ps = PHASE_STYLE[row.phase];
+                    return (
+                      <tr key={row.week} style={{ background: i % 2 === 0 ? 'var(--white)' : 'var(--gray-50)', borderBottom: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '9px 14px', textAlign: 'center', fontWeight: 700, color: 'var(--text-strong)', fontSize: 13 }}>{row.week}</td>
+                        <td style={{ padding: '9px 14px', textAlign: 'center', color: 'var(--text-secondary)' }}>{row.bw.toLocaleString()}</td>
+                        <td style={{ padding: '9px 14px', textAlign: 'center', fontWeight: 600, color: 'var(--text-strong)' }}>{row.budget}</td>
+                        <td style={{ padding: '9px 14px' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600, background: ps.bg, color: ps.color, whiteSpace: 'nowrap' }}>
+                            {row.feed}
+                          </span>
+                        </td>
+                        <td style={{ padding: '9px 14px', color: row.remarks === '—' ? 'var(--text-muted)' : 'var(--text-secondary)', fontStyle: row.remarks === '—' ? 'normal' : 'normal' }}>
+                          {row.remarks !== '—' && (
+                            <span style={{ display: 'inline-block', marginRight: 6, color: '#ca8a04' }}>●</span>
+                          )}
+                          {row.remarks}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
 
       <Modal open={modal} title="Issue Feed" onClose={() => setModal(false)} onConfirm={handleSave} confirmLabel="Record Issue" loading={saving}>
         {formErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{formErr}</div>}
