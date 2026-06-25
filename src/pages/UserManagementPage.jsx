@@ -42,7 +42,7 @@ function StatBox({ label, value, tone = 'neutral' }) {
   );
 }
 
-const EMPTY_FORM = { full_name: '', email: '', password: '', role_id: '3', department: '', phone: '' };
+const EMPTY_FORM = { full_name: '', email: '', role_id: '3', department: '', phone: '' };
 
 export default function UserManagementPage() {
   const { farmId } = useFarm();
@@ -55,10 +55,11 @@ export default function UserManagementPage() {
   const [toast, setToast]       = useState(null);
 
   // Add modal
-  const [addOpen, setAddOpen]   = useState(false);
-  const [addForm, setAddForm]   = useState(EMPTY_FORM);
-  const [addErr, setAddErr]     = useState('');
-  const [addSaving, setAddSaving] = useState(false);
+  const [addOpen, setAddOpen]       = useState(false);
+  const [addForm, setAddForm]       = useState(EMPTY_FORM);
+  const [addErr, setAddErr]         = useState('');
+  const [addSaving, setAddSaving]   = useState(false);
+  const [addResult, setAddResult]   = useState(null); // { email, temp_password }
 
   // Edit modal
   const [editUser, setEditUser] = useState(null);
@@ -106,16 +107,15 @@ export default function UserManagementPage() {
 
   // ── Add User ──
   async function handleAdd() {
-    if (!addForm.full_name || !addForm.email || !addForm.password) {
-      setAddErr('Full name, email, and password are required.'); return;
+    if (!addForm.full_name || !addForm.email) {
+      setAddErr('Full name and email are required.'); return;
     }
-    if (addForm.password.length < 6) { setAddErr('Password must be at least 6 characters.'); return; }
     setAddSaving(true); setAddErr('');
     try {
-      await authApi.createUser({ ...addForm, role_id: Number(addForm.role_id), farm_id: farmId });
+      const res = await authApi.createUser({ ...addForm, role_id: Number(addForm.role_id), farm_id: farmId });
       await loadUsers();
-      setAddOpen(false); setAddForm(EMPTY_FORM);
-      showToast('User created. They will be prompted to change their password on first login.');
+      setAddForm(EMPTY_FORM);
+      setAddResult({ full_name: res.full_name, email: res.email, temp_password: res.temp_password || 'Welcome@123' });
     } catch (e) { setAddErr(e.message || 'Failed to create user.'); }
     finally { setAddSaving(false); }
   }
@@ -300,36 +300,61 @@ export default function UserManagementPage() {
       </Card>
 
       {/* ── Add User Modal ── */}
-      <Modal open={addOpen} title="Add New User" onClose={() => setAddOpen(false)} onConfirm={handleAdd} confirmLabel="Create User" loading={addSaving}>
-        {addErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{addErr}</div>}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-          <FormRow label="Full Name" required>
-            <FieldInput value={addForm.full_name} onChange={af('full_name')} placeholder="e.g. Maria Santos" />
-          </FormRow>
-          <FormRow label="Email" required>
-            <FieldInput type="email" value={addForm.email} onChange={af('email')} placeholder="user@farm.com" />
-          </FormRow>
-          <FormRow label="Default Password" required>
-            <FieldInput type="password" value={addForm.password} onChange={af('password')} placeholder="Min. 6 chars (user will reset)" />
-          </FormRow>
-          <FormRow label="Role">
-            <FieldSelect value={addForm.role_id} onChange={af('role_id')}>
-              {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </FieldSelect>
-          </FormRow>
-          <FormRow label="Department">
-            <FieldSelect value={addForm.department} onChange={af('department')}>
-              <option value="">— Select —</option>
-              {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-            </FieldSelect>
-          </FormRow>
-          <FormRow label="Phone / Contact">
-            <FieldInput value={addForm.phone} onChange={af('phone')} placeholder="+63 912 345 6789" />
-          </FormRow>
-        </div>
-        <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-bg, #fffbeb)', borderRadius: 8, fontSize: 12, color: 'var(--warning-text, #92400e)' }}>
-          The user will be required to change their password upon first login.
-        </div>
+      <Modal
+        open={addOpen}
+        title={addResult ? 'Account Created' : 'Add New User'}
+        onClose={() => { setAddOpen(false); setAddResult(null); }}
+        onConfirm={addResult ? () => { setAddOpen(false); setAddResult(null); } : handleAdd}
+        confirmLabel={addResult ? 'Done' : 'Create Account'}
+        loading={addSaving}
+        cancelLabel={addResult ? null : 'Cancel'}
+      >
+        {addResult ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ padding: '14px 16px', background: '#dcfce7', border: '1px solid #bbf7d0', borderRadius: 10 }}>
+              <div style={{ fontWeight: 700, color: '#15803d', fontSize: 14, marginBottom: 4 }}>Account created successfully</div>
+              <div style={{ fontSize: 13, color: '#166534' }}>Share these credentials with <strong>{addResult.full_name}</strong>:</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '10px 16px', fontSize: 13, alignItems: 'center' }}>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Email</span>
+              <code style={{ background: 'var(--gray-100)', padding: '4px 10px', borderRadius: 6, fontFamily: 'monospace', fontSize: 13 }}>{addResult.email}</code>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Password</span>
+              <code style={{ background: 'var(--gray-100)', padding: '4px 10px', borderRadius: 6, fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{addResult.temp_password}</code>
+            </div>
+            <div style={{ padding: '10px 14px', background: '#fffbeb', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
+              The user will be required to set a new password on their first login.
+            </div>
+          </div>
+        ) : (
+          <>
+            {addErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{addErr}</div>}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+              <FormRow label="Full Name" required>
+                <FieldInput value={addForm.full_name} onChange={af('full_name')} placeholder="e.g. Maria Santos" />
+              </FormRow>
+              <FormRow label="Email" required>
+                <FieldInput type="email" value={addForm.email} onChange={af('email')} placeholder="user@farm.com" />
+              </FormRow>
+              <FormRow label="Role">
+                <FieldSelect value={addForm.role_id} onChange={af('role_id')}>
+                  {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                </FieldSelect>
+              </FormRow>
+              <FormRow label="Department">
+                <FieldSelect value={addForm.department} onChange={af('department')}>
+                  <option value="">— Select —</option>
+                  {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                </FieldSelect>
+              </FormRow>
+              <FormRow label="Phone / Contact">
+                <FieldInput value={addForm.phone} onChange={af('phone')} placeholder="+63 912 345 6789" />
+              </FormRow>
+            </div>
+            <div style={{ marginTop: 12, padding: '10px 14px', background: '#fffbeb', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
+              A temporary password <strong>Welcome@123</strong> will be assigned. The user must change it on first login.
+            </div>
+          </>
+        )}
       </Modal>
 
       {/* ── Edit User Modal ── */}

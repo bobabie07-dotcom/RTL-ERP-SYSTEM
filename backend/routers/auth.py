@@ -147,7 +147,9 @@ def list_users(
     return q.order_by(User.full_name).all()
 
 
-@router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+DEFAULT_PASSWORD = "Welcome@123"
+
+@router.post("/users", status_code=status.HTTP_201_CREATED)
 def create_user(
     body: UserCreate,
     current_user: User = Depends(require_permission("delete")),
@@ -158,16 +160,30 @@ def create_user(
     user = User(
         full_name=body.full_name,
         email=body.email,
-        password_hash=_hash(body.password),
+        password_hash=_hash(DEFAULT_PASSWORD),
         role_id=body.role_id,
         farm_id=body.farm_id,
+        department=body.department or None,
+        phone=body.phone or None,
         is_active=body.is_active,
         is_first_login=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+    return {
+        "id":            user.id,
+        "full_name":     user.full_name,
+        "email":         user.email,
+        "role_id":       user.role_id,
+        "farm_id":       user.farm_id,
+        "department":    user.department,
+        "phone":         user.phone,
+        "is_active":     user.is_active,
+        "is_first_login":user.is_first_login,
+        "created_at":    user.created_at,
+        "temp_password": DEFAULT_PASSWORD,
+    }
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)
