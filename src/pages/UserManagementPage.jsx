@@ -42,7 +42,7 @@ function StatBox({ label, value, tone = 'neutral' }) {
   );
 }
 
-const EMPTY_FORM = { full_name: '', email: '', role_id: '3', department: '', phone: '' };
+const EMPTY_FORM = { full_name: '', email: '', username: '', role_id: '3', department: '', phone: '' };
 
 export default function UserManagementPage() {
   const { farmId } = useFarm();
@@ -115,7 +115,7 @@ export default function UserManagementPage() {
       const res = await authApi.createUser({ ...addForm, role_id: Number(addForm.role_id), farm_id: farmId });
       await loadUsers();
       setAddForm(EMPTY_FORM);
-      setAddResult({ full_name: res.full_name, email: res.email, temp_password: res.temp_password || 'Welcome@123' });
+      setAddResult({ full_name: res.full_name, email: res.email, username: res.username, temp_password: res.temp_password || 'Welcome@123' });
     } catch (e) { setAddErr(e.message || 'Failed to create user.'); }
     finally { setAddSaving(false); }
   }
@@ -123,7 +123,7 @@ export default function UserManagementPage() {
   // ── Edit User ──
   function openEdit(u) {
     setEditUser(u);
-    setEditForm({ full_name: u.full_name, email: u.email, role_id: String(u.role_id), department: u.department || '', phone: u.phone || '' });
+    setEditForm({ full_name: u.full_name, email: u.email, username: u.username || '', role_id: String(u.role_id), department: u.department || '', phone: u.phone || '' });
     setEditErr('');
   }
   async function handleEdit() {
@@ -258,6 +258,7 @@ export default function UserManagementPage() {
                           <div>
                             <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{u.full_name}{isMe && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-brand)', fontWeight: 500 }}>(you)</span>}</div>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.email}</div>
+                            {u.username && <div style={{ fontSize: 11, color: 'var(--text-brand)', fontWeight: 500 }}>@{u.username}</div>}
                           </div>
                         </div>
                       </td>
@@ -318,6 +319,10 @@ export default function UserManagementPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '10px 16px', fontSize: 13, alignItems: 'center' }}>
               <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Email</span>
               <code style={{ background: 'var(--gray-100)', padding: '4px 10px', borderRadius: 6, fontFamily: 'monospace', fontSize: 13 }}>{addResult.email}</code>
+              {addResult.username && <>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Username</span>
+                <code style={{ background: 'var(--gray-100)', padding: '4px 10px', borderRadius: 6, fontFamily: 'monospace', fontSize: 13 }}>@{addResult.username}</code>
+              </>}
               <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Password</span>
               <code style={{ background: 'var(--gray-100)', padding: '4px 10px', borderRadius: 6, fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{addResult.temp_password}</code>
             </div>
@@ -334,6 +339,9 @@ export default function UserManagementPage() {
               </FormRow>
               <FormRow label="Email" required>
                 <FieldInput type="email" value={addForm.email} onChange={af('email')} placeholder="user@farm.com" />
+              </FormRow>
+              <FormRow label="Username">
+                <FieldInput value={addForm.username} onChange={af('username')} placeholder="e.g. jdoe (optional)" />
               </FormRow>
               <FormRow label="Role">
                 <FieldSelect value={addForm.role_id} onChange={af('role_id')}>
@@ -366,6 +374,9 @@ export default function UserManagementPage() {
           </FormRow>
           <FormRow label="Email" required>
             <FieldInput type="email" value={editForm.email} onChange={ef('email')} />
+          </FormRow>
+          <FormRow label="Username">
+            <FieldInput value={editForm.username || ''} onChange={ef('username')} placeholder="e.g. jdoe" />
           </FormRow>
           <FormRow label="Role">
             <FieldSelect value={editForm.role_id} onChange={ef('role_id')}>

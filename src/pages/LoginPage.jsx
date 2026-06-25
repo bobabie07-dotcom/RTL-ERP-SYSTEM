@@ -96,7 +96,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <Input label="Email" type="email" placeholder="Enter your email" icon={<I.user />} value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Input label="Email or Username" type="text" placeholder="Email or username" icon={<I.user />} value={email} onChange={(e) => setEmail(e.target.value)} required />
           <Input
             label="Password" type={show ? 'text' : 'password'} placeholder="Enter your password" icon={<I.lock />}
             value={pass} onChange={(e) => setPass(e.target.value)} required

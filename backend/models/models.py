@@ -49,6 +49,7 @@ class User(Base):
     role_id         = Column(SmallInteger, ForeignKey("roles.id"), nullable=False)
     full_name       = Column(String(150), nullable=False)
     email           = Column(String(150), nullable=False, unique=True)
+    username        = Column(String(50), unique=True, nullable=True)
     password_hash   = Column(String(255), nullable=False)
     department      = Column(String(100), nullable=True)
     phone           = Column(String(50), nullable=True)

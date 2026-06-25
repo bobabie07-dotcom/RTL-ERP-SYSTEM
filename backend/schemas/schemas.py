@@ -29,6 +29,7 @@ class UserOut(OrmBase):
     id:             int
     full_name:      str
     email:          str
+    username:       Optional[str]
     farm_id:        int
     role_id:        int
     department:     Optional[str]
@@ -41,7 +42,7 @@ class UserOut(OrmBase):
 class UserCreate(BaseModel):
     full_name:    str
     email:        str
-    password:     str
+    username:     Optional[str] = None
     role_id:      int = 3
     farm_id:      int = 1
     department:   Optional[str] = None
@@ -52,6 +53,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     full_name:  Optional[str] = None
     email:      Optional[str] = None
+    username:   Optional[str] = None
     role_id:    Optional[int] = None
     department: Optional[str] = None
     phone:      Optional[str] = None

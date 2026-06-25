@@ -89,7 +89,10 @@ def get_current_user(
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == body.email).first()
+    identifier = body.email.strip()
+    user = db.query(User).filter(
+        (User.email == identifier) | (User.username == identifier)
+    ).first()
     if not user or not _verify(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not user.is_active:
@@ -157,9 +160,12 @@ def create_user(
 ):
     if db.query(User).filter(User.email == body.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
+    if body.username and db.query(User).filter(User.username == body.username).first():
+        raise HTTPException(status_code=400, detail="Username already taken")
     user = User(
         full_name=body.full_name,
         email=body.email,
+        username=body.username or None,
         password_hash=_hash(DEFAULT_PASSWORD),
         role_id=body.role_id,
         farm_id=body.farm_id,
@@ -175,6 +181,7 @@ def create_user(
         "id":            user.id,
         "full_name":     user.full_name,
         "email":         user.email,
+        "username":      user.username,
         "role_id":       user.role_id,
         "farm_id":       user.farm_id,
         "department":    user.department,
@@ -196,7 +203,12 @@ def update_user(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    for field, value in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_none=True)
+    if "username" in data and data["username"]:
+        conflict = db.query(User).filter(User.username == data["username"], User.id != user_id).first()
+        if conflict:
+            raise HTTPException(status_code=400, detail="Username already taken")
+    for field, value in data.items():
         setattr(user, field, value)
     db.commit()
     db.refresh(user)
