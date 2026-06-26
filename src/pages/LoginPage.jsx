@@ -31,7 +31,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const me = await login(email, pass);
-      navigate(me.is_first_login ? '/change-password' : '/dashboard');
+      window.location.replace(me.is_first_login ? '/change-password' : '/dashboard');
     } catch (err) {
       setError(err.message || 'Invalid credentials');
     } finally {

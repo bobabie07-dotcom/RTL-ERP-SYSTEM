@@ -33,8 +33,8 @@ export default function ChangePasswordPage() {
     setLoading(true);
     try {
       await authApi.setFirstPassword(newPass, confirmPass);
-      setUser(prev => ({ ...prev, is_first_login: false }));
-      navigate('/dashboard', { replace: true });
+      // Full reload so AuthContext re-fetches /me with is_first_login=false
+      window.location.replace('/dashboard');
     } catch (err) {
       setError(err.message || 'Failed to update password.');
     } finally {
