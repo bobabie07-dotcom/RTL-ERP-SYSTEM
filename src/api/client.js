@@ -136,9 +136,10 @@ export const salesApi = {
 };
 
 export const procurementApi = {
-  orders:         (params)       => get('/api/procurement/orders', params),
-  suppliers:      ()             => get('/api/procurement/suppliers'),
-  createOrder:    (data)         => post('/api/procurement/orders', data),
+  orders:          (params)      => get('/api/procurement/orders', params),
+  suppliers:       ()            => get('/api/procurement/suppliers'),
+  createSupplier:  (data)        => post('/api/procurement/suppliers', data),
+  createOrder:     (data)        => post('/api/procurement/orders', data),
   approveOrder:   (id)         => post(`/api/procurement/orders/${id}/approve`),
   rejectOrder:    (id, reason) => post(`/api/procurement/orders/${id}/reject`, { rejection_reason: reason }),
   receiveOrder:   (id)         => post(`/api/procurement/orders/${id}/receive`),

@@ -11,7 +11,7 @@ from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
     ApprovalAction,
     PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
-    SupplierOut,
+    SupplierCreate, SupplierOut,
 )
 
 router = APIRouter(prefix="/procurement", tags=["procurement"])
@@ -22,6 +22,19 @@ router = APIRouter(prefix="/procurement", tags=["procurement"])
 @router.get("/suppliers", response_model=list[SupplierOut])
 def list_suppliers(db: Session = Depends(get_db), _=Depends(get_current_user)):
     return db.query(Supplier).filter(Supplier.is_active == True).all()
+
+
+@router.post("/suppliers", response_model=SupplierOut, status_code=status.HTTP_201_CREATED)
+def create_supplier(
+    body: SupplierCreate,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    supplier = Supplier(**body.model_dump())
+    db.add(supplier)
+    db.commit()
+    db.refresh(supplier)
+    return supplier
 
 
 # ── Purchase Orders ───────────────────────────────────────────────────────────

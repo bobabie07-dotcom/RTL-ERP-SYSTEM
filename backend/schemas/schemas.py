@@ -600,6 +600,14 @@ class SupplierOut(OrmBase):
     is_active:    bool
 
 
+class SupplierCreate(BaseModel):
+    name:         str
+    contact_name: Optional[str] = None
+    phone:        Optional[str] = None
+    email:        Optional[str] = None
+    address:      Optional[str] = None
+
+
 # ── Sales ────────────────────────────────────────────────────────────────────
 
 class BuyerCreate(BaseModel):

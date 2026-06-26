@@ -111,6 +111,12 @@ export default function SalesPage() {
   const [poSaving, setPoSaving] = useState(false);
   const [poErr,    setPoErr]    = useState('');
 
+  // Inline add-supplier inside PO modal
+  const [addSupplierOpen,   setAddSupplierOpen]   = useState(false);
+  const [newSupplierForm,   setNewSupplierForm]   = useState({ name: '', contact_name: '', phone: '' });
+  const [newSupplierSaving, setNewSupplierSaving] = useState(false);
+  const [newSupplierErr,    setNewSupplierErr]    = useState('');
+
   // Approve/Reject modal (shared for sales + PO)
   const [approvalTarget, setApprovalTarget] = useState(null); // { type: 'sale'|'po', id, action: 'approve'|'reject' }
   const [rejectReason,   setRejectReason]   = useState('');
@@ -183,7 +189,9 @@ export default function SalesPage() {
 
   // ── New Purchase ───────────────────────────────────────────────────────────
   function openPoModal() {
-    setPoForm(BLANK_PO); setPoErr(''); setPoModal(true);
+    setPoForm(BLANK_PO); setPoErr('');
+    setAddSupplierOpen(false); setNewSupplierForm({ name: '', contact_name: '', phone: '' }); setNewSupplierErr('');
+    setPoModal(true);
   }
 
   async function handleSavePo() {
@@ -204,6 +212,24 @@ export default function SalesPage() {
       setPoModal(false);
     } catch (err) { setPoErr(err.message || 'Failed to save.'); }
     finally { setPoSaving(false); }
+  }
+
+  async function handleAddSupplier() {
+    if (!newSupplierForm.name.trim()) { setNewSupplierErr('Supplier name is required.'); return; }
+    setNewSupplierSaving(true); setNewSupplierErr('');
+    try {
+      const created = await procurementApi.createSupplier({
+        name:         newSupplierForm.name.trim(),
+        contact_name: newSupplierForm.contact_name || null,
+        phone:        newSupplierForm.phone || null,
+      });
+      const updated = await procurementApi.suppliers();
+      setSuppliers(updated);
+      setPoForm(p => ({ ...p, supplier_id: String(created.id) }));
+      setAddSupplierOpen(false);
+      setNewSupplierForm({ name: '', contact_name: '', phone: '' });
+    } catch (e) { setNewSupplierErr(e.message || 'Failed to add supplier.'); }
+    finally { setNewSupplierSaving(false); }
   }
 
   // ── Approval ───────────────────────────────────────────────────────────────
@@ -522,10 +548,41 @@ export default function SalesPage() {
           <FormRow label="Order Date" required><FieldInput type="date" value={poForm.order_date} onChange={pf('order_date')} /></FormRow>
           <FormRow label="Expected Delivery"><FieldInput type="date" value={poForm.expected_date} onChange={pf('expected_date')} /></FormRow>
           <FormRow label="Supplier" style={{ gridColumn: '1/-1' }}>
-            <FieldSelect value={poForm.supplier_id} onChange={pf('supplier_id')}>
-              <option value="">Select supplier…</option>
-              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </FieldSelect>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <FieldSelect value={poForm.supplier_id} onChange={pf('supplier_id')} style={{ flex: 1 }}>
+                <option value="">Select supplier…</option>
+                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </FieldSelect>
+              <button
+                type="button"
+                onClick={() => { setAddSupplierOpen(s => !s); setNewSupplierErr(''); }}
+                style={{ flexShrink: 0, height: 36, padding: '0 12px', border: '1px dashed var(--border)', borderRadius: 8, background: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-brand)', fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                {addSupplierOpen ? '✕ Cancel' : '+ New Supplier'}
+              </button>
+            </div>
+            {addSupplierOpen && (
+              <div style={{ marginTop: 10, padding: '12px 14px', background: 'var(--gray-50)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>New Supplier</div>
+                {newSupplierErr && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{newSupplierErr}</div>}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                  <FormRow label="Supplier Name" required>
+                    <FieldInput value={newSupplierForm.name} onChange={e => setNewSupplierForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Al-Noor Feed Co." />
+                  </FormRow>
+                  <FormRow label="Contact Person">
+                    <FieldInput value={newSupplierForm.contact_name} onChange={e => setNewSupplierForm(p => ({ ...p, contact_name: e.target.value }))} placeholder="e.g. Juan dela Cruz" />
+                  </FormRow>
+                  <FormRow label="Phone" style={{ gridColumn: '1/-1' }}>
+                    <FieldInput value={newSupplierForm.phone} onChange={e => setNewSupplierForm(p => ({ ...p, phone: e.target.value }))} placeholder="+63 912 345 6789" />
+                  </FormRow>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button variant="primary" size="sm" onClick={handleAddSupplier} disabled={newSupplierSaving}>
+                    {newSupplierSaving ? 'Saving…' : 'Add Supplier'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </FormRow>
           <FormRow label="Total Amount (₱)" required style={{ gridColumn: '1/-1' }}><FieldInput type="number" value={poForm.total_amount} onChange={pf('total_amount')} placeholder="e.g. 25000.00" min="0" step="0.01" /></FormRow>
           <FormRow label="Description / Items" style={{ gridColumn: '1/-1' }}><FieldInput value={poForm.notes} onChange={pf('notes')} placeholder="e.g. 500kg Starter Feed, 200kg Grower…" /></FormRow>
