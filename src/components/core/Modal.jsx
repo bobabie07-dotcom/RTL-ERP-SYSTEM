@@ -45,9 +45,9 @@ export function Modal({ open, title, onClose, onConfirm, confirmLabel = 'Save', 
   );
 }
 
-export function FormRow({ label, children, required }) {
+export function FormRow({ label, children, required, style }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16, ...style }}>
       <label style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--text-body)' }}>
         {label}{required && <span style={{ color: 'var(--danger)', marginLeft: 3 }}>*</span>}
       </label>
@@ -74,7 +74,7 @@ export function FieldInput({ value, onChange, type = 'text', placeholder, min, s
   );
 }
 
-export function FieldSelect({ value, onChange, children }) {
+export function FieldSelect({ value, onChange, children, style }) {
   return (
     <select
       value={value} onChange={onChange}
@@ -83,6 +83,7 @@ export function FieldSelect({ value, onChange, children }) {
         borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-body)',
         fontSize: 14, color: 'var(--text-strong)', background: 'var(--white)',
         width: '100%', boxSizing: 'border-box', outline: 'none', cursor: 'pointer',
+        ...style,
       }}
       onFocus={e => e.target.style.borderColor = 'var(--green-500)'}
       onBlur={e => e.target.style.borderColor = 'var(--border)'}
