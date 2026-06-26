@@ -164,7 +164,6 @@ class HouseOut(OrmBase):
 
 
 class HouseCreate(BaseModel):
-    farm_id:    int
     name:       str
     capacity:   int = 0
     house_type: str = "broiler"
