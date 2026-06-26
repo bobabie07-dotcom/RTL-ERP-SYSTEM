@@ -102,11 +102,35 @@ def mortality_rates_7d(
     _=Depends(get_current_user),
 ):
     rows = db.execute(text("""
-        SELECT v.*
-        FROM v_mortality_rate_7d v
-        JOIN batches b ON v.batch_id = b.id
-        WHERE b.farm_id = :farm_id
-        ORDER BY v.mortality_rate_pct DESC
+        SELECT
+            m.batch_id,
+            b.batch_no,
+            h.name                                              AS house,
+            SUM(m.count)                                        AS total_deaths_7d,
+            COALESCE(
+                dl.current_count,
+                b.initial_count - COALESCE(all_mort.total_deaths, 0)
+            )                                                   AS current_count,
+            ROUND(SUM(m.count) / NULLIF(b.initial_count, 0) * 100, 3) AS mortality_rate_pct
+        FROM mortality_records m
+        JOIN batches b  ON m.batch_id  = b.id
+        JOIN houses  h  ON m.house_id  = h.id
+        LEFT JOIN (
+            SELECT batch_id, current_count
+            FROM batch_daily_logs
+            WHERE (batch_id, log_date) IN (
+                SELECT batch_id, MAX(log_date) FROM batch_daily_logs GROUP BY batch_id
+            )
+        ) dl ON dl.batch_id = m.batch_id
+        LEFT JOIN (
+            SELECT batch_id, SUM(count) AS total_deaths
+            FROM mortality_records
+            GROUP BY batch_id
+        ) all_mort ON all_mort.batch_id = m.batch_id
+        WHERE m.record_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+          AND b.farm_id = :farm_id
+        GROUP BY m.batch_id, b.batch_no, h.name, dl.current_count, b.initial_count, all_mort.total_deaths
+        ORDER BY mortality_rate_pct DESC
     """), {"farm_id": farm_id}).mappings().all()
     return [MortalityRate7d(**dict(r)) for r in rows]
 

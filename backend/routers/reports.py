@@ -64,13 +64,22 @@ def farm_finances(
     """), {"fid": farm_id}).scalar()
 
     current_birds = db.execute(text("""
-        SELECT COALESCE(SUM(bl.current_count), 0)
-        FROM batch_daily_logs bl
-        JOIN batches b ON bl.batch_id = b.id
+        SELECT COALESCE(SUM(
+            COALESCE(bl.current_count, b.initial_count - COALESCE(m.total_deaths, 0))
+        ), 0)
+        FROM batches b
+        LEFT JOIN (
+            SELECT batch_id, current_count
+            FROM batch_daily_logs
+            WHERE (batch_id, log_date) IN (
+                SELECT batch_id, MAX(log_date) FROM batch_daily_logs GROUP BY batch_id
+            )
+        ) bl ON bl.batch_id = b.id
+        LEFT JOIN (
+            SELECT batch_id, SUM(count) AS total_deaths
+            FROM mortality_records GROUP BY batch_id
+        ) m ON m.batch_id = b.id
         WHERE b.farm_id = :fid AND b.status IN ('active','harvest_soon')
-          AND (bl.batch_id, bl.log_date) IN (
-              SELECT batch_id, MAX(log_date) FROM batch_daily_logs GROUP BY batch_id
-          )
     """), {"fid": farm_id}).scalar()
 
     total_rev = float(rev)
@@ -111,7 +120,10 @@ def mortality_impact(
             b.batch_no,
             h.name             AS house,
             b.initial_count,
-            COALESCE(bl.current_count, b.initial_count)  AS current_count,
+            COALESCE(
+                bl.current_count,
+                b.initial_count - COALESCE(mort_total.total_deaths, 0)
+            )                  AS current_count,
             COALESCE(bl.avg_weight_g, 0)                 AS avg_weight_g,
             COALESCE(fi_agg.total_feed_kg, 0)            AS total_feed_kg,
             COALESCE(exp_agg.other_expenses, 0)          AS other_expenses
@@ -124,6 +136,10 @@ def mortality_impact(
                 SELECT batch_id, MAX(log_date) FROM batch_daily_logs GROUP BY batch_id
             )
         ) bl ON b.id = bl.batch_id
+        LEFT JOIN (
+            SELECT batch_id, SUM(count) AS total_deaths
+            FROM mortality_records GROUP BY batch_id
+        ) mort_total ON b.id = mort_total.batch_id
         LEFT JOIN (
             SELECT batch_id, SUM(qty_kg) AS total_feed_kg
             FROM feed_issues GROUP BY batch_id
