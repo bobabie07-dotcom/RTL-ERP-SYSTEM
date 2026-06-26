@@ -6,7 +6,7 @@ async function request(method, path, body) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10000); // 10s timeout
+  const timer = setTimeout(() => controller.abort(), 30000); // 30s timeout (Render cold start)
 
   let res;
   try {
@@ -18,7 +18,7 @@ async function request(method, path, body) {
     });
   } catch (err) {
     clearTimeout(timer);
-    if (err.name === 'AbortError') throw new Error('Request timed out. Check that the backend is running.');
+    if (err.name === 'AbortError') throw new Error('Server is taking too long to respond. Please try again in a moment.');
     throw err;
   }
   clearTimeout(timer);
