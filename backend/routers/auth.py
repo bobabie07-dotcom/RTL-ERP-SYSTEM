@@ -204,7 +204,11 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     data = body.model_dump(exclude_none=True)
-    if "username" in data and data["username"]:
+    # Coerce empty strings to None for optional fields so DB stores NULL, not ""
+    for f in ("username", "department", "phone"):
+        if f in data and data[f] == "":
+            data[f] = None
+    if data.get("username"):
         conflict = db.query(User).filter(User.username == data["username"], User.id != user_id).first()
         if conflict:
             raise HTTPException(status_code=400, detail="Username already taken")
