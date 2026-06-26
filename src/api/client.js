@@ -82,8 +82,9 @@ export const batchesApi = {
 };
 
 export const feedApi = {
-  types:          ()             => get('/api/feed/types'),
-  stock:          ()             => get('/api/feed/stock'),
+  types:           ()             => get('/api/feed/types'),
+  createFeedType:  (data)         => post('/api/feed/types', data),
+  stock:           ()             => get('/api/feed/stock'),
   purchases:      (params)       => get('/api/feed/purchases', params),
   issues:         (params)       => get('/api/feed/issues', params),
   weekly:         (farm_id)      => get('/api/feed/weekly', { farm_id }),

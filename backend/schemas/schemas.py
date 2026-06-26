@@ -303,6 +303,13 @@ class FeedStockRow(BaseModel):
     inventory_item_name:     Optional[str]   = None
 
 
+class FeedTypeCreate(BaseModel):
+    name:        str
+    unit:        str = "kg"
+    protein_pct: Optional[Decimal] = None
+    energy_kcal: Optional[int] = None
+
+
 class FeedTypePatch(BaseModel):
     inventory_item_id: Optional[int] = None
 

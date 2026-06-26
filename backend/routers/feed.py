@@ -10,7 +10,7 @@ from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
     FeedIssueCreate, FeedIssueOut, FeedIssueRow,
     FeedPurchaseCreate, FeedPurchaseOut, FeedPurchaseRow,
-    FeedStockRow, FeedTypePatch, FeedTypeOut,
+    FeedStockRow, FeedTypeCreate, FeedTypePatch, FeedTypeOut,
 )
 
 router = APIRouter(prefix="/feed", tags=["feed"])
@@ -19,6 +19,22 @@ router = APIRouter(prefix="/feed", tags=["feed"])
 @router.get("/types", response_model=list[FeedTypeOut])
 def list_feed_types(db: Session = Depends(get_db), _=Depends(get_current_user)):
     return db.query(FeedType).all()
+
+
+@router.post("/types", response_model=FeedTypeOut, status_code=status.HTTP_201_CREATED)
+def create_feed_type(
+    body: FeedTypeCreate,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    ft = FeedType(**body.model_dump())
+    db.add(ft)
+    db.commit()
+    db.refresh(ft)
+    # Also create an empty stock row so it shows up in the stock table
+    db.add(FeedStock(feed_type_id=ft.id, qty_on_hand_kg=0, reorder_qty_kg=0))
+    db.commit()
+    return ft
 
 
 @router.get("/stock", response_model=list[FeedStockRow])

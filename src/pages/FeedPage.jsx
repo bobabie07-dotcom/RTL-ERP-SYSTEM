@@ -100,9 +100,36 @@ export default function FeedPage() {
     inventoryApi.suppliers().then(setSuppliers).catch(() => {});
   }, [farmId]);
 
-  function openModal() { setForm(BLANK_ISSUE); setFormErr(''); setModal(true); }
+  // inline add feed type
+  const [addTypeOpen,   setAddTypeOpen]   = useState(false);
+  const [newTypeName,   setNewTypeName]   = useState('');
+  const [newTypeSaving, setNewTypeSaving] = useState(false);
+  const [newTypeErr,    setNewTypeErr]    = useState('');
 
-  function openPurchaseModal() { setPurchaseForm(BLANK_PURCHASE); setPurchaseErr(''); setPurchaseModal(true); }
+  async function handleAddFeedType() {
+    if (!newTypeName.trim()) { setNewTypeErr('Feed type name is required.'); return; }
+    setNewTypeSaving(true); setNewTypeErr('');
+    try {
+      const created = await feedApi.createFeedType({ name: newTypeName.trim() });
+      await loadFeed();
+      setForm(p => ({ ...p, feed_type_id: String(created.id) }));
+      setAddTypeOpen(false);
+      setNewTypeName('');
+    } catch (e) { setNewTypeErr(e.message || 'Failed to add feed type.'); }
+    finally { setNewTypeSaving(false); }
+  }
+
+  function openModal() {
+    setForm(BLANK_ISSUE); setFormErr('');
+    setAddTypeOpen(false); setNewTypeName(''); setNewTypeErr('');
+    setModal(true);
+  }
+
+  function openPurchaseModal() {
+    setPurchaseForm(BLANK_PURCHASE); setPurchaseErr('');
+    setAddTypeOpen(false); setNewTypeName(''); setNewTypeErr('');
+    setPurchaseModal(true);
+  }
 
   async function handlePurchaseSave() {
     const pf = purchaseForm;
@@ -399,11 +426,34 @@ export default function FeedPage() {
       <Modal open={purchaseModal} title="Record Feed Purchase" onClose={() => setPurchaseModal(false)} onConfirm={handlePurchaseSave} confirmLabel="Save Purchase" loading={saving}>
         {purchaseErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{purchaseErr}</div>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-          <FormRow label="Feed Type" required>
-            <FieldSelect value={purchaseForm.feed_type_id} onChange={e => setPurchaseForm(p => ({ ...p, feed_type_id: e.target.value }))}>
-              <option value="">Select feed type…</option>
-              {stock.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </FieldSelect>
+          <FormRow label="Feed Type" required style={{ gridColumn: '1/-1' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <FieldSelect value={purchaseForm.feed_type_id} onChange={e => setPurchaseForm(p => ({ ...p, feed_type_id: e.target.value }))} style={{ flex: 1 }}>
+                <option value="">Select feed type…</option>
+                {stock.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </FieldSelect>
+              <button
+                type="button"
+                onClick={() => { setAddTypeOpen(o => !o); setNewTypeErr(''); }}
+                style={{ flexShrink: 0, height: 36, padding: '0 12px', border: '1px dashed var(--border)', borderRadius: 8, background: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-brand)', fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                {addTypeOpen ? '✕ Cancel' : '+ New Type'}
+              </button>
+            </div>
+            {addTypeOpen && (
+              <div style={{ marginTop: 10, padding: '12px 14px', background: 'var(--gray-50)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>New Feed Type</div>
+                {newTypeErr && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{newTypeErr}</div>}
+                <FormRow label="Feed Type Name" required>
+                  <FieldInput value={newTypeName} onChange={e => setNewTypeName(e.target.value)} placeholder="e.g. Starter Pro, Layer Mash…" />
+                </FormRow>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button variant="primary" size="sm" onClick={handleAddFeedType} disabled={newTypeSaving}>
+                    {newTypeSaving ? 'Saving…' : 'Add Feed Type'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </FormRow>
           <FormRow label="Supplier">
             <FieldSelect value={purchaseForm.supplier_id} onChange={e => setPurchaseForm(p => ({ ...p, supplier_id: e.target.value }))}>
@@ -469,11 +519,38 @@ export default function FeedPage() {
               {houses.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
             </FieldSelect>
           </FormRow>
-          <FormRow label="Feed Type" required>
-            <FieldSelect value={form.feed_type_id} onChange={f('feed_type_id')}>
-              <option value="">Select feed type…</option>
-              {stock.map((s) => <option key={s.id} value={s.id}>{s.name} ({Math.round(s.qty_on_hand_kg)} kg left)</option>)}
-            </FieldSelect>
+          <FormRow label="Feed Type" required style={{ gridColumn: '1/-1' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <FieldSelect value={form.feed_type_id} onChange={f('feed_type_id')} style={{ flex: 1 }}>
+                <option value="">Select feed type…</option>
+                {stock.map((s) => <option key={s.id} value={s.id}>{s.name} ({Math.round(s.qty_on_hand_kg)} kg left)</option>)}
+              </FieldSelect>
+              <button
+                type="button"
+                onClick={() => { setAddTypeOpen(o => !o); setNewTypeErr(''); }}
+                style={{ flexShrink: 0, height: 36, padding: '0 12px', border: '1px dashed var(--border)', borderRadius: 8, background: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-brand)', fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                {addTypeOpen ? '✕ Cancel' : '+ New Type'}
+              </button>
+            </div>
+            {addTypeOpen && (
+              <div style={{ marginTop: 10, padding: '12px 14px', background: 'var(--gray-50)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>New Feed Type</div>
+                {newTypeErr && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{newTypeErr}</div>}
+                <FormRow label="Feed Type Name" required>
+                  <FieldInput
+                    value={newTypeName}
+                    onChange={e => setNewTypeName(e.target.value)}
+                    placeholder="e.g. Starter Pro, Layer Mash…"
+                  />
+                </FormRow>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button variant="primary" size="sm" onClick={handleAddFeedType} disabled={newTypeSaving}>
+                    {newTypeSaving ? 'Saving…' : 'Add Feed Type'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </FormRow>
           <FormRow label="Date" required>
             <FieldInput type="date" value={form.issue_date} onChange={f('issue_date')} />
