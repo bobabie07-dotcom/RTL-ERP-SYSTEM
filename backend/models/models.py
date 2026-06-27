@@ -27,7 +27,7 @@ class Role(Base):
     is_active   = Column(Boolean, nullable=False, default=True)
     created_at  = Column(DateTime, default=func.now())
 
-    users: list[User] = relationship("User", back_populates="role", foreign_keys="User.role_id")
+    users: list[User] = relationship("User", back_populates="role", foreign_keys="[User.role_id]")
 
 
 class Farm(Base):
@@ -73,7 +73,7 @@ class User(Base):
 
     farm        = relationship("Farm", back_populates="users", foreign_keys=[farm_id])
     role        = relationship("Role", back_populates="users", foreign_keys=[role_id])
-    extra_roles = relationship("UserRole", foreign_keys="UserRole.user_id", back_populates="user",
+    extra_roles = relationship("UserRole", foreign_keys="[UserRole.user_id]", back_populates="user",
                                cascade="all, delete-orphan")
 
 
