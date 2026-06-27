@@ -54,7 +54,7 @@ const PO_STATUS_LABEL = {
 const TODAY = new Date().toISOString().split('T')[0];
 const BLANK_SALE = { order_no: '', batch_id: '', buyer_id: '', order_date: TODAY, qty_kg: '', price_per_kg: '', notes: '' };
 const BLANK_PO      = { supplier_id: '', order_date: TODAY, expected_date: '', notes: '' };
-const BLANK_PO_ITEM = { item_id: '', qty_ordered: '', unit_price: '' };
+const BLANK_PO_ITEM = { item_id: '', qty_ordered: '', unit_price: '', mode: 'select', new_name: '', new_unit: 'pcs', new_category_id: '' };
 
 function TabBar({ active, onChange, overdueCount }) {
   const tabs = [
@@ -113,6 +113,7 @@ export default function SalesPage() {
   const [poForm,          setPoForm]          = useState(BLANK_PO);
   const [poItems,         setPoItems]         = useState([{ ...BLANK_PO_ITEM }]);
   const [inventoryItems,  setInventoryItems]  = useState([]);
+  const [categories,      setCategories]      = useState([]);
   const [poSaving,        setPoSaving]        = useState(false);
   const [poErr,           setPoErr]           = useState('');
 
@@ -204,6 +205,7 @@ export default function SalesPage() {
     setPoItems([{ ...BLANK_PO_ITEM }]);
     setAddSupplierOpen(false); setNewSupplierForm({ name: '', contact_name: '', phone: '' }); setNewSupplierErr('');
     inventoryApi.items({ farm_id: farmId }).then(setInventoryItems).catch(() => {});
+    if (categories.length === 0) inventoryApi.categories().then(setCategories).catch(() => {});
     setPoModal(true);
   }
 
@@ -212,18 +214,31 @@ export default function SalesPage() {
   function updatePoItem(idx, k, v) { setPoItems(p => p.map((it, i) => i === idx ? { ...it, [k]: v } : it)); }
 
   async function handleSavePo() {
-    const validItems = poItems.filter(it => it.item_id && it.qty_ordered && it.unit_price);
+    const validItems = poItems.filter(it => {
+      if (it.mode === 'input') return it.new_name.trim() && it.qty_ordered && it.unit_price;
+      return it.item_id && it.qty_ordered && it.unit_price;
+    });
     if (!poForm.order_date) { setPoErr('Order date is required.'); return; }
     if (validItems.length === 0) { setPoErr('Add at least one item with qty and unit price.'); return; }
     setPoSaving(true); setPoErr('');
     try {
+      const resolved = await Promise.all(validItems.map(async it => {
+        if (it.mode !== 'input') return it;
+        const created = await inventoryApi.createItem({
+          farm_id:     farmId,
+          name:        it.new_name.trim(),
+          unit:        it.new_unit || 'pcs',
+          category_id: it.new_category_id ? Number(it.new_category_id) : (categories[0]?.id || 1),
+        });
+        return { ...it, item_id: String(created.id) };
+      }));
       await procurementApi.createOrder({
         farm_id:       farmId,
         supplier_id:   poForm.supplier_id ? Number(poForm.supplier_id) : null,
         order_date:    poForm.order_date,
         expected_date: poForm.expected_date || null,
         notes:         poForm.notes || null,
-        items: validItems.map(it => ({
+        items: resolved.map(it => ({
           item_id:     Number(it.item_id),
           qty_ordered: parseFloat(it.qty_ordered),
           unit_price:  parseFloat(it.unit_price),
@@ -308,18 +323,32 @@ export default function SalesPage() {
     setSyncTarget({ id: row.id, po_no: row.po_no || `PO-${String(row.id).padStart(6, '0')}` });
     setSyncItems([{ ...BLANK_PO_ITEM }]);
     setSyncErr('');
-    if (inventoryItems.length === 0) {
-      inventoryApi.items({ farm_id: farmId }).then(setInventoryItems).catch(() => {});
-    }
+    inventoryApi.items({ farm_id: farmId }).then(setInventoryItems).catch(() => {});
+    if (categories.length === 0) inventoryApi.categories().then(setCategories).catch(() => {});
     setSyncSaving(false);
   }
 
+  function updateSyncItem(idx, k, v) { setSyncItems(p => p.map((x, i) => i === idx ? { ...x, [k]: v } : x)); }
+
   async function handleSyncInventory() {
-    const validItems = syncItems.filter(it => it.item_id && it.qty_ordered && parseFloat(it.qty_ordered) > 0);
+    const validItems = syncItems.filter(it => {
+      if (it.mode === 'input') return it.new_name.trim() && it.qty_ordered && parseFloat(it.qty_ordered) > 0;
+      return it.item_id && it.qty_ordered && parseFloat(it.qty_ordered) > 0;
+    });
     if (validItems.length === 0) { setSyncErr('Add at least one item with a quantity.'); return; }
     setSyncSaving(true); setSyncErr('');
     try {
-      await procurementApi.syncInventory(syncTarget.id, validItems.map(it => ({
+      const resolved = await Promise.all(validItems.map(async it => {
+        if (it.mode !== 'input') return it;
+        const created = await inventoryApi.createItem({
+          farm_id:     farmId,
+          name:        it.new_name.trim(),
+          unit:        it.new_unit || 'pcs',
+          category_id: it.new_category_id ? Number(it.new_category_id) : (categories[0]?.id || 1),
+        });
+        return { ...it, item_id: String(created.id) };
+      }));
+      await procurementApi.syncInventory(syncTarget.id, resolved.map(it => ({
         item_id:     Number(it.item_id),
         qty_ordered: parseFloat(it.qty_ordered),
         unit_price:  parseFloat(it.unit_price || 0),
@@ -661,10 +690,29 @@ export default function SalesPage() {
                     return (
                       <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle,#f0f0f0)' }}>
                         <td style={{ padding: '4px 6px' }}>
-                          <FieldSelect value={it.item_id} onChange={e => updatePoItem(idx, 'item_id', e.target.value)}>
-                            <option value="">Select item…</option>
-                            {inventoryItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
-                          </FieldSelect>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 3 }}>
+                            <button type="button" onClick={() => updatePoItem(idx, 'mode', it.mode === 'select' ? 'input' : 'select')}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--text-brand)', fontWeight: 600, padding: 0, textDecoration: 'underline' }}>
+                              {it.mode === 'input' ? '← Pick existing' : '+ Type new'}
+                            </button>
+                          </div>
+                          {it.mode !== 'input' ? (
+                            <FieldSelect value={it.item_id} onChange={e => updatePoItem(idx, 'item_id', e.target.value)}>
+                              <option value="">Select item…</option>
+                              {inventoryItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                            </FieldSelect>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              <FieldInput value={it.new_name} onChange={e => updatePoItem(idx, 'new_name', e.target.value)} placeholder="Item name…" autoFocus />
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <FieldInput value={it.new_unit} onChange={e => updatePoItem(idx, 'new_unit', e.target.value)} placeholder="Unit" style={{ width: 64 }} />
+                                <FieldSelect value={it.new_category_id} onChange={e => updatePoItem(idx, 'new_category_id', e.target.value)} style={{ flex: 1 }}>
+                                  <option value="">Category…</option>
+                                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </FieldSelect>
+                              </div>
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: '4px 6px' }}>
                           <FieldInput type="number" value={it.qty_ordered} onChange={e => updatePoItem(idx, 'qty_ordered', e.target.value)} min="0.01" step="0.01" style={{ textAlign: 'right' }} />
@@ -793,16 +841,35 @@ export default function SalesPage() {
             {syncItems.map((it, idx) => (
               <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle,#f0f0f0)' }}>
                 <td style={{ padding: '4px 6px' }}>
-                  <FieldSelect value={it.item_id} onChange={e => setSyncItems(p => p.map((x, i) => i === idx ? { ...x, item_id: e.target.value } : x))}>
-                    <option value="">Select item…</option>
-                    {inventoryItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
-                  </FieldSelect>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 3 }}>
+                    <button type="button" onClick={() => updateSyncItem(idx, 'mode', it.mode === 'select' ? 'input' : 'select')}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--text-brand)', fontWeight: 600, padding: 0, textDecoration: 'underline' }}>
+                      {it.mode === 'input' ? '← Pick existing' : '+ Type new'}
+                    </button>
+                  </div>
+                  {it.mode !== 'input' ? (
+                    <FieldSelect value={it.item_id} onChange={e => updateSyncItem(idx, 'item_id', e.target.value)}>
+                      <option value="">Select item…</option>
+                      {inventoryItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                    </FieldSelect>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <FieldInput value={it.new_name} onChange={e => updateSyncItem(idx, 'new_name', e.target.value)} placeholder="Item name…" autoFocus />
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <FieldInput value={it.new_unit} onChange={e => updateSyncItem(idx, 'new_unit', e.target.value)} placeholder="Unit" style={{ width: 64 }} />
+                        <FieldSelect value={it.new_category_id} onChange={e => updateSyncItem(idx, 'new_category_id', e.target.value)} style={{ flex: 1 }}>
+                          <option value="">Category…</option>
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </FieldSelect>
+                      </div>
+                    </div>
+                  )}
                 </td>
                 <td style={{ padding: '4px 6px' }}>
-                  <FieldInput type="number" value={it.qty_ordered} onChange={e => setSyncItems(p => p.map((x, i) => i === idx ? { ...x, qty_ordered: e.target.value } : x))} min="0.01" step="0.01" style={{ textAlign: 'right' }} />
+                  <FieldInput type="number" value={it.qty_ordered} onChange={e => updateSyncItem(idx, 'qty_ordered', e.target.value)} min="0.01" step="0.01" style={{ textAlign: 'right' }} />
                 </td>
                 <td style={{ padding: '4px 6px' }}>
-                  <FieldInput type="number" value={it.unit_price} onChange={e => setSyncItems(p => p.map((x, i) => i === idx ? { ...x, unit_price: e.target.value } : x))} min="0" step="0.01" placeholder="optional" style={{ textAlign: 'right' }} />
+                  <FieldInput type="number" value={it.unit_price} onChange={e => updateSyncItem(idx, 'unit_price', e.target.value)} min="0" step="0.01" placeholder="optional" style={{ textAlign: 'right' }} />
                 </td>
                 <td style={{ padding: '4px 6px', textAlign: 'center' }}>
                   {syncItems.length > 1 && (
