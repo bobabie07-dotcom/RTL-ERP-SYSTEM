@@ -502,9 +502,9 @@ export default function FeedPage() {
             Currently linked to: <strong>{linkTarget.inventory_item_name || `Item #${linkTarget.inventory_item_id}`}</strong>
           </div>
         )}
-        {linkItemId && Number(linkItemId) !== linkTarget?.inventory_item_id && (
+        {linkItemId && (
           <div style={{ marginTop: 10, padding: '8px 12px', background: '#fef9c3', borderRadius: 8, fontSize: 12, color: '#713f12' }}>
-            <strong>Note:</strong> Linking will immediately set the inventory item qty to match current feed stock ({Math.round(linkTarget?.qty_on_hand_kg || 0).toLocaleString()} kg). Future purchases and issues will keep both in sync.
+            <strong>Note:</strong> Saving will sync the feed stock qty to match the selected inventory item's current qty. Future purchases and issues will keep both in sync automatically.
           </div>
         )}
       </Modal>
