@@ -232,6 +232,7 @@ def feed_efficiency(
 ):
     rows = db.execute(text("""
         SELECT
+            b.id                AS batch_id,
             b.batch_no,
             h.name              AS house,
             SUM(fi.qty_kg)      AS total_feed_kg,
@@ -397,7 +398,7 @@ def batch_comparison(
         gross_profit    = round(revenue - total_expenses, 2)
 
         result.append({
-            "id":            r["id"],
+            "batch_id":      r["id"],
             "batch_no":      r["batch_no"],
             "house":         r["house"],
             "placed_date":   str(r["placed_date"]),
@@ -431,6 +432,7 @@ def mortality_analysis(
             m.cause,
             COUNT(*)          AS incidents,
             SUM(m.count)      AS total_deaths,
+            b.id              AS batch_id,
             b.batch_no,
             h.name            AS house
         FROM mortality_records m
@@ -438,7 +440,7 @@ def mortality_analysis(
         JOIN houses  h ON m.house_id = h.id
         WHERE b.farm_id     = :farm_id
           AND m.record_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
-        GROUP BY m.cause, b.batch_no, h.name
+        GROUP BY m.cause, b.id, b.batch_no, h.name
         ORDER BY total_deaths DESC
     """), {"farm_id": farm_id, "days": days}).mappings().all()
     return [dict(r) for r in rows]

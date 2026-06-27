@@ -411,6 +411,7 @@ class MortalityOut(OrmBase):
 
 class MortalityRow(BaseModel):
     id:                int
+    batch_id:          int
     date:              date
     batch:             str
     house:             str
@@ -677,6 +678,7 @@ class SalesOrderOut(OrmBase):
 
 class SalesOrderRow(BaseModel):
     id:               int
+    batch_id:         int
     order_no:         str
     date:             date
     batch:            str

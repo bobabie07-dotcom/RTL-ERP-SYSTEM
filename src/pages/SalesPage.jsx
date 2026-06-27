@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/data/Card';
 import { DataTable } from '../components/data/DataTable';
 import { Badge } from '../components/core/Badge';
@@ -82,6 +83,7 @@ function TabBar({ active, onChange, overdueCount }) {
 export default function SalesPage() {
   const { farmId } = useFarm();
   const { user }   = useAuth();
+  const navigate   = useNavigate();
   const isManager  = user?.role_id <= 2 || user?.role_id === 5;
 
   const [tab,          setTab]          = useState('sales');
@@ -367,7 +369,9 @@ export default function SalesPage() {
   const saleCols = [
     { key: 'order_no',  header: 'Order No.',  strong: true },
     { key: 'date',      header: 'Date' },
-    { key: 'batch',     header: 'Batch' },
+    { key: 'batch',     header: 'Batch', render: r => (
+      <span onClick={() => navigate(`/batches/${r.batch_id}`)} style={{ color: 'var(--text-brand)', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>{r.batch}</span>
+    ) },
     { key: 'buyer',     header: 'Buyer' },
     { key: 'qtyKg',    header: 'Qty (kg)',  align: 'right', numeric: true },
     { key: 'pricePerKg', header: 'Price/kg', align: 'right', numeric: true },
@@ -435,7 +439,10 @@ export default function SalesPage() {
             <Button variant="secondary" size="sm" onClick={() => handleReceivePo(r.id)}>Mark Received</Button>
           )}
           {r.status === 'received' && isManager && (
-            <Button variant="ghost" size="sm" onClick={() => openSyncModal(r)} style={{ color: 'var(--text-brand)' }}>Sync Inventory</Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={() => openSyncModal(r)} style={{ color: 'var(--text-brand)' }}>Sync Inventory</Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/inventory')} style={{ color: 'var(--text-brand)' }}>View Inventory</Button>
+            </>
           )}
           {isManager && (
             <Button variant="ghost" size="sm" icon={<I.trash w={12} />}
@@ -458,7 +465,9 @@ export default function SalesPage() {
   const recvCols = [
     { key: 'order_no',    header: 'Order No.',  strong: true },
     { key: 'order_date',  header: 'Date' },
-    { key: 'batch',       header: 'Batch' },
+    { key: 'batch',       header: 'Batch', render: r => (
+      <span onClick={() => navigate(`/batches/${r.batch_id}`)} style={{ color: 'var(--text-brand)', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>{r.batch}</span>
+    ) },
     { key: 'buyer',       header: 'Buyer',      render: r => r.buyer || 'Unknown' },
     { key: 'buyer_phone', header: 'Phone',      render: r => r.buyer_phone || '—' },
     { key: 'total_amount', header: 'Amount',    align: 'right', render: r => <b style={{ color: 'var(--danger)' }}>{fmt(r.total_amount)}</b> },

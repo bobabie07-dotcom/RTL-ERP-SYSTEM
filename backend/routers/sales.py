@@ -51,6 +51,7 @@ def list_orders(
     sql = """
         SELECT
             so.id,
+            so.batch_id,
             so.order_no,
             so.order_date                AS date,
             b.batch_no                   AS batch,
@@ -250,6 +251,7 @@ def accounts_receivable(
     rows = db.execute(text("""
         SELECT
             so.id,
+            so.batch_id,
             so.order_no,
             so.order_date,
             so.delivery_date,

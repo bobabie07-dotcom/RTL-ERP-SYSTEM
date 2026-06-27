@@ -105,6 +105,7 @@ export const mortalityApi = {
 export const healthApi = {
   events:              (params)    => get('/api/health/events', params),
   vaccinations:        (params)    => get('/api/health/vaccinations', params),
+  upcomingVaccinations:(farm_id)   => get('/api/health/vaccinations/upcoming', { farm_id }),
   createVaccination:   (data)      => post('/api/health/vaccinations', data),
   updateVaccination:   (id, data)  => patch(`/api/health/vaccinations/${id}`, data),
   deleteVaccination:   (id)        => del(`/api/health/vaccinations/${id}`),

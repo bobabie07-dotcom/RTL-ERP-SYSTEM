@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/data/Card';
 import { Button } from '../components/core/Button';
 import { reportsApi } from '../api/client';
@@ -60,7 +61,15 @@ const TD = ({ children, right, strong, tone }) => {
 function fmt(n, prefix='₱') { return `${prefix}${parseFloat(n||0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 function fmtN(n) { return parseFloat(n||0).toFixed(2); }
 
-function PnlTable({ rows }) {
+function BatchLink({ id, name, navigate }) {
+  return (
+    <span onClick={() => navigate(`/batches/${id}`)} style={{ color: 'var(--text-brand)', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>
+      {name}
+    </span>
+  );
+}
+
+function PnlTable({ rows, navigate }) {
   if (!rows?.length) return <Empty />;
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -68,7 +77,7 @@ function PnlTable({ rows }) {
       <tbody>
         {rows.map((r, i) => (
           <tr key={i}>
-            <TD strong>{r.batch_no}</TD>
+            <TD strong><BatchLink id={r.batch_id} name={r.batch_no} navigate={navigate} /></TD>
             <TD>{r.house}</TD>
             <TD right>{fmt(r.total_revenue)}</TD>
             <TD right>{fmt(r.feed_cost)}</TD>
@@ -88,7 +97,7 @@ function PnlTable({ rows }) {
   );
 }
 
-function FeedTable({ rows }) {
+function FeedTable({ rows, navigate }) {
   if (!rows?.length) return <Empty />;
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -96,7 +105,7 @@ function FeedTable({ rows }) {
       <tbody>
         {rows.map((r, i) => (
           <tr key={i}>
-            <TD strong>{r.batch_no}</TD>
+            <TD strong><BatchLink id={r.batch_id} name={r.batch_no} navigate={navigate} /></TD>
             <TD>{r.house}</TD>
             <TD right>{fmtN(r.total_feed_kg)}</TD>
             <TD right>{r.avg_weight_g ?? '—'}</TD>
@@ -109,7 +118,7 @@ function FeedTable({ rows }) {
   );
 }
 
-function MortalityTable({ rows }) {
+function MortalityTable({ rows, navigate }) {
   if (!rows?.length) return <Empty />;
   const CAUSE_LABEL = { heat_stress: 'Heat Stress', disease: 'Disease', injury: 'Injury', culling: 'Culling', unknown: 'Unknown', other: 'Other' };
   return (
@@ -119,7 +128,7 @@ function MortalityTable({ rows }) {
         {rows.map((r, i) => (
           <tr key={i}>
             <TD strong>{CAUSE_LABEL[r.cause] || r.cause}</TD>
-            <TD>{r.batch_no}</TD>
+            <TD><BatchLink id={r.batch_id} name={r.batch_no} navigate={navigate} /></TD>
             <TD>{r.house}</TD>
             <TD right>{r.incidents}</TD>
             <TD right tone="danger">{r.total_deaths}</TD>
@@ -209,7 +218,7 @@ function InventoryTable({ rows }) {
   );
 }
 
-function BatchComparisonTable({ rows }) {
+function BatchComparisonTable({ rows, navigate }) {
   if (!rows?.length) return <Empty />;
   const pColor = n => n == null ? 'inherit' : n >= 0 ? 'var(--success)' : 'var(--danger)';
   const statusTone = s => s === 'profitable' ? 'success' : s === 'at_risk' ? 'warning' : 'danger';
@@ -234,7 +243,7 @@ function BatchComparisonTable({ rows }) {
       <tbody>
         {rows.map((r, i) => (
           <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--surface-raised,rgba(0,0,0,.02))' }}>
-            <TD strong>{r.batch_no}</TD>
+            <TD strong><BatchLink id={r.batch_id} name={r.batch_no} navigate={navigate} /></TD>
             <TD>{r.house}</TD>
             <TD right>{r.initial_count?.toLocaleString() ?? '—'}</TD>
             <TD right tone={r.total_deaths > 0 ? 'danger' : 'neutral'}>{r.total_deaths ?? 0}</TD>
@@ -259,16 +268,16 @@ function Empty() {
   return <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No data available for this period.</div>;
 }
 
-function renderResult(id, data) {
+function renderResult(id, data, navigate) {
   if (!data) return null;
   if (data.error) return <div style={{ color: 'var(--danger)', fontSize: 13, padding: '12px 0' }}>{data.error}</div>;
-  if (id === 'pnl')        return <PnlTable rows={data} />;
-  if (id === 'feed')       return <FeedTable rows={data} />;
-  if (id === 'mortality')  return <MortalityTable rows={data} />;
+  if (id === 'pnl')        return <PnlTable rows={data} navigate={navigate} />;
+  if (id === 'feed')       return <FeedTable rows={data} navigate={navigate} />;
+  if (id === 'mortality')  return <MortalityTable rows={data} navigate={navigate} />;
   if (id === 'monthly')    return <MonthlySummaryCards data={data} />;
   if (id === 'inventory')  return <InventoryTable rows={data} />;
   if (id === 'financial')  return <FinancialTable data={data} />;
-  if (id === 'comparison') return <BatchComparisonTable rows={data} />;
+  if (id === 'comparison') return <BatchComparisonTable rows={data} navigate={navigate} />;
   return null;
 }
 
@@ -297,6 +306,7 @@ const RANGES = ['This month', 'Last month', 'Last 3 months', 'Last 6 months', 'T
 
 export default function ReportsPage() {
   const { farms, farmId } = useFarm();
+  const navigate = useNavigate();
   const farmName = farms.find(f => f.id === farmId)?.name || 'Farm';
 
   const [selected, setSelected] = useState(null);
@@ -444,7 +454,7 @@ export default function ReportsPage() {
               <div style={{ padding: '16px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{result.error}</div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
-                {renderResult(selected, result)}
+                {renderResult(selected, result, navigate)}
               </div>
             )}
 

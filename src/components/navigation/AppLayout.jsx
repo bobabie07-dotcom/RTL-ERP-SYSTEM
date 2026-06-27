@@ -11,33 +11,52 @@ import { alertsApi } from '../../api/client';
 import Icons from '../../icons';
 
 const navItems = [
-  { key: 'dashboard',  label: 'Dashboard',           path: '/dashboard' },
-  { key: 'farms',      label: 'Farm Management',      path: '/farms' },
-  { key: 'houses',     label: 'Poultry Houses',       path: '/houses' },
-  { key: 'batches',    label: 'Batch Management',     path: '/batches' },
-  { key: 'inventory',  label: 'Inventory',            path: '/inventory' },
-  { key: 'feed',       label: 'Feed Management',      path: '/feed' },
-  { key: 'mortality',  label: 'Mortality Tracker',    path: '/mortality' },
-  { key: 'sales',      label: 'Sales & Procurement',  path: '/sales' },
-  { key: 'reports',    label: 'Reports & Analytics',  path: '/reports' },
-  { key: 'notifications', label: 'Notifications',     path: '/notifications' },
-  { key: 'usermgmt',   label: 'User Management',      path: '/user-management' },
-  { key: 'support',    label: 'IT Support',           path: '/support' },
-  { key: 'helpdesk',   label: 'Helpdesk',             path: '/helpdesk' },
-  { key: 'settings',   label: 'Settings',             path: '/settings' },
+  { key: 'dashboard',     label: 'Dashboard',           path: '/dashboard' },
+  { key: 'farms',         label: 'Farm Management',      path: '/farms' },
+  { key: 'houses',        label: 'Poultry Houses',       path: '/houses' },
+  { key: 'maintenance',   label: 'Maintenance',          path: '/maintenance' },
+  { key: 'batches',       label: 'Batch Management',     path: '/batches' },
+  { key: 'inventory',     label: 'Inventory',            path: '/inventory' },
+  { key: 'feed',          label: 'Feed Management',      path: '/feed' },
+  { key: 'mortality',     label: 'Mortality Tracker',    path: '/mortality' },
+  { key: 'health',        label: 'Animal Health',        path: '/health' },
+  { key: 'sales',         label: 'Sales & Procurement',  path: '/sales' },
+  { key: 'reports',       label: 'Reports & Analytics',  path: '/reports' },
+  { key: 'notifications', label: 'Notifications',        path: '/notifications' },
+  { key: 'usermgmt',      label: 'User Management',      path: '/user-management' },
+  { key: 'support',       label: 'IT Support',           path: '/support' },
+  { key: 'helpdesk',      label: 'Helpdesk',             path: '/helpdesk' },
+  { key: 'settings',      label: 'Settings',             path: '/settings' },
 ];
 
 const iconMap = {
   dashboard: Icons.dashboard, farms: Icons.farm, houses: Icons.house,
+  maintenance: Icons.wrench,
   batches: Icons.batch, inventory: Icons.inventory, feed: Icons.feed,
-  mortality: Icons.mortality, sales: Icons.sales, reports: Icons.reports,
+  mortality: Icons.mortality, health: Icons.syringe,
+  sales: Icons.sales, reports: Icons.reports,
   notifications: Icons.bell, settings: Icons.settings,
   usermgmt: Icons.users, support: Icons.mail, helpdesk: Icons.wrench,
 };
 
+const ROLE_LABEL = { 1: 'Administrator', 2: 'Farm Manager', 3: 'Farm Worker', 4: 'Veterinarian', 5: 'Owner' };
+
+function getAlertRoute(alertType) {
+  switch (alertType) {
+    case 'inventory_low':
+    case 'inventory_expiry': return '/inventory';
+    case 'feed_low':         return '/feed';
+    case 'vaccination_due':  return '/health';
+    case 'mortality_high':   return '/mortality';
+    case 'batch_harvest':
+    case 'withdrawal_active': return '/batches';
+    default:                 return '/notifications';
+  }
+}
+
 const SEVERITY_TONE = { info: 'info', warning: 'warning', danger: 'danger' };
 
-function NotificationsDropdown({ alerts, onClose, onMarkAll, onViewAll }) {
+function NotificationsDropdown({ alerts, onClose, onMarkAll, onViewAll, onAlertClick }) {
   return (
     <div style={{
       position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 340,
@@ -59,6 +78,7 @@ function NotificationsDropdown({ alerts, onClose, onMarkAll, onViewAll }) {
       )}
       {alerts.map((n) => (
         <div key={n.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'background 120ms' }}
+          onClick={() => onAlertClick(n)}
           onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-50)'}
           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -116,7 +136,7 @@ export function AppLayout({ children }) {
 
   const activeItem = navItems.find((item) => {
     if (item.key === 'batches') return location.pathname === '/batches' || location.pathname.startsWith('/batches/');
-    return location.pathname === item.path;
+    return location.pathname === item.path || location.pathname.startsWith(item.path + '/');
   });
   const activeKey = activeItem?.key || 'dashboard';
   const pageTitle = activeItem?.label || 'Dashboard';
@@ -135,7 +155,22 @@ export function AppLayout({ children }) {
     setAlerts([]);
   }
 
-  const nav = navItems.map((item) => ({
+  function handleAlertClick(alert) {
+    navigate(getAlertRoute(alert.alert_type));
+    setNotifOpen(false);
+    alertsApi.markRead(alert.id).catch(() => {});
+    setAlerts(prev => prev.filter(a => a.id !== alert.id));
+  }
+
+  const roleId = user?.role_id;
+  const filteredNavItems = navItems.filter(item => {
+    if (item.key === 'usermgmt') return roleId === 1;
+    if (item.key === 'helpdesk') return roleId === 1 || roleId === 2 || roleId === 5;
+    if (item.key === 'support')  return roleId === 3 || roleId === 4;
+    return true;
+  });
+
+  const nav = filteredNavItems.map((item) => ({
     key: item.key, label: item.label,
     icon: React.createElement(iconMap[item.key] || Icons.dashboard, { w: 19 }),
   }));
@@ -203,11 +238,12 @@ export function AppLayout({ children }) {
                     onClose={() => setNotifOpen(false)}
                     onMarkAll={handleMarkAll}
                     onViewAll={() => { navigate('/notifications'); setNotifOpen(false); }}
+                    onAlertClick={handleAlertClick}
                   />
                 )}
               </div>
               <div style={{ width: 1, height: 28, background: 'var(--border)' }} />
-              <Avatar name={displayName} role="Farm Manager" showText />
+              <Avatar name={displayName} role={ROLE_LABEL[user?.role_id] || 'User'} showText />
               <button
                 onClick={logout}
                 title="Sign out"

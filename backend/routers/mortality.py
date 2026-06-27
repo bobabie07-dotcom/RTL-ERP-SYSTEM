@@ -25,6 +25,7 @@ def list_mortality(
     sql = """
         SELECT
             m.id,
+            m.batch_id,
             m.record_date      AS date,
             b.batch_no         AS batch,
             h.name             AS house,

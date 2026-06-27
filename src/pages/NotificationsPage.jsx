@@ -1,15 +1,30 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/data/Card';
 import { Badge } from '../components/core/Badge';
 import { Button } from '../components/core/Button';
 import { alertsApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
 
+function getAlertRoute(alertType) {
+  switch (alertType) {
+    case 'inventory_low':
+    case 'inventory_expiry': return '/inventory';
+    case 'feed_low':         return '/feed';
+    case 'vaccination_due':  return '/health';
+    case 'mortality_high':   return '/mortality';
+    case 'batch_harvest':
+    case 'withdrawal_active': return '/batches';
+    default:                 return null;
+  }
+}
+
 const SEVERITY_TONE  = { info: 'info', warning: 'warning', danger: 'danger' };
 const SEVERITY_LABEL = { info: 'Info', warning: 'Warning', danger: 'Alert' };
 
 export default function NotificationsPage() {
   const { farmId }  = useFarm();
+  const navigate    = useNavigate();
   const [alerts,     setAlerts]     = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
@@ -60,11 +75,17 @@ export default function NotificationsPage() {
         ) : alerts.length === 0 ? (
           <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No notifications yet.</div>
         ) : alerts.map((n, i) => (
-          <div key={n.id} style={{
-            display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 16px',
-            borderBottom: i < alerts.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-            background: n.is_read ? 'transparent' : 'var(--green-50)',
-          }}>
+          <div key={n.id}
+            onClick={() => { const r = getAlertRoute(n.alert_type); if (r) navigate(r); }}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 16px',
+              borderBottom: i < alerts.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+              background: n.is_read ? 'transparent' : 'var(--green-50)',
+              cursor: getAlertRoute(n.alert_type) ? 'pointer' : 'default',
+              transition: 'background 120ms',
+            }}
+            onMouseEnter={e => { if (getAlertRoute(n.alert_type)) e.currentTarget.style.background = 'var(--gray-50)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = n.is_read ? 'transparent' : 'var(--green-50)'; }}
             <Badge tone={SEVERITY_TONE[n.severity] || 'neutral'} variant="solid" style={{ marginTop: 2, flexShrink: 0 }}>
               {SEVERITY_LABEL[n.severity] || n.severity}
             </Badge>

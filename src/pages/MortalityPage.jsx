@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/data/Card';
 import { DataTable } from '../components/data/DataTable';
 import { Badge } from '../components/core/Badge';
@@ -26,6 +27,15 @@ const BLANK = { batch_id: '', house_id: '', record_date: TODAY, count: 1, chicke
 
 const fmt = n =>
   n == null ? '—' : `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const BatchLink = ({ id, name }) => {
+  const navigate = useNavigate();
+  return (
+    <span onClick={() => navigate(`/batches/${id}`)} style={{ color: 'var(--text-brand)', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>
+      {name}
+    </span>
+  );
+};
 
 export default function MortalityPage() {
   const { farmId } = useFarm();
@@ -369,7 +379,7 @@ export default function MortalityPage() {
         ) : (
           <DataTable
             columns={[
-              { key: 'batch_no',        header: 'Batch',           strong: true },
+              { key: 'batch_no', header: 'Batch', render: r => <BatchLink id={r.batch_id} name={r.batch_no} /> },
               { key: 'house',           header: 'House' },
               { key: 'initial_count',   header: 'Placed',          align: 'right', numeric: true, render: r => r.initial_count.toLocaleString() },
               { key: 'deaths',          header: 'Deaths',          align: 'right', numeric: true, render: r => <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{r.deaths.toLocaleString()} <small style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>({r.mortality_pct}%)</small></span> },
@@ -398,9 +408,9 @@ export default function MortalityPage() {
         <Card title="Detailed Mortality Cost Breakdown">
           <DataTable
             columns={[
-              { key: 'batch_no',     header: 'Batch',          strong: true },
-              { key: 'house',        header: 'House' },
-              { key: 'deaths',       header: 'Total Deaths',   align: 'right', numeric: true,
+              { key: 'batch_no', header: 'Batch', render: r => <BatchLink id={r.batch_id} name={r.batch_no} /> },
+              { key: 'house',    header: 'House' },
+              { key: 'deaths',   header: 'Total Deaths',   align: 'right', numeric: true,
                 render: r => <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{r.deaths.toLocaleString()}</span> },
               { key: 'feedCostLoss', header: 'Feed Cost Loss', align: 'right',
                 render: r => <span style={{ color: 'var(--danger)' }}>{fmt(r.feedCostLoss)}</span> },
@@ -439,7 +449,7 @@ export default function MortalityPage() {
         <Card title="Mortality Rate by Batch (7-day)">
           <DataTable
             columns={[
-              { key: 'batch_no',           header: 'Batch',         strong: true },
+              { key: 'batch_no', header: 'Batch', render: r => <BatchLink id={r.batch_id} name={r.batch_no} /> },
               { key: 'house',              header: 'House' },
               { key: 'total_deaths_7d',    header: 'Deaths (7d)',   align: 'right', numeric: true },
               { key: 'current_count',      header: 'Current Birds', align: 'right', numeric: true },
@@ -475,9 +485,9 @@ export default function MortalityPage() {
       }>
         <DataTable
           columns={[
-            { key: 'date',         header: 'Date',         strong: true },
-            { key: 'batch',        header: 'Batch' },
-            { key: 'house',        header: 'House' },
+            { key: 'date',  header: 'Date',  strong: true },
+            { key: 'batch', header: 'Batch', render: r => <BatchLink id={r.batch_id} name={r.batch} /> },
+            { key: 'house', header: 'House' },
             { key: 'count',        header: 'Count',        align: 'right', numeric: true },
             ...(!isByBird ? [{ key: 'chicken_weight_kg', header: 'Weight (kg)', align: 'right', render: r => r.chicken_weight_kg != null ? `${Number(r.chicken_weight_kg).toFixed(2)} kg` : '—' }] : []),
             { key: 'financialLoss', header: 'Est. Loss', align: 'right', render: r => {
