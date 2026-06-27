@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Alert, InventoryCategory, InventoryItem, InventoryMovement, PurchaseOrder, Supplier
+from models import InventoryCategory, InventoryItem, InventoryMovement, Supplier
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
     InventoryCategoryOut, InventoryItemCreate, InventoryItemOut, InventoryItemUpdate,

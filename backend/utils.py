@@ -7,7 +7,7 @@ def check_and_create_inventory_alerts(item, db: Session) -> None:
     from models import Alert  # local import avoids circular imports
 
     farm_id = item.farm_id
-    available = float(item.qty_on_hand) - float(item.qty_reserved)
+    available = item.qty_available  # uses max(0, on_hand - reserved) from model property
 
     # Low stock
     if float(item.reorder_level) > 0 and available <= float(item.reorder_level):
