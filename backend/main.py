@@ -57,6 +57,43 @@ def run_startup_migrations():
                 created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
+        # Recreate v_batch_pnl with LEFT JOIN so feed issues without purchase records
+        # use a fallback price (25/kg) instead of being silently dropped.
+        conn.execute(text("""
+            CREATE OR REPLACE VIEW v_batch_pnl AS
+            SELECT
+              b.id                                              AS batch_id,
+              b.batch_no,
+              h.name                                           AS house,
+              COALESCE(rev.total_revenue, 0)                   AS total_revenue,
+              COALESCE(fc.feed_cost, 0)                        AS feed_cost,
+              COALESCE(ex.other_expenses, 0)                   AS other_expenses,
+              COALESCE(rev.total_revenue, 0)
+                - COALESCE(fc.feed_cost, 0)
+                - COALESCE(ex.other_expenses, 0)               AS gross_profit
+            FROM batches b
+            JOIN houses h ON b.house_id = h.id
+            LEFT JOIN (
+              SELECT batch_id, SUM(total_amount) AS total_revenue
+              FROM sales_orders WHERE status != 'cancelled'
+              GROUP BY batch_id
+            ) rev ON rev.batch_id = b.id
+            LEFT JOIN (
+              SELECT fi.batch_id,
+                     SUM(fi.qty_kg * COALESCE(fp.cost_per_kg, 25.0)) AS feed_cost
+              FROM feed_issues fi
+              LEFT JOIN (
+                SELECT feed_type_id, AVG(cost_per_kg) AS cost_per_kg
+                FROM feed_purchases GROUP BY feed_type_id
+              ) fp ON fp.feed_type_id = fi.feed_type_id
+              GROUP BY fi.batch_id
+            ) fc ON fc.batch_id = b.id
+            LEFT JOIN (
+              SELECT batch_id, SUM(amount) AS other_expenses
+              FROM expenses WHERE batch_id IS NOT NULL
+              GROUP BY batch_id
+            ) ex ON ex.batch_id = b.id
+        """))
 
 
 app = FastAPI(

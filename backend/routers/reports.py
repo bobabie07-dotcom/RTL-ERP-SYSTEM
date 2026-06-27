@@ -8,15 +8,8 @@ from schemas.schemas import BatchPnL
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
-AVG_FEED_PRICE_PER_KG = 25.0   # fallback if no purchase records
-
-
-def _avg_feed_price(db: Session) -> float:
-    """Get average feed cost per kg from purchase records, fall back to default."""
-    result = db.execute(text(
-        "SELECT AVG(cost_per_kg) FROM feed_purchases WHERE cost_per_kg > 0"
-    )).scalar()
-    return float(result) if result else AVG_FEED_PRICE_PER_KG
+# Fallback price used when a feed type has no purchase records in the DB.
+FALLBACK_FEED_PRICE = 25.0  # ₱/kg
 
 
 @router.get("/farm-finances")
@@ -26,7 +19,6 @@ def farm_finances(
     _=Depends(get_current_user),
 ):
     """Financial health overview for a single farm."""
-    feed_price = _avg_feed_price(db)
     year = db.execute(text("SELECT YEAR(CURDATE())")).scalar()
 
     rev = db.execute(text("""
@@ -42,12 +34,24 @@ def farm_finances(
         WHERE farm_id = :fid AND YEAR(expense_date) = :yr
     """), {"fid": farm_id, "yr": year}).scalar()
 
+    # Per-feed-type average pricing avoids skewing when different feed grades are used.
     feed_exp = db.execute(text("""
-        SELECT COALESCE(SUM(fi.qty_kg), 0) * :fp
+        SELECT COALESCE(SUM(fi.qty_kg * COALESCE(fp.cost_per_kg, :fallback)), 0)
+        FROM feed_issues fi
+        JOIN batches b ON fi.batch_id = b.id
+        LEFT JOIN (
+            SELECT feed_type_id, AVG(cost_per_kg) AS cost_per_kg
+            FROM feed_purchases GROUP BY feed_type_id
+        ) fp ON fp.feed_type_id = fi.feed_type_id
+        WHERE b.farm_id = :fid AND YEAR(fi.issue_date) = :yr
+    """), {"fid": farm_id, "yr": year, "fallback": FALLBACK_FEED_PRICE}).scalar()
+
+    feed_kg = db.execute(text("""
+        SELECT COALESCE(SUM(fi.qty_kg), 0)
         FROM feed_issues fi
         JOIN batches b ON fi.batch_id = b.id
         WHERE b.farm_id = :fid AND YEAR(fi.issue_date) = :yr
-    """), {"fid": farm_id, "yr": year, "fp": feed_price}).scalar()
+    """), {"fid": farm_id, "yr": year}).scalar()
 
     active = db.execute(text("""
         SELECT COUNT(*) AS cnt,
@@ -90,16 +94,16 @@ def farm_finances(
     mortality_cost = deaths * cost_per_bird
 
     return {
-        "year":             year,
-        "active_batches":   int(active["cnt"]),
-        "active_birds":     int(current_birds or 0),
-        "initial_birds":    initial,
-        "total_deaths":     deaths,
-        "mortality_cost":   round(mortality_cost, 2),
-        "revenue_ytd":      round(total_rev, 2),
-        "expenses_ytd":     round(total_exp, 2),
-        "net_profit_ytd":   round(total_rev - total_exp, 2),
-        "feed_price_used":  round(feed_price, 2),
+        "year":            year,
+        "active_batches":  int(active["cnt"]),
+        "active_birds":    int(current_birds or 0),
+        "initial_birds":   initial,
+        "total_mortality": deaths,
+        "mortality_cost":  round(mortality_cost, 2),
+        "revenue":         round(total_rev, 2),
+        "expenses":        round(total_exp, 2),
+        "gross_profit":    round(total_rev - total_exp, 2),
+        "feed_used_kg":    round(float(feed_kg), 2),
     }
 
 
@@ -112,7 +116,6 @@ def mortality_impact(
     _=Depends(get_current_user),
 ):
     """Per-batch mortality financial impact with profit projection."""
-    feed_price = _avg_feed_price(db)
 
     rows = db.execute(text("""
         SELECT
@@ -123,10 +126,11 @@ def mortality_impact(
             COALESCE(
                 bl.current_count,
                 b.initial_count - COALESCE(mort_total.total_deaths, 0)
-            )                  AS current_count,
-            COALESCE(bl.avg_weight_g, 0)                 AS avg_weight_g,
-            COALESCE(fi_agg.total_feed_kg, 0)            AS total_feed_kg,
-            COALESCE(exp_agg.other_expenses, 0)          AS other_expenses
+            )                              AS current_count,
+            COALESCE(bl.avg_weight_g, 0)  AS avg_weight_g,
+            COALESCE(fi_agg.total_feed_kg, 0) AS total_feed_kg,
+            COALESCE(fi_agg.feed_cost, 0)     AS feed_cost,
+            COALESCE(exp_agg.other_expenses, 0) AS other_expenses
         FROM batches b
         JOIN houses h ON b.house_id = h.id
         LEFT JOIN (
@@ -141,8 +145,15 @@ def mortality_impact(
             FROM mortality_records GROUP BY batch_id
         ) mort_total ON b.id = mort_total.batch_id
         LEFT JOIN (
-            SELECT batch_id, SUM(qty_kg) AS total_feed_kg
-            FROM feed_issues GROUP BY batch_id
+            SELECT fi.batch_id,
+                   SUM(fi.qty_kg) AS total_feed_kg,
+                   SUM(fi.qty_kg * COALESCE(fp.cost_per_kg, :fallback)) AS feed_cost
+            FROM feed_issues fi
+            LEFT JOIN (
+                SELECT feed_type_id, AVG(cost_per_kg) AS cost_per_kg
+                FROM feed_purchases GROUP BY feed_type_id
+            ) fp ON fp.feed_type_id = fi.feed_type_id
+            GROUP BY fi.batch_id
         ) fi_agg ON b.id = fi_agg.batch_id
         LEFT JOIN (
             SELECT batch_id, SUM(amount) AS other_expenses
@@ -150,7 +161,7 @@ def mortality_impact(
         ) exp_agg ON b.id = exp_agg.batch_id
         WHERE b.farm_id = :fid AND b.status IN ('active','harvest_soon')
         ORDER BY b.batch_no
-    """), {"fid": farm_id}).mappings().all()
+    """), {"fid": farm_id, "fallback": FALLBACK_FEED_PRICE}).mappings().all()
 
     result = []
     for r in rows:
@@ -158,10 +169,11 @@ def mortality_impact(
         current       = int(r["current_count"])
         deaths        = max(0, initial - current)
         feed_kg       = float(r["total_feed_kg"])
+        feed_cost     = float(r["feed_cost"])
         other_exp     = float(r["other_expenses"])
         avg_w         = int(r["avg_weight_g"])
 
-        total_expenses   = feed_kg * feed_price + other_exp
+        total_expenses   = feed_cost + other_exp
         cost_per_bird    = total_expenses / initial if initial > 0 else 0
         mortality_pct    = (deaths / initial * 100) if initial > 0 else 0
 
@@ -179,7 +191,7 @@ def mortality_impact(
             breakeven_price = total_expenses / proj_weight_kg if proj_weight_kg > 0 else 0
 
         if total_expenses == 0:
-            status = "profitable"          # no costs recorded yet — not a loss
+            status = "profitable"
         elif proj_profit > 0:
             status = "profitable"
         elif proj_profit > -total_expenses * 0.1:
@@ -267,7 +279,7 @@ def monthly_summary(
     db: Session = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    params = {"farm_id": farm_id, "year": year, "month": month}
+    params = {"farm_id": farm_id, "year": year, "month": month, "fallback": FALLBACK_FEED_PRICE}
 
     mortality = db.execute(text("""
         SELECT COALESCE(SUM(m.count), 0) AS total_deaths
@@ -282,6 +294,19 @@ def monthly_summary(
         SELECT COALESCE(SUM(fi.qty_kg), 0) AS total_kg
         FROM feed_issues fi
         JOIN batches b ON fi.batch_id = b.id
+        WHERE b.farm_id = :farm_id
+          AND YEAR(fi.issue_date)  = :year
+          AND MONTH(fi.issue_date) = :month
+    """), params).scalar()
+
+    feed_cost = db.execute(text("""
+        SELECT COALESCE(SUM(fi.qty_kg * COALESCE(fp.cost_per_kg, :fallback)), 0)
+        FROM feed_issues fi
+        JOIN batches b ON fi.batch_id = b.id
+        LEFT JOIN (
+            SELECT feed_type_id, AVG(cost_per_kg) AS cost_per_kg
+            FROM feed_purchases GROUP BY feed_type_id
+        ) fp ON fp.feed_type_id = fi.feed_type_id
         WHERE b.farm_id = :farm_id
           AND YEAR(fi.issue_date)  = :year
           AND MONTH(fi.issue_date) = :month
@@ -305,14 +330,19 @@ def monthly_summary(
           AND MONTH(expense_date) = :month
     """), params).scalar()
 
+    rev_f  = float(revenue)
+    exp_f  = float(expenses)
+    feed_f = float(feed_cost)
+
     return {
         "year":            year,
         "month":           month,
         "total_mortality": int(mortality),
         "feed_used_kg":    float(feed_used),
-        "revenue":         float(revenue),
-        "expenses":        float(expenses),
-        "gross_profit":    float(revenue) - float(expenses),
+        "feed_cost":       round(feed_f, 2),
+        "revenue":         round(rev_f, 2),
+        "expenses":        round(exp_f, 2),
+        "gross_profit":    round(rev_f - exp_f - feed_f, 2),
     }
 
 
@@ -326,10 +356,13 @@ def inventory_snapshot(
         SELECT
             ic.name         AS category,
             COUNT(ii.id)    AS item_count,
-            SUM(CASE WHEN ii.qty_on_hand <= 0               THEN 1 ELSE 0 END) AS out_of_stock,
-            SUM(CASE WHEN ii.qty_on_hand <= ii.reorder_level
-                     AND ii.qty_on_hand > 0                 THEN 1 ELSE 0 END) AS low_stock,
-            SUM(CASE WHEN ii.qty_on_hand > ii.reorder_level THEN 1 ELSE 0 END) AS in_stock
+            SUM(CASE WHEN (ii.qty_on_hand - ii.qty_reserved) <= 0
+                     THEN 1 ELSE 0 END)                                        AS out_of_stock,
+            SUM(CASE WHEN (ii.qty_on_hand - ii.qty_reserved) <= ii.reorder_level
+                     AND  (ii.qty_on_hand - ii.qty_reserved) > 0
+                     THEN 1 ELSE 0 END)                                        AS low_stock,
+            SUM(CASE WHEN (ii.qty_on_hand - ii.qty_reserved) > ii.reorder_level
+                     THEN 1 ELSE 0 END)                                        AS in_stock
         FROM inventory_items ii
         JOIN inventory_categories ic ON ii.category_id = ic.id
         WHERE ii.farm_id = :farm_id
@@ -346,38 +379,61 @@ def batch_comparison(
     _=Depends(get_current_user),
 ):
     """Compare key KPIs across all batches for a farm."""
-    feed_price = _avg_feed_price(db)
 
     rows = db.execute(text("""
         SELECT
             b.id,
             b.batch_no,
-            h.name               AS house,
+            h.name                  AS house,
             b.placed_date,
             b.initial_count,
             b.status,
             b.cycle_length_days,
-            COALESCE(dl.current_count, b.initial_count)  AS current_count,
-            COALESCE(dl.avg_weight_g, 0)                 AS avg_weight_g,
-            COALESCE(fi.total_feed_kg, 0)                AS total_feed_kg,
-            COALESCE(mort.total_deaths, 0)               AS total_deaths,
-            COALESCE(rev.total_revenue, 0)               AS total_revenue,
-            COALESCE(exp.other_expenses, 0)              AS other_expenses,
-            DATEDIFF(COALESCE(b.updated_at, CURDATE()), b.placed_date) AS age_days
+            COALESCE(dl.current_count,
+                     b.initial_count - COALESCE(mort.total_deaths, 0)) AS current_count,
+            COALESCE(dl.avg_weight_g, 0)    AS avg_weight_g,
+            COALESCE(fi.total_feed_kg, 0)   AS total_feed_kg,
+            COALESCE(fi.feed_cost, 0)       AS feed_cost,
+            COALESCE(mort.total_deaths, 0)  AS total_deaths,
+            COALESCE(rev.total_revenue, 0)  AS total_revenue,
+            COALESCE(exp.other_expenses, 0) AS other_expenses,
+            DATEDIFF(COALESCE(hr.harvest_date, CURDATE()), b.placed_date) AS age_days
         FROM batches b
         JOIN houses h ON b.house_id = h.id
         LEFT JOIN (
             SELECT batch_id, current_count, avg_weight_g
             FROM batch_daily_logs
-            WHERE (batch_id, log_date) IN (SELECT batch_id, MAX(log_date) FROM batch_daily_logs GROUP BY batch_id)
+            WHERE (batch_id, log_date) IN (
+                SELECT batch_id, MAX(log_date) FROM batch_daily_logs GROUP BY batch_id
+            )
         ) dl ON b.id = dl.batch_id
-        LEFT JOIN (SELECT batch_id, SUM(qty_kg) AS total_feed_kg FROM feed_issues GROUP BY batch_id) fi ON b.id = fi.batch_id
-        LEFT JOIN (SELECT batch_id, SUM(count) AS total_deaths FROM mortality_records GROUP BY batch_id) mort ON b.id = mort.batch_id
-        LEFT JOIN (SELECT batch_id, SUM(qty_kg * price_per_kg) AS total_revenue FROM sales_orders WHERE status != 'cancelled' GROUP BY batch_id) rev ON b.id = rev.batch_id
-        LEFT JOIN (SELECT batch_id, SUM(amount) AS other_expenses FROM expenses WHERE batch_id IS NOT NULL GROUP BY batch_id) exp ON b.id = exp.batch_id
+        LEFT JOIN (
+            SELECT fi.batch_id,
+                   SUM(fi.qty_kg) AS total_feed_kg,
+                   SUM(fi.qty_kg * COALESCE(fp.cost_per_kg, :fallback)) AS feed_cost
+            FROM feed_issues fi
+            LEFT JOIN (
+                SELECT feed_type_id, AVG(cost_per_kg) AS cost_per_kg
+                FROM feed_purchases GROUP BY feed_type_id
+            ) fp ON fp.feed_type_id = fi.feed_type_id
+            GROUP BY fi.batch_id
+        ) fi ON b.id = fi.batch_id
+        LEFT JOIN (
+            SELECT batch_id, SUM(count) AS total_deaths
+            FROM mortality_records GROUP BY batch_id
+        ) mort ON b.id = mort.batch_id
+        LEFT JOIN (
+            SELECT batch_id, SUM(qty_kg * price_per_kg) AS total_revenue
+            FROM sales_orders WHERE status != 'cancelled' GROUP BY batch_id
+        ) rev ON b.id = rev.batch_id
+        LEFT JOIN (
+            SELECT batch_id, SUM(amount) AS other_expenses
+            FROM expenses WHERE batch_id IS NOT NULL GROUP BY batch_id
+        ) exp ON b.id = exp.batch_id
+        LEFT JOIN harvest_records hr ON hr.batch_id = b.id
         WHERE b.farm_id = :farm_id
         ORDER BY b.placed_date DESC
-    """), {"farm_id": farm_id}).mappings().all()
+    """), {"farm_id": farm_id, "fallback": FALLBACK_FEED_PRICE}).mappings().all()
 
     result = []
     for r in rows:
@@ -385,6 +441,7 @@ def batch_comparison(
         current     = int(r["current_count"])
         deaths      = int(r["total_deaths"])
         feed_kg     = float(r["total_feed_kg"])
+        feed_cost   = float(r["feed_cost"])
         other_exp   = float(r["other_expenses"])
         revenue     = float(r["total_revenue"])
         avg_w       = int(r["avg_weight_g"])
@@ -393,29 +450,28 @@ def batch_comparison(
         mortality_pct   = round((deaths / initial * 100), 2) if initial > 0 else 0
         live_weight_kg  = current * avg_w / 1000 if avg_w > 0 else 0
         fcr             = round(feed_kg / live_weight_kg, 3) if live_weight_kg > 0 else 0
-        feed_cost       = round(feed_kg * feed_price, 2)
         total_expenses  = round(feed_cost + other_exp, 2)
         gross_profit    = round(revenue - total_expenses, 2)
 
         result.append({
-            "batch_id":      r["id"],
-            "batch_no":      r["batch_no"],
-            "house":         r["house"],
-            "placed_date":   str(r["placed_date"]),
-            "status":        r["status"],
-            "initial_count": initial,
-            "current_count": current,
-            "deaths":        deaths,
-            "survival_pct":  survival_pct,
-            "mortality_pct": mortality_pct,
-            "total_feed_kg": round(feed_kg, 1),
-            "fcr":           fcr,
-            "avg_weight_g":  avg_w,
-            "revenue":       round(revenue, 2),
-            "feed_cost":     feed_cost,
+            "batch_id":       r["id"],
+            "batch_no":       r["batch_no"],
+            "house":          r["house"],
+            "placed_date":    str(r["placed_date"]),
+            "status":         r["status"],
+            "initial_count":  initial,
+            "current_count":  current,
+            "deaths":         deaths,
+            "survival_pct":   survival_pct,
+            "mortality_pct":  mortality_pct,
+            "total_feed_kg":  round(feed_kg, 1),
+            "fcr":            fcr,
+            "avg_weight_g":   avg_w,
+            "revenue":        round(revenue, 2),
+            "feed_cost":      round(feed_cost, 2),
             "other_expenses": round(other_exp, 2),
             "total_expenses": total_expenses,
-            "gross_profit":  gross_profit,
+            "gross_profit":   gross_profit,
         })
     return result
 

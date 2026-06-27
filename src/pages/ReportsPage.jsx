@@ -148,7 +148,8 @@ function MonthlySummaryCards({ data }) {
   if (!data) return <Empty />;
   const cards = [
     { label: 'Revenue',         value: fmt(data.revenue),       tone: 'success' },
-    { label: 'Total Expenses',  value: fmt(data.expenses),      tone: 'danger' },
+    { label: 'Other Expenses',  value: fmt(data.expenses),      tone: 'danger' },
+    { label: 'Feed Cost',       value: fmt(data.feed_cost),     tone: 'danger' },
     { label: 'Gross Profit',    value: fmt(data.gross_profit),  tone: data.gross_profit >= 0 ? 'success' : 'danger' },
     { label: 'Feed Used (kg)',  value: parseFloat(data.feed_used_kg||0).toLocaleString() + ' kg', tone: 'neutral' },
     { label: 'Total Mortality', value: parseInt(data.total_mortality||0).toLocaleString() + ' birds', tone: parseInt(data.total_mortality) > 0 ? 'warning' : 'success' },
@@ -172,8 +173,8 @@ function FinancialTable({ data }) {
   const rows = [
     { label: 'Total Revenue',    value: fmt(data.revenue),                     tone: 'success' },
     { label: 'Total Expenses',   value: fmt(data.expenses),                    tone: 'danger'  },
-    { label: 'Gross Profit',     value: fmt(data.gross_profit),                tone: data.gross_profit >= 0 ? 'success' : 'danger' },
     { label: 'Feed Used (kg)',   value: `${parseFloat(data.feed_used_kg||0).toLocaleString()} kg`, tone: 'neutral' },
+    { label: 'Gross Profit',     value: fmt(data.gross_profit),                tone: data.gross_profit >= 0 ? 'success' : 'danger' },
     { label: 'Total Mortalities',value: `${parseInt(data.total_mortality||0)} birds`,              tone: 'neutral' },
   ];
   return (

@@ -536,9 +536,9 @@ LEFT JOIN (
 ) rev ON rev.batch_id = b.id
 LEFT JOIN (
   SELECT fi.batch_id,
-         SUM(fi.qty_kg * fp.cost_per_kg) AS feed_cost
+         SUM(fi.qty_kg * COALESCE(fp.cost_per_kg, 25.0)) AS feed_cost
   FROM feed_issues fi
-  JOIN (
+  LEFT JOIN (
     SELECT feed_type_id, AVG(cost_per_kg) AS cost_per_kg
     FROM feed_purchases GROUP BY feed_type_id
   ) fp ON fp.feed_type_id = fi.feed_type_id
