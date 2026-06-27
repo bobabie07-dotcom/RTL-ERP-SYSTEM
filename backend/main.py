@@ -25,6 +25,30 @@ def run_startup_migrations():
         _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN qty_reserved NUMERIC(12,2) NOT NULL DEFAULT 0")
         _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN brand VARCHAR(100) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN remarks TEXT DEFAULT NULL")
+        # Support ticket extended fields
+        _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN affected_module VARCHAR(100) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN contact_info VARCHAR(255) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN department VARCHAR(100) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN closed_at DATETIME DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN escalated_at DATETIME DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN escalation_notes TEXT DEFAULT NULL")
+        # Change ENUM columns to VARCHAR for flexibility
+        _safe_add_column(conn, "ALTER TABLE support_tickets MODIFY COLUMN category VARCHAR(100) NOT NULL DEFAULT 'other'")
+        _safe_add_column(conn, "ALTER TABLE support_tickets MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'new'")
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS ticket_activity_logs (
+                id           INT AUTO_INCREMENT PRIMARY KEY,
+                ticket_id    INT NOT NULL,
+                action_type  VARCHAR(100) NOT NULL,
+                old_value    TEXT DEFAULT NULL,
+                new_value    TEXT DEFAULT NULL,
+                performed_by INT NOT NULL,
+                notes        TEXT DEFAULT NULL,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_ticket (ticket_id),
+                INDEX idx_actor (performed_by)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
         _safe_add_column(conn, """
             ALTER TABLE alerts MODIFY COLUMN alert_type
             ENUM('mortality_high','feed_low','vaccination_due','withdrawal_active',

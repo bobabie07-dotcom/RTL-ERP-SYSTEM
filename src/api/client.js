@@ -210,6 +210,11 @@ export const supportApi = {
   createTicket:  (data)         => post('/api/support/tickets', data),
   getTicket:     (id)           => get(`/api/support/tickets/${id}`),
   updateTicket:  (id, data)     => patch(`/api/support/tickets/${id}`, data),
+  assignTicket:  (id, data)     => post(`/api/support/tickets/${id}/assign`, data),
+  changeStatus:  (id, data)     => post(`/api/support/tickets/${id}/status`, data),
   getComments:   (id)           => get(`/api/support/tickets/${id}/comments`),
   addComment:    (id, data)     => post(`/api/support/tickets/${id}/comments`, data),
+  getActivity:   (id)           => get(`/api/support/tickets/${id}/activity`),
+  getDashboard:  (params)       => get('/api/support/dashboard', params),
+  getStaff:      ()             => get('/api/support/staff'),
 };

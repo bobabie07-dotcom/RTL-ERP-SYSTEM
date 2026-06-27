@@ -69,19 +69,26 @@ class SupportTicket(Base):
     user_id          = Column(Integer, ForeignKey("users.id"), nullable=False)
     farm_id          = Column(Integer, nullable=True)
     subject          = Column(String(255), nullable=False)
-    category         = Column(Enum("bug", "access_request", "feature_request", "general"), nullable=False, default="general")
+    category         = Column(String(100), nullable=False, default="other")
     priority         = Column(Enum("low", "medium", "high", "critical"), nullable=False, default="medium")
     description      = Column(Text, nullable=False)
-    status           = Column(Enum("open", "in_progress", "waiting_on_user", "resolved", "closed"), nullable=False, default="open")
+    status           = Column(String(50), nullable=False, default="new")
+    affected_module  = Column(String(100), nullable=True)
+    contact_info     = Column(String(255), nullable=True)
+    department       = Column(String(100), nullable=True)
     assigned_to      = Column(Integer, ForeignKey("users.id"), nullable=True)
     resolution_notes = Column(Text, nullable=True)
+    escalation_notes = Column(Text, nullable=True)
     created_at       = Column(DateTime, default=func.now())
     updated_at       = Column(DateTime, default=func.now(), onupdate=func.now())
     resolved_at      = Column(DateTime, nullable=True)
+    closed_at        = Column(DateTime, nullable=True)
+    escalated_at     = Column(DateTime, nullable=True)
 
-    submitter = relationship("User", foreign_keys=[user_id])
-    assignee  = relationship("User", foreign_keys=[assigned_to])
-    comments  = relationship("TicketComment", back_populates="ticket", order_by="TicketComment.created_at")
+    submitter      = relationship("User", foreign_keys=[user_id])
+    assignee       = relationship("User", foreign_keys=[assigned_to])
+    comments       = relationship("TicketComment", back_populates="ticket", order_by="TicketComment.created_at")
+    activity_logs  = relationship("TicketActivityLog", back_populates="ticket", order_by="TicketActivityLog.created_at")
 
 
 class TicketComment(Base):
@@ -96,6 +103,22 @@ class TicketComment(Base):
 
     ticket = relationship("SupportTicket", back_populates="comments")
     author = relationship("User")
+
+
+class TicketActivityLog(Base):
+    __tablename__ = "ticket_activity_logs"
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    ticket_id    = Column(Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False)
+    action_type  = Column(String(100), nullable=False)
+    old_value    = Column(Text, nullable=True)
+    new_value    = Column(Text, nullable=True)
+    performed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    notes        = Column(Text, nullable=True)
+    created_at   = Column(DateTime, default=func.now())
+
+    ticket = relationship("SupportTicket", back_populates="activity_logs")
+    actor  = relationship("User")
 
 
 # ── Flocks / Batches ─────────────────────────────────────────────────────────

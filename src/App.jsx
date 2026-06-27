@@ -10,6 +10,7 @@ import DashboardPage from './pages/DashboardPage';
 import UserManagementPage from './pages/UserManagementPage';
 import SupportPage from './pages/SupportPage';
 import HelpdeskPage from './pages/HelpdeskPage';
+import TicketDetailPage from './pages/TicketDetailPage';
 import BatchesPage from './pages/BatchesPage';
 import BatchDetailPage from './pages/BatchDetailPage';
 import FarmsPage from './pages/FarmsPage';
@@ -96,8 +97,10 @@ export default function App() {
           <Route path="/user-management" element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>} />
           <Route path="/health"          element={<ProtectedRoute><HealthPage /></ProtectedRoute>} />
           <Route path="/maintenance"     element={<ProtectedRoute><MaintenancePage /></ProtectedRoute>} />
-          <Route path="/support"         element={<ProtectedRoute><SupportPage /></ProtectedRoute>} />
-          <Route path="/helpdesk"        element={<ProtectedRoute><HelpdeskPage /></ProtectedRoute>} />
+          <Route path="/support"                   element={<ProtectedRoute><SupportPage /></ProtectedRoute>} />
+          <Route path="/support/tickets/:id"       element={<ProtectedRoute><TicketDetailPage /></ProtectedRoute>} />
+          <Route path="/helpdesk"                  element={<ProtectedRoute><HelpdeskPage /></ProtectedRoute>} />
+          <Route path="/helpdesk/tickets/:id"      element={<ProtectedRoute><TicketDetailPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

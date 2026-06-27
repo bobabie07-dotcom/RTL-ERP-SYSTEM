@@ -72,11 +72,31 @@ class FirstPasswordRequest(BaseModel):
 
 # ── Support Tickets ───────────────────────────────────────────────────────────
 
+TICKET_CATEGORIES = [
+    "login_problem", "account_issue", "inventory_issue", "procurement_issue",
+    "sales_issue", "report_issue", "dashboard_issue", "button_not_working",
+    "data_not_saving", "calculation_issue", "permission_issue", "system_error",
+    "feature_request", "other",
+    # legacy values kept for backward compat
+    "bug", "access_request", "general",
+]
+
+TICKET_STATUSES = [
+    "new", "assigned", "in_progress", "waiting_for_user",
+    "resolved", "closed", "reopened", "cancelled", "escalated",
+    # legacy
+    "open", "waiting_on_user",
+]
+
+
 class TicketCreate(BaseModel):
-    subject:     str
-    category:    str
-    priority:    str = "medium"
-    description: str
+    subject:         str
+    category:        str = "other"
+    priority:        str = "medium"
+    description:     str
+    affected_module: Optional[str] = None
+    contact_info:    Optional[str] = None
+    department:      Optional[str] = None
 
 
 class TicketUpdate(BaseModel):
@@ -84,6 +104,16 @@ class TicketUpdate(BaseModel):
     assigned_to:      Optional[int] = None
     resolution_notes: Optional[str] = None
     priority:         Optional[str] = None
+    escalation_notes: Optional[str] = None
+
+
+class TicketAssign(BaseModel):
+    user_id: Optional[int] = None
+
+
+class TicketStatusChange(BaseModel):
+    status: str
+    notes:  Optional[str] = None
 
 
 class TicketCommentCreate(BaseModel):
@@ -101,22 +131,46 @@ class TicketCommentOut(OrmBase):
     author_name: Optional[str] = None
 
 
+class TicketActivityLogOut(BaseModel):
+    id:           int
+    ticket_id:    int
+    action_type:  str
+    old_value:    Optional[str]
+    new_value:    Optional[str]
+    performed_by: int
+    actor_name:   Optional[str] = None
+    notes:        Optional[str]
+    created_at:   datetime
+
+
 class TicketOut(OrmBase):
     id:               int
     ticket_no:        str
     user_id:          int
-    farm_id:          int
+    farm_id:          Optional[int]
     subject:          str
     category:         str
     priority:         str
     description:      str
     status:           str
+    affected_module:  Optional[str]
+    contact_info:     Optional[str]
+    department:       Optional[str]
     assigned_to:      Optional[int]
     resolution_notes: Optional[str]
+    escalation_notes: Optional[str]
     created_at:       datetime
     updated_at:       datetime
     resolved_at:      Optional[datetime]
+    closed_at:        Optional[datetime]
+    escalated_at:     Optional[datetime]
     submitter_name:   Optional[str] = None
+    assignee_name:    Optional[str] = None
+
+
+class TicketDetailOut(TicketOut):
+    comments: list[TicketCommentOut]       = []
+    activity: list[TicketActivityLogOut]   = []
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
