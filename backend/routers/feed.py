@@ -58,12 +58,35 @@ def update_feed_type(
     type_id: int,
     body: FeedTypePatch,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "feed")),
+    current_user=Depends(require_permission("write", "feed")),
 ):
     ft = db.get(FeedType, type_id)
     if not ft:
         raise HTTPException(status_code=404, detail="Feed type not found")
+
+    old_item_id = ft.inventory_item_id
     ft.inventory_item_id = body.inventory_item_id
+
+    # When a new link is established, reconcile inventory qty to match feed stock
+    if body.inventory_item_id and body.inventory_item_id != old_item_id:
+        stock = db.get(FeedStock, type_id)
+        inv_item = db.get(InventoryItem, body.inventory_item_id)
+        if stock and inv_item:
+            old_qty = float(inv_item.qty_on_hand)
+            new_qty = float(stock.qty_on_hand_kg)
+            inv_item.qty_on_hand = new_qty
+            diff = new_qty - old_qty
+            if diff != 0:
+                db.add(InventoryMovement(
+                    item_id=body.inventory_item_id,
+                    movement_type="adjustment",
+                    qty=abs(diff),
+                    reference_type="adjustment",
+                    notes=f"Reconciled on link to feed type '{ft.name}' — feed stock was {new_qty} kg",
+                    created_by=current_user.id,
+                ))
+                check_and_create_inventory_alerts(inv_item, db)
+
     db.commit()
     db.refresh(ft)
     return ft
