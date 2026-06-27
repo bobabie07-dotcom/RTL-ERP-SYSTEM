@@ -21,6 +21,7 @@ def run_startup_migrations():
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN phone VARCHAR(50) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE feed_types ADD COLUMN inventory_item_id INT NULL")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN username VARCHAR(50) UNIQUE NULL")
+        _safe_add_column(conn, "ALTER TABLE purchase_order_items ADD COLUMN qty_received NUMERIC(12,2) NOT NULL DEFAULT 0")
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS support_tickets (
                 id               INT AUTO_INCREMENT PRIMARY KEY,

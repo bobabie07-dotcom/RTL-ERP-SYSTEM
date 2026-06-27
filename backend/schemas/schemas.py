@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
@@ -814,6 +814,12 @@ class HarvestPnL(BaseModel):
 
 # ── Purchase Orders ───────────────────────────────────────────────────────────
 
+class POItemCreate(BaseModel):
+    item_id:     int
+    qty_ordered: Decimal
+    unit_price:  Decimal
+
+
 class PurchaseOrderCreate(BaseModel):
     farm_id:       int
     supplier_id:   Optional[int] = None
@@ -821,6 +827,7 @@ class PurchaseOrderCreate(BaseModel):
     expected_date: Optional[date] = None
     total_amount:  Optional[Decimal] = None
     notes:         Optional[str] = None
+    items:         List[POItemCreate] = []
 
 
 class PurchaseOrderUpdate(BaseModel):

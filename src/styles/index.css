@@ -20,3 +20,52 @@
   .stat-grid       { grid-template-columns: 1fr !important; }
   .rpt-select-grid { grid-template-columns: 1fr !important; }
 }
+
+/* ─── Mobile-first fixes ─── */
+@media (max-width: 600px) {
+
+  /* Page padding */
+  .page-content > div {
+    padding: 16px !important;
+  }
+
+  /* Modal: full-screen bottom-sheet */
+  .modal-backdrop {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal-card {
+    border-radius: 18px 18px 0 0 !important;
+    max-height: 92vh !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Collapse ALL 2-column form grids inside modals */
+  .modal-body [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* Full-width any grid children that were set to span */
+  .modal-body [style*="grid-column"] {
+    grid-column: 1 !important;
+  }
+
+  /* Tables: always horizontal scroll */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Topbar: hide subtitle on very small screens */
+  .topbar-subtitle { display: none !important; }
+
+  /* Stat cards: 2 col on phones */
+  .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Buttons in table action cells — wrap nicely */
+  .row-actions { flex-wrap: wrap; gap: 4px; }
+
+  /* Reduce table font size */
+  table { font-size: 12px !important; }
+  table th, table td { padding: 8px 10px !important; }
+}

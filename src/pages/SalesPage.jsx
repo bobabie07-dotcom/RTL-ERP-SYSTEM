@@ -5,7 +5,7 @@ import { Badge } from '../components/core/Badge';
 import { Button } from '../components/core/Button';
 import { StatCard } from '../components/data/StatCard';
 import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Modal';
-import { salesApi, procurementApi, batchesApi } from '../api/client';
+import { salesApi, procurementApi, batchesApi, inventoryApi } from '../api/client';
 import { exportCsv } from '../utils/exportCsv';
 import { useFarm } from '../context/FarmContext';
 import { useAuth } from '../context/AuthContext';
@@ -52,7 +52,8 @@ const PO_STATUS_LABEL = {
 
 const TODAY = new Date().toISOString().split('T')[0];
 const BLANK_SALE = { order_no: '', batch_id: '', buyer_id: '', order_date: TODAY, qty_kg: '', price_per_kg: '', notes: '' };
-const BLANK_PO   = { supplier_id: '', order_date: TODAY, expected_date: '', total_amount: '', notes: '' };
+const BLANK_PO      = { supplier_id: '', order_date: TODAY, expected_date: '', notes: '' };
+const BLANK_PO_ITEM = { item_id: '', qty_ordered: '', unit_price: '' };
 
 function TabBar({ active, onChange, overdueCount }) {
   const tabs = [
@@ -106,10 +107,12 @@ export default function SalesPage() {
   const [saleErr,   setSaleErr]   = useState('');
 
   // PO modal
-  const [poModal,  setPoModal]  = useState(false);
-  const [poForm,   setPoForm]   = useState(BLANK_PO);
-  const [poSaving, setPoSaving] = useState(false);
-  const [poErr,    setPoErr]    = useState('');
+  const [poModal,         setPoModal]         = useState(false);
+  const [poForm,          setPoForm]          = useState(BLANK_PO);
+  const [poItems,         setPoItems]         = useState([{ ...BLANK_PO_ITEM }]);
+  const [inventoryItems,  setInventoryItems]  = useState([]);
+  const [poSaving,        setPoSaving]        = useState(false);
+  const [poErr,           setPoErr]           = useState('');
 
   // Inline add-supplier inside PO modal
   const [addSupplierOpen,   setAddSupplierOpen]   = useState(false);
@@ -190,14 +193,20 @@ export default function SalesPage() {
   // ── New Purchase ───────────────────────────────────────────────────────────
   function openPoModal() {
     setPoForm(BLANK_PO); setPoErr('');
+    setPoItems([{ ...BLANK_PO_ITEM }]);
     setAddSupplierOpen(false); setNewSupplierForm({ name: '', contact_name: '', phone: '' }); setNewSupplierErr('');
+    inventoryApi.items({ farm_id: farmId }).then(setInventoryItems).catch(() => {});
     setPoModal(true);
   }
 
+  function addPoItem()          { setPoItems(p => [...p, { ...BLANK_PO_ITEM }]); }
+  function removePoItem(idx)    { setPoItems(p => p.filter((_, i) => i !== idx)); }
+  function updatePoItem(idx, k, v) { setPoItems(p => p.map((it, i) => i === idx ? { ...it, [k]: v } : it)); }
+
   async function handleSavePo() {
-    if (!poForm.order_date || !poForm.total_amount) {
-      setPoErr('Order date and total amount are required.'); return;
-    }
+    const validItems = poItems.filter(it => it.item_id && it.qty_ordered && it.unit_price);
+    if (!poForm.order_date) { setPoErr('Order date is required.'); return; }
+    if (validItems.length === 0) { setPoErr('Add at least one item with qty and unit price.'); return; }
     setPoSaving(true); setPoErr('');
     try {
       await procurementApi.createOrder({
@@ -205,8 +214,12 @@ export default function SalesPage() {
         supplier_id:   poForm.supplier_id ? Number(poForm.supplier_id) : null,
         order_date:    poForm.order_date,
         expected_date: poForm.expected_date || null,
-        total_amount:  parseFloat(poForm.total_amount),
         notes:         poForm.notes || null,
+        items: validItems.map(it => ({
+          item_id:     Number(it.item_id),
+          qty_ordered: parseFloat(it.qty_ordered),
+          unit_price:  parseFloat(it.unit_price),
+        })),
       });
       await loadAll();
       setPoModal(false);
@@ -539,10 +552,10 @@ export default function SalesPage() {
       </Modal>
 
       {/* New Purchase Order Modal */}
-      <Modal open={poModal} title="New Purchase Order" onClose={() => setPoModal(false)} onConfirm={handleSavePo} confirmLabel="Submit for Approval" loading={poSaving}>
+      <Modal open={poModal} title="New Purchase Order" onClose={() => setPoModal(false)} onConfirm={handleSavePo} confirmLabel="Submit for Approval" loading={poSaving} width={680}>
         {poErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{poErr}</div>}
         <div style={{ background: 'var(--warning-bg,#fffbeb)', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 12, color: '#92400e' }}>
-          This PO will be submitted for manager approval before ordering.
+          This PO will be submitted for manager approval before ordering. Received items will be automatically added to inventory.
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
           <FormRow label="Order Date" required><FieldInput type="date" value={poForm.order_date} onChange={pf('order_date')} /></FormRow>
@@ -584,8 +597,60 @@ export default function SalesPage() {
               </div>
             )}
           </FormRow>
-          <FormRow label="Total Amount (₱)" required style={{ gridColumn: '1/-1' }}><FieldInput type="number" value={poForm.total_amount} onChange={pf('total_amount')} placeholder="e.g. 25000.00" min="0" step="0.01" /></FormRow>
-          <FormRow label="Description / Items" style={{ gridColumn: '1/-1' }}><FieldInput value={poForm.notes} onChange={pf('notes')} placeholder="e.g. 500kg Starter Feed, 200kg Grower…" /></FormRow>
+
+          {/* Line items */}
+          <FormRow label="Items" required style={{ gridColumn: '1/-1' }}>
+            <div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '4px 6px 8px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'left', width: '46%' }}>Inventory Item</th>
+                    <th style={{ padding: '4px 6px 8px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'right', width: '16%' }}>Qty</th>
+                    <th style={{ padding: '4px 6px 8px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'right', width: '20%' }}>Unit Price (₱)</th>
+                    <th style={{ padding: '4px 6px 8px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'right', width: '14%' }}>Total</th>
+                    <th style={{ width: '4%' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {poItems.map((it, idx) => {
+                    const rowTotal = parseFloat(it.qty_ordered || 0) * parseFloat(it.unit_price || 0);
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle,#f0f0f0)' }}>
+                        <td style={{ padding: '4px 6px' }}>
+                          <FieldSelect value={it.item_id} onChange={e => updatePoItem(idx, 'item_id', e.target.value)}>
+                            <option value="">Select item…</option>
+                            {inventoryItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                          </FieldSelect>
+                        </td>
+                        <td style={{ padding: '4px 6px' }}>
+                          <FieldInput type="number" value={it.qty_ordered} onChange={e => updatePoItem(idx, 'qty_ordered', e.target.value)} min="0.01" step="0.01" style={{ textAlign: 'right' }} />
+                        </td>
+                        <td style={{ padding: '4px 6px' }}>
+                          <FieldInput type="number" value={it.unit_price} onChange={e => updatePoItem(idx, 'unit_price', e.target.value)} min="0" step="0.01" style={{ textAlign: 'right' }} />
+                        </td>
+                        <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', whiteSpace: 'nowrap' }}>
+                          {rowTotal > 0 ? `₱${rowTotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                        </td>
+                        <td style={{ padding: '4px 2px', textAlign: 'center' }}>
+                          {poItems.length > 1 && (
+                            <button type="button" onClick={() => removePoItem(idx)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 18, lineHeight: 1, padding: '0 2px' }}>×</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                <button type="button" onClick={addPoItem} style={{ border: '1px dashed var(--border)', background: 'none', cursor: 'pointer', borderRadius: 6, padding: '4px 12px', fontSize: 12, color: 'var(--text-brand)', fontWeight: 600 }}>+ Add Row</button>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>
+                  Total: ₱{poItems.reduce((s, it) => s + parseFloat(it.qty_ordered || 0) * parseFloat(it.unit_price || 0), 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+          </FormRow>
+
+          <FormRow label="Notes" style={{ gridColumn: '1/-1' }}><FieldInput value={poForm.notes} onChange={pf('notes')} placeholder="Optional notes…" /></FormRow>
         </div>
       </Modal>
 

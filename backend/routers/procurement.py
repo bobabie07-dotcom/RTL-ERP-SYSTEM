@@ -6,11 +6,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import PurchaseOrder, Supplier
+from models import InventoryItem, InventoryMovement, PurchaseOrder, PurchaseOrderItem, Supplier
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
     ApprovalAction,
-    PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
+    POItemCreate, PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
     SupplierCreate, SupplierOut,
 )
 
@@ -85,13 +85,31 @@ def create_purchase_order(
     count = db.query(PurchaseOrder).count()
     po_no = f"PO-{(count + 1):06d}"
 
+    items_data = body.items
+    total = sum(float(it.qty_ordered) * float(it.unit_price) for it in items_data) if items_data else (float(body.total_amount or 0))
+
     po = PurchaseOrder(
-        **body.model_dump(),
+        farm_id=body.farm_id,
+        supplier_id=body.supplier_id,
+        order_date=body.order_date,
+        expected_date=body.expected_date,
+        notes=body.notes,
+        total_amount=total,
         po_no=po_no,
         status="pending_approval",
         created_by=current_user.id,
     )
     db.add(po)
+    db.flush()
+
+    for it in items_data:
+        db.add(PurchaseOrderItem(
+            po_id=po.id,
+            item_id=it.item_id,
+            qty_ordered=it.qty_ordered,
+            unit_price=it.unit_price,
+        ))
+
     db.commit()
     db.refresh(po)
 
@@ -206,6 +224,8 @@ def delete_purchase_order(
     po = db.get(PurchaseOrder, po_id)
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
+    for item in po.items:
+        db.delete(item)
     db.delete(po)
     db.commit()
 
@@ -214,13 +234,35 @@ def delete_purchase_order(
 def receive_purchase_order(
     po_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "procurement")),
+    current_user=Depends(require_permission("write", "procurement")),
 ):
     po = db.get(PurchaseOrder, po_id)
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
     if po.status not in ("ordered", "partial"):
         raise HTTPException(status_code=400, detail="Only ordered POs can be marked received")
+
+    for po_item in po.items:
+        delta = float(po_item.qty_ordered) - float(po_item.qty_received)
+        if delta <= 0 or not po_item.item_id:
+            continue
+        inv_item = db.get(InventoryItem, po_item.item_id)
+        if not inv_item:
+            continue
+        inv_item.qty_on_hand = float(inv_item.qty_on_hand) + delta
+        if float(po_item.unit_price or 0) > 0:
+            inv_item.cost_per_unit = float(po_item.unit_price)
+        db.add(InventoryMovement(
+            item_id=inv_item.id,
+            movement_type="in",
+            qty=delta,
+            reference_type="purchase",
+            reference_id=po.id,
+            notes=f"Received via {po.po_no}",
+            created_by=current_user.id,
+        ))
+        po_item.qty_received = float(po_item.qty_ordered)
+
     po.status = "received"
     db.commit()
 
