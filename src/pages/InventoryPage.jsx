@@ -23,7 +23,7 @@ const ACTION_BTN = {
   background: 'transparent', color: 'var(--text-muted)', transition: 'background 0.15s, color 0.15s',
 };
 
-const BLANK = { name: '', category_id: '', newCategory: '', unit: 'pcs', qty_on_hand: '', reorder_level: '', cost_per_unit: '', sku: '' };
+const BLANK = { name: '', category_id: '', newCategory: '', unit: 'pcs', qty_on_hand: '', reorder_level: '', cost_per_unit: '', sku: '', brand: '', remarks: '' };
 
 export default function InventoryPage() {
   const { farmId } = useFarm();
@@ -102,6 +102,8 @@ export default function InventoryPage() {
       reorder_level: String(parseFloat(r.reorder_level)),
       cost_per_unit: r.cost_per_unit ? String(parseFloat(r.cost_per_unit)) : '',
       sku:           r.sku || '',
+      brand:         r.brand || '',
+      remarks:       r.remarks || '',
     });
     setFormErr('');
     setModal(true);
@@ -125,6 +127,8 @@ export default function InventoryPage() {
           qty_on_hand:   form.qty_on_hand ? parseFloat(form.qty_on_hand) : 0,
           reorder_level: form.reorder_level ? parseFloat(form.reorder_level) : 0,
           cost_per_unit: form.cost_per_unit ? parseFloat(form.cost_per_unit) : null,
+          brand:         form.brand || null,
+          remarks:       form.remarks || null,
         });
       } else {
         let categoryId = Number(form.category_id);
@@ -141,6 +145,8 @@ export default function InventoryPage() {
           qty_on_hand:   form.qty_on_hand ? parseFloat(form.qty_on_hand) : 0,
           reorder_level: form.reorder_level ? parseFloat(form.reorder_level) : 0,
           cost_per_unit: form.cost_per_unit ? parseFloat(form.cost_per_unit) : null,
+          brand:         form.brand || null,
+          remarks:       form.remarks || null,
         });
       }
       await loadItems();
@@ -231,12 +237,14 @@ export default function InventoryPage() {
           <Button variant="secondary" size="md" icon={<I.download w={15} />} onClick={() => exportCsv(rows, [
             { key: 'name',           header: 'Item Name' },
             { key: 'categoryName',   header: 'Category' },
+            { key: 'brand',          header: 'Brand' },
             { key: 'qtyDisplay',     header: 'Total Qty' },
             { key: 'qtyReserved',    header: 'Reserved' },
             { key: 'qtyAvailable',   header: 'Available' },
             { key: 'unit',           header: 'Unit' },
             { key: 'reorderDisplay', header: 'Reorder Level' },
             { key: 'status',         header: 'Status' },
+            { key: 'remarks',        header: 'Remarks' },
             { key: 'lastUpdated',    header: 'Last Updated' },
           ], 'inventory.csv')}>Export CSV</Button>
         </div>
@@ -244,11 +252,13 @@ export default function InventoryPage() {
           columns={[
             { key: 'name',          header: 'Item Name',     strong: true },
             { key: 'categoryName',  header: 'Category' },
+            { key: 'brand',         header: 'Brand',         render: r => r.brand || '—' },
             { key: 'qtyDisplay',    header: 'Total',         align: 'right', numeric: true },
             { key: 'qtyReserved',   header: 'Reserved',      align: 'right', numeric: true },
             { key: 'qtyAvailable',  header: 'Available',     align: 'right', numeric: true },
             { key: 'unit',          header: 'Unit' },
             { key: 'reorderDisplay', header: 'Reorder',      align: 'right', numeric: true },
+            { key: 'remarks',       header: 'Remarks',       render: r => r.remarks ? <span title={r.remarks} style={{ color: 'var(--text-secondary)' }}>{r.remarks.length > 40 ? r.remarks.slice(0, 40) + '…' : r.remarks}</span> : '—' },
             { key: 'lastUpdated',   header: 'Last Updated' },
             { key: 'status',        header: 'Status', render: (r) => (
               <Badge tone={STATUS_TONE[r.status] || 'neutral'} dot>{STATUS_LABEL[r.status] || r.status}</Badge>
@@ -358,6 +368,12 @@ export default function InventoryPage() {
           </FormRow>
           <FormRow label="Cost per Unit (₱)">
             <FieldInput type="number" value={form.cost_per_unit} onChange={f('cost_per_unit')} placeholder="Optional" min="0" step="0.01" />
+          </FormRow>
+          <FormRow label="Brand">
+            <FieldInput value={form.brand} onChange={f('brand')} placeholder="e.g. Zoetis, Elanco" />
+          </FormRow>
+          <FormRow label="Remarks" style={{ gridColumn: '1 / -1' }}>
+            <FieldInput value={form.remarks} onChange={f('remarks')} placeholder="Notes, storage instructions, etc." />
           </FormRow>
         </div>
       </Modal>

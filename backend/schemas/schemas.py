@@ -557,6 +557,8 @@ class InventoryItemCreate(BaseModel):
     reorder_level: Decimal = Decimal("0")
     cost_per_unit: Optional[Decimal] = None
     expiry_date:   Optional[date] = None
+    brand:         Optional[str] = None
+    remarks:       Optional[str] = None
 
 
 class InventoryItemUpdate(BaseModel):
@@ -565,6 +567,8 @@ class InventoryItemUpdate(BaseModel):
     reorder_level: Optional[Decimal] = None
     cost_per_unit: Optional[Decimal] = None
     expiry_date:   Optional[date] = None
+    brand:         Optional[str] = None
+    remarks:       Optional[str] = None
 
 
 class InventoryItemOut(OrmBase):
@@ -581,6 +585,8 @@ class InventoryItemOut(OrmBase):
     reorder_level: Decimal
     cost_per_unit: Optional[Decimal]
     expiry_date:   Optional[date]
+    brand:         Optional[str]
+    remarks:       Optional[str]
     last_updated:  Optional[datetime]
     status:        str
 

@@ -283,6 +283,8 @@ CREATE TABLE inventory_items (
   reorder_level DECIMAL(12,2) NOT NULL DEFAULT 0,
   cost_per_unit DECIMAL(10,4),
   expiry_date   DATE,
+  brand         VARCHAR(100),
+  remarks       TEXT,
   last_updated  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (farm_id)     REFERENCES farms(id),
   FOREIGN KEY (category_id) REFERENCES inventory_categories(id)

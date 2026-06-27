@@ -398,6 +398,8 @@ class InventoryItem(Base):
     reorder_level = Column(Numeric(12, 2), nullable=False, default=0)
     cost_per_unit = Column(Numeric(10, 4))
     expiry_date   = Column(Date)
+    brand         = Column(String(100))
+    remarks       = Column(Text)
     last_updated  = Column(DateTime, default=func.now(), onupdate=func.now())
 
     farm:      Farm              = relationship("Farm")
