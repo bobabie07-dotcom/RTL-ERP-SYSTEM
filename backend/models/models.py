@@ -72,10 +72,8 @@ class User(Base):
     updated_at              = Column(DateTime, default=func.now(), onupdate=func.now())
     deleted_at              = Column(DateTime, nullable=True)
 
-    farm        = relationship("Farm", back_populates="users", foreign_keys=[farm_id])
-    role        = relationship("Role", back_populates="users", foreign_keys=[role_id])
-    extra_roles = relationship("UserRole", primaryjoin="User.id == UserRole.user_id",
-                               back_populates="user", cascade="all, delete-orphan")
+    farm = relationship("Farm", back_populates="users", foreign_keys=[farm_id])
+    role = relationship("Role", back_populates="users", foreign_keys=[role_id])
 
 
 class UserRole(Base):
@@ -90,6 +88,16 @@ class UserRole(Base):
     user     = relationship("User", foreign_keys=[user_id], back_populates="extra_roles")
     role     = relationship("Role")
     assigner = relationship("User", foreign_keys=[assigned_by])
+
+
+# UserRole is now defined — use real column objects to avoid FK ambiguity
+User.extra_roles = relationship(
+    UserRole,
+    primaryjoin=User.id == UserRole.user_id,
+    foreign_keys=[UserRole.user_id],
+    back_populates="user",
+    cascade="all, delete-orphan",
+)
 
 
 class LoginHistory(Base):
