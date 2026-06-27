@@ -23,7 +23,7 @@ const ACTION_BTN = {
   background: 'transparent', color: 'var(--text-muted)', transition: 'background 0.15s, color 0.15s',
 };
 
-const BLANK = { name: '', category_id: '', unit: 'pcs', qty_on_hand: '', reorder_level: '', cost_per_unit: '', sku: '' };
+const BLANK = { name: '', category_id: '', newCategory: '', unit: 'pcs', qty_on_hand: '', reorder_level: '', cost_per_unit: '', sku: '' };
 
 export default function InventoryPage() {
   const { farmId } = useFarm();
@@ -35,11 +35,12 @@ export default function InventoryPage() {
   const [loadError,  setLoadError]  = useState('');
 
   // Add / Edit modal
-  const [modal,       setModal]       = useState(false);
-  const [editId,      setEditId]      = useState(null);
-  const [form,        setForm]        = useState(BLANK);
-  const [saving,      setSaving]      = useState(false);
-  const [formErr,     setFormErr]     = useState('');
+  const [modal,        setModal]       = useState(false);
+  const [editId,       setEditId]      = useState(null);
+  const [form,         setForm]        = useState(BLANK);
+  const [saving,       setSaving]      = useState(false);
+  const [formErr,      setFormErr]     = useState('');
+  const [categoryMode, setCategoryMode] = useState('select'); // 'select' | 'input'
 
   // Delete modal
   const [deleteModal,  setDeleteModal]  = useState(false);
@@ -87,6 +88,7 @@ export default function InventoryPage() {
     setEditId(null);
     setForm(BLANK);
     setFormErr('');
+    setCategoryMode('select');
     setModal(true);
   }
 
@@ -106,8 +108,14 @@ export default function InventoryPage() {
   }
 
   async function handleSave() {
-    if (!form.name || !form.category_id) {
-      setFormErr('Item name and category are required.'); return;
+    if (!form.name) { setFormErr('Item name is required.'); return; }
+    if (!editId) {
+      if (categoryMode === 'select' && !form.category_id) {
+        setFormErr('Please select a category or type a new one.'); return;
+      }
+      if (categoryMode === 'input' && !form.newCategory.trim()) {
+        setFormErr('Please enter a category name.'); return;
+      }
     }
     setSaving(true); setFormErr('');
     try {
@@ -119,9 +127,14 @@ export default function InventoryPage() {
           cost_per_unit: form.cost_per_unit ? parseFloat(form.cost_per_unit) : null,
         });
       } else {
+        let categoryId = Number(form.category_id);
+        if (categoryMode === 'input') {
+          const cat = await inventoryApi.createCategory(form.newCategory.trim());
+          categoryId = cat.id;
+        }
         await inventoryApi.createItem({
           farm_id:       farmId,
-          category_id:   Number(form.category_id),
+          category_id:   categoryId,
           name:          form.name,
           sku:           form.sku || null,
           unit:          form.unit || 'pcs',
@@ -292,12 +305,33 @@ export default function InventoryPage() {
             <FieldInput value={form.name} onChange={f('name')} placeholder="e.g. Poultry Vaccine A" />
           </FormRow>
           {!editId && (
-            <FormRow label="Category" required>
-              <FieldSelect value={form.category_id} onChange={f('category_id')}>
-                <option value="">Select category…</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </FieldSelect>
-            </FormRow>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--text-body)' }}>
+                  Category <span style={{ color: 'var(--danger)' }}>*</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCategoryMode(m => m === 'select' ? 'input' : 'select')}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--text-brand)', fontWeight: 600, padding: 0, textDecoration: 'underline' }}
+                >
+                  {categoryMode === 'select' ? '+ Type new' : '← Pick existing'}
+                </button>
+              </div>
+              {categoryMode === 'select' ? (
+                <FieldSelect value={form.category_id} onChange={f('category_id')}>
+                  <option value="">Select category…</option>
+                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </FieldSelect>
+              ) : (
+                <FieldInput
+                  value={form.newCategory}
+                  onChange={f('newCategory')}
+                  placeholder="e.g. Disinfectants"
+                  autoFocus
+                />
+              )}
+            </div>
           )}
           {!editId && (
             <FormRow label="Unit">

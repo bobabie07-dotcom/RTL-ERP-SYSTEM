@@ -8,7 +8,8 @@ from database import get_db
 from models import InventoryCategory, InventoryItem, InventoryMovement, Supplier
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
-    InventoryCategoryOut, InventoryItemCreate, InventoryItemOut, InventoryItemUpdate,
+    InventoryCategoryCreate, InventoryCategoryOut,
+    InventoryItemCreate, InventoryItemOut, InventoryItemUpdate,
     MovementCreate, MovementOut, ReservePayload, SupplierOut,
 )
 from utils import check_and_create_inventory_alerts
@@ -21,6 +22,23 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 @router.get("/categories", response_model=list[InventoryCategoryOut])
 def list_categories(db: Session = Depends(get_db), _=Depends(get_current_user)):
     return db.query(InventoryCategory).all()
+
+
+@router.post("/categories", response_model=InventoryCategoryOut, status_code=status.HTTP_201_CREATED)
+def create_category(
+    body: InventoryCategoryCreate,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("write", "inventory")),
+):
+    name = body.name.strip()
+    existing = db.query(InventoryCategory).filter(InventoryCategory.name.ilike(name)).first()
+    if existing:
+        return existing
+    cat = InventoryCategory(name=name, name_ar=body.name_ar)
+    db.add(cat)
+    db.commit()
+    db.refresh(cat)
+    return cat
 
 
 # ── Items ─────────────────────────────────────────────────────────────────────

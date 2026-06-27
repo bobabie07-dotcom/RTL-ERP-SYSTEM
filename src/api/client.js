@@ -114,8 +114,9 @@ export const healthApi = {
 };
 
 export const inventoryApi = {
-  items:        (params)   => get('/api/inventory/items', params),
-  categories:   ()         => get('/api/inventory/categories'),
+  items:          (params)   => get('/api/inventory/items', params),
+  categories:     ()         => get('/api/inventory/categories'),
+  createCategory: (name)     => post('/api/inventory/categories', { name }),
   suppliers:    ()         => get('/api/inventory/suppliers'),
   createItem:   (data)     => post('/api/inventory/items', data),
   updateItem:   (id, data) => patch(`/api/inventory/items/${id}`, data),

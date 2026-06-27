@@ -536,6 +536,10 @@ class UpcomingVaccination(BaseModel):
 
 # ── Inventory ────────────────────────────────────────────────────────────────
 
+class InventoryCategoryCreate(BaseModel):
+    name:    str
+    name_ar: Optional[str] = None
+
 class InventoryCategoryOut(OrmBase):
     id:      int
     name:    str
