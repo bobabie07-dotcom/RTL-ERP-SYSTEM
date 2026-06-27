@@ -22,9 +22,12 @@ class Role(Base):
     id          = Column(SmallInteger, primary_key=True, autoincrement=True)
     name        = Column(String(50), nullable=False, unique=True)
     name_ar     = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=True)
     permissions = Column(JSON, nullable=False, default=dict)
+    is_active   = Column(Boolean, nullable=False, default=True)
+    created_at  = Column(DateTime, default=func.now())
 
-    users: list[User] = relationship("User", back_populates="role")
+    users: list[User] = relationship("User", back_populates="role", foreign_keys="User.role_id")
 
 
 class Farm(Base):
@@ -44,21 +47,79 @@ class Farm(Base):
 class User(Base):
     __tablename__ = "users"
 
-    id              = Column(Integer, primary_key=True, autoincrement=True)
-    farm_id         = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
-    role_id         = Column(SmallInteger, ForeignKey("roles.id"), nullable=False)
-    full_name       = Column(String(150), nullable=False)
-    email           = Column(String(150), nullable=False, unique=True)
-    username        = Column(String(50), unique=True, nullable=True)
-    password_hash   = Column(String(255), nullable=False)
-    department      = Column(String(100), nullable=True)
-    phone           = Column(String(50), nullable=True)
-    is_active       = Column(Boolean, nullable=False, default=True)
-    is_first_login  = Column(Boolean, nullable=False, default=False)
-    created_at      = Column(DateTime, default=func.now())
+    id                      = Column(Integer, primary_key=True, autoincrement=True)
+    employee_id             = Column(String(50), unique=True, nullable=True)
+    farm_id                 = Column(SmallInteger, ForeignKey("farms.id"), nullable=True)
+    role_id                 = Column(SmallInteger, ForeignKey("roles.id"), nullable=False, default=3)
+    full_name               = Column(String(150), nullable=False)
+    email                   = Column(String(150), nullable=False, unique=True)
+    username                = Column(String(50), unique=True, nullable=True)
+    password_hash           = Column(String(255), nullable=False)
+    department              = Column(String(100), nullable=True)
+    position                = Column(String(100), nullable=True)
+    phone                   = Column(String(50), nullable=True)
+    status                  = Column(String(20), nullable=False, default="active")
+    is_active               = Column(Boolean, nullable=False, default=True)
+    is_first_login          = Column(Boolean, nullable=False, default=False)
+    failed_login_count      = Column(Integer, nullable=False, default=0)
+    locked_until            = Column(DateTime, nullable=True)
+    last_login_at           = Column(DateTime, nullable=True)
+    last_password_change_at = Column(DateTime, nullable=True)
+    created_by              = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_by              = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at              = Column(DateTime, default=func.now())
+    updated_at              = Column(DateTime, default=func.now(), onupdate=func.now())
+    deleted_at              = Column(DateTime, nullable=True)
 
-    farm: Farm = relationship("Farm", back_populates="users")
-    role: Role = relationship("Role", back_populates="users")
+    farm        = relationship("Farm", back_populates="users", foreign_keys=[farm_id])
+    role        = relationship("Role", back_populates="users", foreign_keys=[role_id])
+    extra_roles = relationship("UserRole", foreign_keys="UserRole.user_id", back_populates="user",
+                               cascade="all, delete-orphan")
+
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    user_id     = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role_id     = Column(SmallInteger, ForeignKey("roles.id"), nullable=False)
+    assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    assigned_at = Column(DateTime, default=func.now())
+
+    user     = relationship("User", foreign_keys=[user_id], back_populates="extra_roles")
+    role     = relationship("Role")
+    assigner = relationship("User", foreign_keys=[assigned_by])
+
+
+class LoginHistory(Base):
+    __tablename__ = "login_history"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    user_id        = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    success        = Column(Boolean, nullable=False)
+    ip_address     = Column(String(45), nullable=True)
+    user_agent     = Column(String(500), nullable=True)
+    failure_reason = Column(String(100), nullable=True)
+    created_at     = Column(DateTime, default=func.now())
+
+    user = relationship("User")
+
+
+class UserAuditLog(Base):
+    __tablename__ = "user_audit_logs"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    target_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    action_type    = Column(String(100), nullable=False)
+    old_value      = Column(Text, nullable=True)
+    new_value      = Column(Text, nullable=True)
+    performed_by   = Column(Integer, ForeignKey("users.id"), nullable=False)
+    ip_address     = Column(String(45), nullable=True)
+    notes          = Column(Text, nullable=True)
+    created_at     = Column(DateTime, default=func.now())
+
+    target = relationship("User", foreign_keys=[target_user_id])
+    actor  = relationship("User", foreign_keys=[performed_by])
 
 
 class SupportTicket(Base):

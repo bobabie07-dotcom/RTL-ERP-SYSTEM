@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from config import settings
 from database import engine
-from routers import alerts, auth, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support
+from routers import alerts, auth, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support, users
 
 
 def _safe_add_column(conn, sql: str):
@@ -25,6 +25,66 @@ def run_startup_migrations():
         _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN qty_reserved NUMERIC(12,2) NOT NULL DEFAULT 0")
         _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN brand VARCHAR(100) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN remarks TEXT DEFAULT NULL")
+        # User management extended fields
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN employee_id VARCHAR(50) UNIQUE DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN position VARCHAR(100) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN failed_login_count INT NOT NULL DEFAULT 0")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN locked_until DATETIME DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN last_login_at DATETIME DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN last_password_change_at DATETIME DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN created_by INT DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN updated_by INT DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN deleted_at DATETIME DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users MODIFY COLUMN farm_id SMALLINT NULL")
+        # Roles extended fields
+        _safe_add_column(conn, "ALTER TABLE roles ADD COLUMN description VARCHAR(255) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE roles ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1")
+        _safe_add_column(conn, "ALTER TABLE roles ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+        # Sync status from is_active for existing rows
+        _safe_add_column(conn, "UPDATE users SET status = CASE WHEN is_active = 1 THEN 'active' ELSE 'inactive' END WHERE status = 'active' OR status IS NULL")
+        # User roles (many-to-many)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_roles (
+                id          INT AUTO_INCREMENT PRIMARY KEY,
+                user_id     INT NOT NULL,
+                role_id     SMALLINT NOT NULL,
+                assigned_by INT DEFAULT NULL,
+                assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_ur_user (user_id),
+                INDEX idx_ur_role (role_id)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
+        # Login history
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS login_history (
+                id             INT AUTO_INCREMENT PRIMARY KEY,
+                user_id        INT NOT NULL,
+                success        TINYINT(1) NOT NULL,
+                ip_address     VARCHAR(45) DEFAULT NULL,
+                user_agent     VARCHAR(500) DEFAULT NULL,
+                failure_reason VARCHAR(100) DEFAULT NULL,
+                created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_lh_user (user_id)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
+        # User audit logs
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_audit_logs (
+                id             INT AUTO_INCREMENT PRIMARY KEY,
+                target_user_id INT NOT NULL,
+                action_type    VARCHAR(100) NOT NULL,
+                old_value      TEXT DEFAULT NULL,
+                new_value      TEXT DEFAULT NULL,
+                performed_by   INT NOT NULL,
+                ip_address     VARCHAR(45) DEFAULT NULL,
+                notes          TEXT DEFAULT NULL,
+                created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_ual_target (target_user_id),
+                INDEX idx_ual_actor  (performed_by)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
         # Support ticket extended fields
         _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN affected_module VARCHAR(100) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN contact_info VARCHAR(255) DEFAULT NULL")
@@ -155,6 +215,7 @@ app.include_router(harvest.router,     prefix=API)
 app.include_router(alerts.router,       prefix=API)
 app.include_router(maintenance.router,  prefix=API)
 app.include_router(support.router,      prefix=API)
+app.include_router(users.router,        prefix=API)
 
 
 run_startup_migrations()

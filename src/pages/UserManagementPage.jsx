@@ -1,437 +1,801 @@
-import React, { useEffect, useState } from 'react';
-import { Card } from '../components/data/Card';
-import { Badge } from '../components/core/Badge';
-import { Button } from '../components/core/Button';
-import { Avatar } from '../components/core/Avatar';
-import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Modal';
-import { authApi } from '../api/client';
-import { useFarm } from '../context/FarmContext';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { usersApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import Icons from '../icons';
 
-const I = Icons;
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-const ROLES = [
-  { id: 1, label: 'Administrator',  tone: 'danger',  desc: 'Full system access — users, settings, all data' },
-  { id: 2, label: 'Farm Manager',   tone: 'info',    desc: 'Manage batches, feed, mortality, reports' },
-  { id: 3, label: 'Farm Worker',    tone: 'neutral', desc: 'Log daily records and feed issues' },
-  { id: 4, label: 'Veterinarian',   tone: 'success', desc: 'View health events, vaccinations, treatments' },
-  { id: 5, label: 'Owner',          tone: 'warning', desc: 'Read-only access to reports and analytics' },
-];
+const ROLE_MAP = {
+  1: { label: 'Administrator', color: '#dc2626', bg: '#fee2e2' },
+  2: { label: 'Farm Manager',  color: '#2563eb', bg: '#dbeafe' },
+  3: { label: 'Farm Worker',   color: '#374151', bg: '#f3f4f6' },
+  4: { label: 'Veterinarian',  color: '#16a34a', bg: '#dcfce7' },
+  5: { label: 'Owner',         color: '#92400e', bg: '#fef3c7' },
+};
 
-const DEPT_OPTIONS = ['Management','Operations','Finance','IT','Veterinary','Logistics','HR'];
+const STATUS_MAP = {
+  active:    { label: 'Active',    color: '#16a34a', bg: '#dcfce7' },
+  inactive:  { label: 'Inactive',  color: '#6b7280', bg: '#f3f4f6' },
+  suspended: { label: 'Suspended', color: '#d97706', bg: '#fef3c7' },
+  locked:    { label: 'Locked',    color: '#dc2626', bg: '#fee2e2' },
+  archived:  { label: 'Archived',  color: '#4b5563', bg: '#e5e7eb' },
+};
 
-function Toast({ msg, ok }) {
-  return msg ? (
-    <div style={{
-      position: 'fixed', bottom: 24, right: 24, zIndex: 999,
-      background: ok ? 'var(--success)' : 'var(--danger)',
-      color: '#fff', padding: '10px 18px', borderRadius: 8,
-      fontSize: 13, fontWeight: 600, boxShadow: 'var(--shadow-lg)',
-    }}>{msg}</div>
-  ) : null;
+const DEPARTMENTS = ['Management','Operations','Finance','IT','Veterinary','Logistics','HR','Sales','Procurement'];
+const POSITIONS   = ['Manager','Supervisor','Staff','Coordinator','Analyst','Officer','Assistant','Encoder','Specialist'];
+
+const EMPTY_FORM = {
+  full_name: '', email: '', username: '', employee_id: '',
+  role_id: '3', department: '', position: '', phone: '',
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmt(dt) {
+  if (!dt) return '—';
+  const d = new Date(dt.endsWith('Z') ? dt : dt + 'Z');
+  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' ' + d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+}
+function fmtDate(dt) {
+  if (!dt) return '—';
+  const d = new Date(dt.endsWith('Z') ? dt : dt + 'Z');
+  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function StatBox({ label, value, tone = 'neutral' }) {
-  const colors = { neutral: 'var(--text-brand)', success: 'var(--success)', danger: 'var(--danger)', warning: '#f59e0b' };
+function StatusBadge({ status }) {
+  const s = STATUS_MAP[status] || { label: status, color: '#374151', bg: '#f3f4f6' };
   return (
-    <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px' }}>
-      <div style={{ fontSize: 26, fontWeight: 700, color: colors[tone], fontFamily: 'var(--font-display)' }}>{value}</div>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{label}</div>
+    <span style={{ padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>
+      {s.label}
+    </span>
+  );
+}
+
+function RoleBadge({ roleId, roleName }) {
+  const r = ROLE_MAP[roleId] || { label: roleName || `Role ${roleId}`, color: '#374151', bg: '#f3f4f6' };
+  return (
+    <span style={{ padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: r.bg, color: r.color, marginRight: 3 }}>
+      {r.label}
+    </span>
+  );
+}
+
+function Modal({ title, onClose, children, width = 520 }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: width, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px 0' }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{title}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#6b7280', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ padding: 24 }}>{children}</div>
+      </div>
     </div>
   );
 }
 
-const EMPTY_FORM = { full_name: '', email: '', username: '', role_id: '3', department: '', phone: '' };
+function FieldRow({ label, required, children }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>
+        {label} {required && <span style={{ color: '#dc2626' }}>*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const INP = {
+  width: '100%', height: 38, padding: '0 10px', border: '1px solid #d1d5db',
+  borderRadius: 8, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box',
+};
+const SEL = { ...INP, background: '#fff', cursor: 'pointer' };
+
+function StatCard({ label, value, color = '#374151', sub }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 110 }}>
+      <div style={{ fontSize: 26, fontWeight: 800, color, fontFamily: 'var(--font-display)' }}>{value}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginTop: 2 }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function Toast({ msg, ok }) {
+  if (!msg) return null;
+  return (
+    <div style={{
+      position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+      background: ok ? '#16a34a' : '#dc2626', color: '#fff',
+      padding: '10px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+    }}>
+      {msg}
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 export default function UserManagementPage() {
-  const { farmId } = useFarm();
   const { user: me } = useAuth();
 
-  const [users, setUsers]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState('');
-  const [roleFilter, setRole]   = useState('');
-  const [toast, setToast]       = useState(null);
+  const [users,  setUsers]  = useState([]);
+  const [roles,  setRoles]  = useState([]);
+  const [stats,  setStats]  = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState('');
 
-  // Add modal
-  const [addOpen, setAddOpen]       = useState(false);
-  const [addForm, setAddForm]       = useState(EMPTY_FORM);
-  const [addErr, setAddErr]         = useState('');
-  const [addSaving, setAddSaving]   = useState(false);
-  const [addResult, setAddResult]   = useState(null); // { email, temp_password }
+  // Filters
+  const [search,     setSearch]     = useState('');
+  const [statusFilt, setStatusFilt] = useState('');
+  const [roleFilt,   setRoleFilt]   = useState('');
+  const [deptFilt,   setDeptFilt]   = useState('');
 
-  // Edit modal
-  const [editUser, setEditUser] = useState(null);
-  const [editForm, setEditForm] = useState({});
-  const [editErr, setEditErr]   = useState('');
-  const [editSaving, setEditSaving] = useState(false);
+  // Modals
+  const [addModal,     setAddModal]     = useState(false);
+  const [editUser,     setEditUser]     = useState(null);
+  const [rolesUser,    setRolesUser]    = useState(null);
+  const [histUser,     setHistUser]     = useState(null);
+  const [auditUser,    setAuditUser]    = useState(null);
+  const [statusAction, setStatusAction] = useState(null); // { user, targetStatus }
 
-  // Delete confirm
-  const [delUser, setDelUser]   = useState(null);
-  const [deleting, setDeleting] = useState(false);
+  // History/audit data
+  const [loginHist,  setLoginHist]  = useState([]);
+  const [auditLogs,  setAuditLogs]  = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
 
-  // Reset password confirm
-  const [resetUser, setResetUser]   = useState(null);
-  const [resetResult, setResetResult] = useState('');
-  const [resetting, setResetting]   = useState(false);
+  // Role assignment state
+  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
 
-  function showToast(msg, ok = true) {
+  // Form state
+  const [form, setForm]         = useState(EMPTY_FORM);
+  const [formErr, setFormErr]   = useState('');
+  const [saving, setSaving]     = useState(false);
+  const [toast, setToast]       = useState({ msg: '', ok: true });
+  const [tempPwd, setTempPwd]   = useState('');
+  const [statusNote, setStatusNote] = useState('');
+
+  const showToast = (msg, ok = true) => {
     setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3500);
-  }
-
-  async function loadUsers() {
-    try {
-      const data = await authApi.users();
-      setUsers(data);
-    } catch { }
-    finally { setLoading(false); }
-  }
-
-  useEffect(() => { loadUsers(); }, []);
-
-  const filtered = users.filter(u => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.department || '').toLowerCase().includes(q);
-    const matchRole = !roleFilter || String(u.role_id) === roleFilter;
-    return matchSearch && matchRole;
-  });
-
-  const stats = {
-    total: users.length,
-    active: users.filter(u => u.is_active).length,
-    admins: users.filter(u => u.role_id === 1).length,
-    pending: users.filter(u => u.is_first_login).length,
+    setTimeout(() => setToast({ msg: '', ok: true }), 3500);
   };
 
-  // ── Add User ──
-  async function handleAdd() {
-    if (!addForm.full_name || !addForm.email) {
-      setAddErr('Full name and email are required.'); return;
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadErr('');
+    try {
+      const [u, r, s] = await Promise.all([
+        usersApi.list({ include_archived: false }),
+        usersApi.listRoles(),
+        usersApi.stats(),
+      ]);
+      setUsers(u || []);
+      setRoles(r || []);
+      setStats(s);
+    } catch (e) {
+      setLoadErr(e?.detail || e?.message || 'Failed to load users');
+    } finally {
+      setLoading(false);
     }
-    setAddSaving(true); setAddErr('');
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // ── Filtered list ──────────────────────────────────────────────────────────
+  const filtered = users.filter(u => {
+    if (statusFilt && u.status !== statusFilt) return false;
+    if (roleFilt   && String(u.role_id) !== roleFilt) return false;
+    if (deptFilt   && u.department !== deptFilt) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (u.full_name   || '').toLowerCase().includes(q) ||
+             (u.email       || '').toLowerCase().includes(q) ||
+             (u.employee_id || '').toLowerCase().includes(q) ||
+             (u.department  || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  // ── Create / Edit user ─────────────────────────────────────────────────────
+  async function handleSaveUser(e) {
+    e.preventDefault();
+    if (!form.full_name.trim() || !form.email.trim()) {
+      setFormErr('Full name and email are required.');
+      return;
+    }
+    setSaving(true);
+    setFormErr('');
     try {
-      const res = await authApi.createUser({ ...addForm, role_id: Number(addForm.role_id), farm_id: farmId });
-      await loadUsers();
-      setAddForm(EMPTY_FORM);
-      setAddResult({ full_name: res.full_name, email: res.email, username: res.username, temp_password: res.temp_password || 'Welcome@123' });
-    } catch (e) { setAddErr(e.message || 'Failed to create user.'); }
-    finally { setAddSaving(false); }
+      if (editUser) {
+        await usersApi.update(editUser.id, {
+          full_name:   form.full_name,
+          email:       form.email,
+          username:    form.username || undefined,
+          employee_id: form.employee_id || undefined,
+          role_id:     parseInt(form.role_id),
+          department:  form.department || undefined,
+          position:    form.position   || undefined,
+          phone:       form.phone      || undefined,
+        });
+        showToast(`${form.full_name} updated`);
+        setEditUser(null);
+      } else {
+        const res = await usersApi.create({
+          full_name:   form.full_name,
+          email:       form.email,
+          username:    form.username || undefined,
+          employee_id: form.employee_id || undefined,
+          role_id:     parseInt(form.role_id),
+          department:  form.department || undefined,
+          position:    form.position   || undefined,
+          phone:       form.phone      || undefined,
+        });
+        setTempPwd(res.temp_password || 'Welcome@123');
+        showToast(`${form.full_name} created`);
+        setAddModal(false);
+      }
+      setForm(EMPTY_FORM);
+      load();
+    } catch (e) {
+      setFormErr(e?.detail || e?.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  // ── Edit User ──
+  // ── Status change ──────────────────────────────────────────────────────────
+  async function handleStatusChange() {
+    if (!statusAction) return;
+    setSaving(true);
+    try {
+      await usersApi.setStatus(statusAction.user.id, {
+        status: statusAction.targetStatus,
+        notes:  statusNote || undefined,
+      });
+      showToast(`Account ${statusAction.targetStatus}`);
+      setStatusAction(null);
+      setStatusNote('');
+      load();
+    } catch (e) {
+      showToast(e?.detail || e?.message || 'Failed', false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Reset password ─────────────────────────────────────────────────────────
+  async function handleResetPwd(u) {
+    if (!window.confirm(`Reset password for ${u.full_name}? They will receive a temporary password.`)) return;
+    try {
+      const res = await usersApi.resetPassword(u.id);
+      setTempPwd(res.temp_password || 'Welcome@123');
+      showToast(`Password reset for ${u.full_name}`);
+      load();
+    } catch (e) {
+      showToast(e?.detail || e?.message || 'Reset failed', false);
+    }
+  }
+
+  // ── Assign roles ───────────────────────────────────────────────────────────
+  async function handleAssignRoles() {
+    if (!rolesUser) return;
+    setSaving(true);
+    try {
+      // Extra roles = all selected except the primary
+      const extras = selectedRoleIds.filter(id => id !== rolesUser.role_id);
+      await usersApi.assignRoles(rolesUser.id, extras);
+      showToast('Roles updated');
+      setRolesUser(null);
+      load();
+    } catch (e) {
+      showToast(e?.detail || e?.message || 'Failed', false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Open edit modal ────────────────────────────────────────────────────────
   function openEdit(u) {
+    setForm({
+      full_name:   u.full_name   || '',
+      email:       u.email       || '',
+      username:    u.username    || '',
+      employee_id: u.employee_id || '',
+      role_id:     String(u.role_id || 3),
+      department:  u.department  || '',
+      position:    u.position    || '',
+      phone:       u.phone       || '',
+    });
+    setFormErr('');
     setEditUser(u);
-    setEditForm({ full_name: u.full_name, email: u.email, username: u.username || '', role_id: String(u.role_id), department: u.department || '', phone: u.phone || '' });
-    setEditErr('');
   }
-  async function handleEdit() {
-    if (!editForm.full_name || !editForm.email) { setEditErr('Name and email are required.'); return; }
-    setEditSaving(true); setEditErr('');
+
+  // ── Open assign roles modal ────────────────────────────────────────────────
+  function openAssignRoles(u) {
+    const all = u.all_role_ids || [u.role_id];
+    setSelectedRoleIds(all);
+    setRolesUser(u);
+  }
+
+  // ── Open login history ─────────────────────────────────────────────────────
+  async function openHistory(u) {
+    setHistUser(u);
+    setLoginHist([]);
+    setHistLoading(true);
     try {
-      await authApi.updateUser(editUser.id, { ...editForm, role_id: Number(editForm.role_id) });
-      await loadUsers(); setEditUser(null);
-      showToast('User updated successfully.');
-    } catch (e) { setEditErr(e.message || 'Failed to update user.'); }
-    finally { setEditSaving(false); }
+      const h = await usersApi.loginHistory(u.id, 20);
+      setLoginHist(h || []);
+    } catch { }
+    finally { setHistLoading(false); }
   }
 
-  // ── Toggle Active ──
-  async function toggleActive(u) {
+  // ── Open audit log ─────────────────────────────────────────────────────────
+  async function openAudit(u) {
+    setAuditUser(u);
+    setAuditLogs([]);
+    setHistLoading(true);
     try {
-      await authApi.updateUser(u.id, { is_active: !u.is_active });
-      await loadUsers();
-      showToast(`${u.full_name} ${u.is_active ? 'deactivated' : 'activated'}.`);
-    } catch (e) { showToast(e.message || 'Failed.', false); }
+      const a = await usersApi.auditLogs(u.id, 50);
+      setAuditLogs(a || []);
+    } catch { }
+    finally { setHistLoading(false); }
   }
 
-  // ── Delete ──
-  async function handleDelete() {
-    setDeleting(true);
-    try {
-      await authApi.deleteUser(delUser.id);
-      setUsers(p => p.filter(u => u.id !== delUser.id)); setDelUser(null);
-      showToast('User removed.');
-    } catch (e) { showToast(e.message || 'Failed.', false); }
-    finally { setDeleting(false); }
+  const roleOptions = [
+    ...Object.entries(ROLE_MAP).map(([id, r]) => ({ id: parseInt(id), label: r.label })),
+    ...roles.filter(r => !ROLE_MAP[r.id]).map(r => ({ id: r.id, label: r.name })),
+  ];
+
+  // ── User form JSX ──────────────────────────────────────────────────────────
+  function UserForm({ onCancel }) {
+    return (
+      <form onSubmit={handleSaveUser}>
+        {formErr && (
+          <div style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 14 }}>
+            {formErr}
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <FieldRow label="Full Name" required>
+              <input style={INP} value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} placeholder="e.g. Juan Dela Cruz" />
+            </FieldRow>
+          </div>
+          <FieldRow label="Email Address" required>
+            <input style={INP} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@example.com" />
+          </FieldRow>
+          <FieldRow label="Username">
+            <input style={INP} value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} placeholder="Optional" />
+          </FieldRow>
+          <FieldRow label="Employee ID">
+            <input style={INP} value={form.employee_id} onChange={e => setForm(p => ({ ...p, employee_id: e.target.value }))} placeholder="EMP-0001" />
+          </FieldRow>
+          <FieldRow label="Phone">
+            <input style={INP} value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
+          </FieldRow>
+          <FieldRow label="Primary Role">
+            <select style={SEL} value={form.role_id} onChange={e => setForm(p => ({ ...p, role_id: e.target.value }))}>
+              {roleOptions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </FieldRow>
+          <FieldRow label="Department">
+            <select style={SEL} value={form.department} onChange={e => setForm(p => ({ ...p, department: e.target.value }))}>
+              <option value="">— Select —</option>
+              {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+            </select>
+          </FieldRow>
+          <FieldRow label="Position">
+            <select style={SEL} value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))}>
+              <option value="">— Select —</option>
+              {POSITIONS.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </FieldRow>
+        </div>
+        {!editUser && (
+          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#1e40af', marginTop: 4, marginBottom: 14 }}>
+            Default password: <strong>Welcome@123</strong> — user must change on first login.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+          <button type="submit" disabled={saving} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Saving…' : editUser ? 'Save Changes' : 'Create User'}
+          </button>
+          <button type="button" onClick={onCancel} style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 14, cursor: 'pointer' }}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    );
   }
 
-  // ── Reset Password ──
-  async function handleReset() {
-    setResetting(true);
-    try {
-      const res = await authApi.resetPassword(resetUser.id);
-      setResetResult(res.temp_password || 'Welcome@123');
-      await loadUsers();
-    } catch (e) { showToast(e.message || 'Failed.', false); setResetUser(null); }
-    finally { setResetting(false); }
-  }
-
-  const af = k => e => setAddForm(p => ({ ...p, [k]: e.target.value }));
-  const ef = k => e => setEditForm(p => ({ ...p, [k]: e.target.value }));
-
-  const roleOf = id => ROLES.find(r => r.id === id);
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {toast && <Toast msg={toast.msg} ok={toast.ok} />}
+    <div style={{ padding: 24, fontFamily: 'system-ui, sans-serif', maxWidth: 1400, margin: '0 auto' }}>
+      <Toast msg={toast.msg} ok={toast.ok} />
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>User Management</h2>
-          <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Create accounts, assign roles, and manage team access.</p>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#111827' }}>User Management</h2>
+          <p style={{ margin: '4px 0 0', fontSize: 14, color: '#6b7280' }}>Create accounts, manage roles, monitor access and activity.</p>
         </div>
-        <Button variant="primary" icon={<I.plus w={14} />} onClick={() => { setAddErr(''); setAddForm(EMPTY_FORM); setAddOpen(true); }}>
-          Add New User
-        </Button>
+        <button
+          onClick={() => { setForm(EMPTY_FORM); setFormErr(''); setAddModal(true); }}
+          style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+        >
+          + Add User
+        </button>
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <StatBox label="Total Users" value={stats.total} />
-        <StatBox label="Active" value={stats.active} tone="success" />
-        <StatBox label="Administrators" value={stats.admins} tone="danger" />
-        <StatBox label="Pending First Login" value={stats.pending} tone="warning" />
+      {stats && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <StatCard label="Total Users"     value={stats.total}     color="#111827" />
+          <StatCard label="Active"          value={stats.active}    color="#16a34a" sub="Can log in" />
+          <StatCard label="Inactive"        value={stats.inactive}  color="#6b7280" sub="Deactivated" />
+          <StatCard label="Suspended"       value={stats.suspended} color="#d97706" sub="Temporarily blocked" />
+          <StatCard label="Locked"          value={stats.locked}    color="#dc2626" sub="Too many failures" />
+          <StatCard label="Pending"         value={stats.pending}   color="#7c3aed" sub="Awaiting first login" />
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search name, email, employee ID…"
+          style={{ ...INP, width: 260, height: 36 }}
+        />
+        <select value={statusFilt} onChange={e => setStatusFilt(e.target.value)} style={{ ...SEL, width: 150, height: 36 }}>
+          <option value="">All Status</option>
+          {Object.entries(STATUS_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        <select value={roleFilt} onChange={e => setRoleFilt(e.target.value)} style={{ ...SEL, width: 160, height: 36 }}>
+          <option value="">All Roles</option>
+          {roleOptions.map(r => <option key={r.id} value={String(r.id)}>{r.label}</option>)}
+        </select>
+        <select value={deptFilt} onChange={e => setDeptFilt(e.target.value)} style={{ ...SEL, width: 150, height: 36 }}>
+          <option value="">All Departments</option>
+          {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+        </select>
+        <button onClick={load} style={{ height: 36, padding: '0 14px', border: '1px solid #d1d5db', borderRadius: 8, background: '#f9fafb', cursor: 'pointer', fontSize: 13 }}>
+          Refresh
+        </button>
+        <span style={{ fontSize: 12, color: '#9ca3af', marginLeft: 'auto' }}>{filtered.length} user{filtered.length !== 1 ? 's' : ''}</span>
       </div>
 
-      {/* RBAC Reference */}
-      <Card title="Role-Based Access Control" subtitle="What each role can access in this system">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-          {ROLES.map(r => (
-            <div key={r.id} style={{ padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <Badge tone={r.tone} style={{ flexShrink: 0, marginTop: 2 }}>{r.label}</Badge>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{r.desc}</span>
-            </div>
-          ))}
+      {/* Error */}
+      {loadErr && (
+        <div style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13 }}>
+          {loadErr}
         </div>
-      </Card>
+      )}
 
-      {/* User Table */}
-      <Card
-        title="All Users"
-        subtitle={`${filtered.length} of ${users.length} users`}
-      >
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: '1 1 220px' }}>
-            <I.search w={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search name, email, department…"
-              style={{ width: '100%', height: 36, paddingLeft: 32, paddingRight: 12, border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'var(--font-body)', boxSizing: 'border-box', outline: 'none', color: 'var(--text-strong)', background: 'var(--white)' }}
-            />
-          </div>
-          <select value={roleFilter} onChange={e => setRole(e.target.value)}
-            style={{ height: 36, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--text-body)', background: 'var(--white)', cursor: 'pointer' }}>
-            <option value="">All Roles</option>
-            {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-          </select>
-        </div>
-
-        {loading ? (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading users…</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No users found.</div>
-        ) : (
+      {/* Table */}
+      {loading ? (
+        <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af' }}>Loading users…</div>
+      ) : (
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                  {['User', 'Role', 'Department', 'Phone', 'Status', 'First Login', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{h}</th>
+              <thead style={{ background: '#f9fafb' }}>
+                <tr>
+                  {['Employee ID', 'Name / Email', 'Department', 'Role(s)', 'Status', 'Last Login', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#6b7280', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>
+                      {h}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(u => {
-                  const role = roleOf(u.role_id);
-                  const isMe = u.id === me?.id;
-                  return (
-                    <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-50)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      <td style={{ padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <Avatar name={u.full_name} size={32} />
-                          <div>
-                            <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{u.full_name}{isMe && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-brand)', fontWeight: 500 }}>(you)</span>}</div>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.email}</div>
-                            {u.username && <div style={{ fontSize: 11, color: 'var(--text-brand)', fontWeight: 500 }}>@{u.username}</div>}
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <Badge tone={role?.tone || 'neutral'}>{role?.label || `Role ${u.role_id}`}</Badge>
-                      </td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-body)' }}>{u.department || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-body)' }}>{u.phone || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <Badge tone={u.is_active ? 'success' : 'neutral'} dot>{u.is_active ? 'Active' : 'Inactive'}</Badge>
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>
-                        {u.is_first_login
-                          ? <Badge tone="warning">Pending</Badge>
-                          : <Badge tone="success">Done</Badge>}
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          <Button variant="ghost" size="sm" icon={<I.pencil w={12} />} onClick={() => openEdit(u)}>Edit</Button>
-                          {!isMe && (
-                            <>
-                              <Button variant="ghost" size="sm" onClick={() => toggleActive(u)}>
-                                {u.is_active ? 'Deactivate' : 'Activate'}
-                              </Button>
-                              <Button variant="ghost" size="sm" icon={<I.lock w={12} />} onClick={() => { setResetUser(u); setResetResult(''); }}>
-                                Reset Pwd
-                              </Button>
-                              <Button variant="ghost" size="sm" icon={<I.trash w={12} />} onClick={() => setDelUser(u)}>Remove</Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No users found.</td></tr>
+                ) : filtered.map(u => (
+                  <tr key={u.id} style={{ borderBottom: '1px solid #f3f4f6' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}>
+                    <td style={{ padding: '10px 14px', color: '#6b7280', fontSize: 12 }}>
+                      {u.employee_id || <span style={{ color: '#d1d5db' }}>—</span>}
+                    </td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <div style={{ fontWeight: 700, color: '#111827' }}>{u.full_name}</div>
+                      <div style={{ fontSize: 11, color: '#6b7280' }}>{u.email}</div>
+                      {u.username && <div style={{ fontSize: 11, color: '#9ca3af' }}>@{u.username}</div>}
+                      {u.is_first_login && (
+                        <span style={{ fontSize: 10, background: '#ede9fe', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>
+                          Pending first login
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: '#374151' }}>
+                      <div>{u.department || '—'}</div>
+                      {u.position && <div style={{ fontSize: 11, color: '#9ca3af' }}>{u.position}</div>}
+                    </td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                        <RoleBadge roleId={u.role_id} roleName={u.role_name} />
+                        {(u.all_role_ids || []).filter(id => id !== u.role_id).map(id => (
+                          <RoleBadge key={id} roleId={id} roleName={(u.all_role_names || [])[u.all_role_ids?.indexOf(id)]} />
+                        ))}
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <StatusBadge status={u.status} />
+                    </td>
+                    <td style={{ padding: '10px 14px', color: '#6b7280', fontSize: 12, whiteSpace: 'nowrap' }}>
+                      {fmtDate(u.last_login_at)}
+                    </td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <ActionMenu u={u} me={me}
+                        onEdit={() => openEdit(u)}
+                        onRoles={() => openAssignRoles(u)}
+                        onReset={() => handleResetPwd(u)}
+                        onHistory={() => openHistory(u)}
+                        onAudit={() => openAudit(u)}
+                        onStatus={(s) => { setStatusAction({ user: u, targetStatus: s }); setStatusNote(''); }}
+                      />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        )}
-      </Card>
-
-      {/* ── Add User Modal ── */}
-      <Modal
-        open={addOpen}
-        title={addResult ? 'Account Created' : 'Add New User'}
-        onClose={() => { setAddOpen(false); setAddResult(null); }}
-        onConfirm={addResult ? () => { setAddOpen(false); setAddResult(null); } : handleAdd}
-        confirmLabel={addResult ? 'Done' : 'Create Account'}
-        loading={addSaving}
-        cancelLabel={addResult ? null : 'Cancel'}
-      >
-        {addResult ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ padding: '14px 16px', background: '#dcfce7', border: '1px solid #bbf7d0', borderRadius: 10 }}>
-              <div style={{ fontWeight: 700, color: '#15803d', fontSize: 14, marginBottom: 4 }}>Account created successfully</div>
-              <div style={{ fontSize: 13, color: '#166534' }}>Share these credentials with <strong>{addResult.full_name}</strong>:</div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '10px 16px', fontSize: 13, alignItems: 'center' }}>
-              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Email</span>
-              <code style={{ background: 'var(--gray-100)', padding: '4px 10px', borderRadius: 6, fontFamily: 'monospace', fontSize: 13 }}>{addResult.email}</code>
-              {addResult.username && <>
-                <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Username</span>
-                <code style={{ background: 'var(--gray-100)', padding: '4px 10px', borderRadius: 6, fontFamily: 'monospace', fontSize: 13 }}>@{addResult.username}</code>
-              </>}
-              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Password</span>
-              <code style={{ background: 'var(--gray-100)', padding: '4px 10px', borderRadius: 6, fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{addResult.temp_password}</code>
-            </div>
-            <div style={{ padding: '10px 14px', background: '#fffbeb', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
-              The user will be required to set a new password on their first login.
-            </div>
-          </div>
-        ) : (
-          <>
-            {addErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{addErr}</div>}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-              <FormRow label="Full Name" required>
-                <FieldInput value={addForm.full_name} onChange={af('full_name')} placeholder="e.g. Maria Santos" />
-              </FormRow>
-              <FormRow label="Email" required>
-                <FieldInput type="email" value={addForm.email} onChange={af('email')} placeholder="user@farm.com" />
-              </FormRow>
-              <FormRow label="Username">
-                <FieldInput value={addForm.username} onChange={af('username')} placeholder="e.g. jdoe (optional)" />
-              </FormRow>
-              <FormRow label="Role">
-                <FieldSelect value={addForm.role_id} onChange={af('role_id')}>
-                  {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-                </FieldSelect>
-              </FormRow>
-              <FormRow label="Department">
-                <FieldSelect value={addForm.department} onChange={af('department')}>
-                  <option value="">— Select —</option>
-                  {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                </FieldSelect>
-              </FormRow>
-              <FormRow label="Phone / Contact">
-                <FieldInput value={addForm.phone} onChange={af('phone')} placeholder="+63 912 345 6789" />
-              </FormRow>
-            </div>
-            <div style={{ marginTop: 12, padding: '10px 14px', background: '#fffbeb', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
-              A temporary password <strong>Welcome@123</strong> will be assigned. The user must change it on first login.
-            </div>
-          </>
-        )}
-      </Modal>
-
-      {/* ── Edit User Modal ── */}
-      <Modal open={!!editUser} title="Edit User" onClose={() => setEditUser(null)} onConfirm={handleEdit} confirmLabel="Save Changes" loading={editSaving}>
-        {editErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{editErr}</div>}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-          <FormRow label="Full Name" required>
-            <FieldInput value={editForm.full_name} onChange={ef('full_name')} />
-          </FormRow>
-          <FormRow label="Email" required>
-            <FieldInput type="email" value={editForm.email} onChange={ef('email')} />
-          </FormRow>
-          <FormRow label="Username">
-            <FieldInput value={editForm.username || ''} onChange={ef('username')} placeholder="e.g. jdoe" />
-          </FormRow>
-          <FormRow label="Role">
-            <FieldSelect value={editForm.role_id} onChange={ef('role_id')}>
-              {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </FieldSelect>
-          </FormRow>
-          <FormRow label="Department">
-            <FieldSelect value={editForm.department} onChange={ef('department')}>
-              <option value="">— None —</option>
-              {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-            </FieldSelect>
-          </FormRow>
-          <FormRow label="Phone / Contact">
-            <FieldInput value={editForm.phone} onChange={ef('phone')} placeholder="+63 912 345 6789" />
-          </FormRow>
         </div>
-      </Modal>
+      )}
 
-      {/* ── Delete Confirm ── */}
-      <Modal open={!!delUser} title="Remove User" onClose={() => setDelUser(null)} onConfirm={handleDelete} confirmLabel="Remove" confirmVariant="danger" loading={deleting} width={420}>
-        <p style={{ margin: 0, fontSize: 14, color: 'var(--text-body)', lineHeight: 1.6 }}>
-          Remove <b>{delUser?.full_name}</b> from the system?<br />Their activity history will be preserved.
-        </p>
-      </Modal>
+      {/* ── Add User Modal ──────────────────────────────────────────────────── */}
+      {addModal && (
+        <Modal title="Add New User" onClose={() => setAddModal(false)} width={600}>
+          <UserForm onCancel={() => setAddModal(false)} />
+        </Modal>
+      )}
 
-      {/* ── Reset Password ── */}
-      <Modal
-        open={!!resetUser}
-        title="Reset Password"
-        onClose={() => { setResetUser(null); setResetResult(''); }}
-        onConfirm={resetResult ? null : handleReset}
-        confirmLabel="Reset Password"
-        confirmVariant="danger"
-        loading={resetting}
-        width={440}
-      >
-        {resetResult ? (
-          <div>
-            <div style={{ padding: '14px 16px', background: 'var(--green-50)', border: '1px solid var(--green-200, #bbf7d0)', borderRadius: 8, marginBottom: 12 }}>
-              <div style={{ fontWeight: 600, color: 'var(--success)', marginBottom: 4 }}>Password reset successfully</div>
-              <div style={{ fontSize: 13, color: 'var(--text-body)' }}>
-                Temporary password: <code style={{ fontWeight: 700, background: 'var(--gray-100)', padding: '2px 6px', borderRadius: 4 }}>{resetResult}</code>
-              </div>
-            </div>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
-              Share this with <b>{resetUser?.full_name}</b>. They will be required to set a new password on their next login.
-            </p>
+      {/* ── Edit User Modal ─────────────────────────────────────────────────── */}
+      {editUser && (
+        <Modal title={`Edit User — ${editUser.full_name}`} onClose={() => setEditUser(null)} width={600}>
+          <UserForm onCancel={() => setEditUser(null)} />
+        </Modal>
+      )}
+
+      {/* ── Temp Password Banner ─────────────────────────────────────────────── */}
+      {tempPwd && (
+        <Modal title="Temporary Password" onClose={() => setTempPwd('')} width={440}>
+          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 20, textAlign: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: '#1e40af', marginBottom: 8 }}>Share this temporary password with the user:</div>
+            <div style={{ fontSize: 24, fontWeight: 800, fontFamily: 'monospace', color: '#1e3a8a', letterSpacing: 2 }}>{tempPwd}</div>
           </div>
-        ) : (
-          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-body)', lineHeight: 1.6 }}>
-            Reset the password for <b>{resetUser?.full_name}</b>?<br />
-            Their password will be set to <code>Welcome@123</code> and they will be forced to change it on next login.
+          <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginBottom: 16 }}>
+            The user will be required to change this password on first login.
+          </div>
+          <button onClick={() => setTempPwd('')} style={{ width: '100%', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+            Done
+          </button>
+        </Modal>
+      )}
+
+      {/* ── Assign Roles Modal ───────────────────────────────────────────────── */}
+      {rolesUser && (
+        <Modal title={`Assign Roles — ${rolesUser.full_name}`} onClose={() => setRolesUser(null)} width={480}>
+          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 14 }}>
+            Primary role: <strong>{ROLE_MAP[rolesUser.role_id]?.label || rolesUser.role_name}</strong>
+            <br />Select additional roles to assign to this account:
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            {roleOptions.map(r => {
+              const isPrimary = r.id === rolesUser.role_id;
+              const isChecked = selectedRoleIds.includes(r.id);
+              return (
+                <label key={r.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                  border: `1px solid ${isChecked ? '#bfdbfe' : '#e5e7eb'}`,
+                  borderRadius: 8, background: isChecked ? '#eff6ff' : '#fff',
+                  cursor: isPrimary ? 'default' : 'pointer', opacity: 1,
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    disabled={isPrimary}
+                    onChange={e => {
+                      if (e.target.checked) setSelectedRoleIds(p => [...p, r.id]);
+                      else setSelectedRoleIds(p => p.filter(id => id !== r.id));
+                    }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>
+                      {r.label}
+                      {isPrimary && <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 8 }}>(Primary Role)</span>}
+                    </div>
+                    {ROLE_MAP[r.id]?.desc && <div style={{ fontSize: 11, color: '#9ca3af' }}>{ROLE_MAP[r.id].desc}</div>}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={handleAssignRoles} disabled={saving} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : 'Save Roles'}
+            </button>
+            <button onClick={() => setSelectedRoleIds([rolesUser.role_id])} style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: 8, padding: '9px 14px', fontSize: 13, cursor: 'pointer' }}>
+              Clear All Extra
+            </button>
+            <button onClick={() => setRolesUser(null)} style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 8, padding: '9px 14px', fontSize: 13, cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Status Change Confirmation ────────────────────────────────────────── */}
+      {statusAction && (
+        <Modal title={`Confirm: ${statusAction.targetStatus.charAt(0).toUpperCase() + statusAction.targetStatus.slice(1)} Account`} onClose={() => setStatusAction(null)} width={440}>
+          <p style={{ fontSize: 14, color: '#374151', marginBottom: 14 }}>
+            Change <strong>{statusAction.user.full_name}</strong>'s account status to{' '}
+            <StatusBadge status={statusAction.targetStatus} />?
           </p>
-        )}
-      </Modal>
+          <FieldRow label="Reason / Notes (optional)">
+            <input style={INP} value={statusNote} onChange={e => setStatusNote(e.target.value)} placeholder="e.g. Employee on leave, account breach, etc." />
+          </FieldRow>
+          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+            <button onClick={handleStatusChange} disabled={saving} style={{
+              background: statusAction.targetStatus === 'active' ? '#16a34a' : '#dc2626',
+              color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px',
+              fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1,
+            }}>
+              {saving ? 'Updating…' : 'Confirm'}
+            </button>
+            <button onClick={() => setStatusAction(null)} style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 14, cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Login History Modal ───────────────────────────────────────────────── */}
+      {histUser && (
+        <Modal title={`Login History — ${histUser.full_name}`} onClose={() => setHistUser(null)} width={600}>
+          {histLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading…</div>
+          ) : loginHist.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No login records found.</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead><tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                {['Date & Time', 'Result', 'IP Address', 'User Agent'].map(h => (
+                  <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 11, color: '#6b7280', fontWeight: 700 }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {loginHist.map(h => (
+                  <tr key={h.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '8px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{fmt(h.created_at)}</td>
+                    <td style={{ padding: '8px 10px' }}>
+                      {h.success
+                        ? <span style={{ color: '#16a34a', fontWeight: 600 }}>✓ Success</span>
+                        : <span style={{ color: '#dc2626', fontWeight: 600 }}>✗ Failed</span>
+                      }
+                      {h.failure_reason && <div style={{ fontSize: 11, color: '#9ca3af' }}>{h.failure_reason}</div>}
+                    </td>
+                    <td style={{ padding: '8px 10px', color: '#6b7280', fontSize: 12 }}>{h.ip_address || '—'}</td>
+                    <td style={{ padding: '8px 10px', color: '#9ca3af', fontSize: 11, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {h.user_agent || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Modal>
+      )}
+
+      {/* ── Audit Log Modal ───────────────────────────────────────────────────── */}
+      {auditUser && (
+        <Modal title={`Audit Log — ${auditUser.full_name}`} onClose={() => setAuditUser(null)} width={650}>
+          {histLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading…</div>
+          ) : auditLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No audit records.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {auditLogs.map(a => (
+                <div key={a.id} style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', border: '1px solid #e5e7eb' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600, fontSize: 12, color: '#111827', textTransform: 'capitalize' }}>
+                      {a.action_type.replace(/_/g, ' ')}
+                    </span>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{fmt(a.created_at)}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>
+                    By: <strong>{a.actor_name || `User #${a.performed_by}`}</strong>
+                    {a.ip_address && <span> · IP: {a.ip_address}</span>}
+                  </div>
+                  {a.notes && <div style={{ fontSize: 12, color: '#374151', marginTop: 4 }}>{a.notes}</div>}
+                  {a.old_value && a.new_value && (
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                      {a.old_value.length < 80 && a.new_value.length < 80
+                        ? <>{a.old_value} → {a.new_value}</>
+                        : 'Values updated'
+                      }
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Action Menu ───────────────────────────────────────────────────────────────
+
+function ActionMenu({ u, me, onEdit, onRoles, onReset, onHistory, onAudit, onStatus }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const isSelf = u.id === me?.id;
+  const isActive    = u.status === 'active';
+  const isLocked    = u.status === 'locked';
+  const isSuspended = u.status === 'suspended';
+  const isInactive  = u.status === 'inactive';
+  const isArchived  = u.status === 'archived';
+
+  const Item = ({ label, color = '#374151', onClick, disabled }) => (
+    <button
+      onClick={() => { if (!disabled) { onClick(); setOpen(false); } }}
+      disabled={disabled}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px',
+        background: 'none', border: 'none', fontSize: 13, color: disabled ? '#d1d5db' : color,
+        cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit',
+      }}
+      onMouseEnter={e => { if (!disabled) e.target.style.background = '#f3f4f6'; }}
+      onMouseLeave={e => { e.target.style.background = 'none'; }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 7, padding: '5px 12px', fontSize: 13, cursor: 'pointer', color: '#374151' }}
+      >
+        Actions ▾
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', right: 0, top: '100%', marginTop: 4,
+          background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+          boxShadow: '0 8px 30px rgba(0,0,0,0.12)', zIndex: 50, minWidth: 180,
+          overflow: 'hidden',
+        }}>
+          <Item label="Edit Details"     onClick={onEdit} />
+          <Item label="Assign Roles"     onClick={onRoles} />
+          <Item label="Reset Password"   onClick={onReset} disabled={isSelf} color="#d97706" />
+          <div style={{ borderTop: '1px solid #f3f4f6', margin: '4px 0' }} />
+          {!isActive   && <Item label="Activate"       onClick={() => onStatus('active')}   color="#16a34a" />}
+          {isActive    && !isSelf && <Item label="Deactivate"   onClick={() => onStatus('inactive')} color="#6b7280" />}
+          {!isSuspended && !isSelf && <Item label="Suspend"      onClick={() => onStatus('suspended')} color="#d97706" />}
+          {isSuspended  && <Item label="Unsuspend"     onClick={() => onStatus('active')} color="#16a34a" />}
+          {isLocked     && <Item label="Unlock Account" onClick={() => onStatus('active')} color="#16a34a" />}
+          <div style={{ borderTop: '1px solid #f3f4f6', margin: '4px 0' }} />
+          <Item label="Login History"   onClick={onHistory} />
+          <Item label="Audit Log"       onClick={onAudit} />
+          {!isArchived && !isSelf && (
+            <Item label="Archive User" onClick={() => onStatus('archived')} color="#dc2626" />
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -218,3 +218,26 @@ export const supportApi = {
   getDashboard:  (params)       => get('/api/support/dashboard', params),
   getStaff:      ()             => get('/api/support/staff'),
 };
+
+export const usersApi = {
+  // Users
+  list:            (params)          => get('/api/users', params),
+  stats:           ()                => get('/api/users/stats'),
+  get:             (id)              => get(`/api/users/${id}`),
+  create:          (data)            => post('/api/users', data),
+  update:          (id, data)        => patch(`/api/users/${id}`, data),
+  setStatus:       (id, data)        => patch(`/api/users/${id}/status`, data),
+  resetPassword:   (id)              => post(`/api/users/${id}/reset-password`, {}),
+  // Roles
+  getRoles:        (id)              => get(`/api/users/${id}/roles`),
+  assignRoles:     (id, role_ids)    => post(`/api/users/${id}/roles`, { role_ids }),
+  removeRole:      (id, role_id)     => del(`/api/users/${id}/roles/${role_id}`),
+  // History
+  loginHistory:    (id, limit)       => get(`/api/users/${id}/login-history`, limit ? { limit } : {}),
+  auditLogs:       (id, limit)       => get(`/api/users/${id}/audit-logs`, limit ? { limit } : {}),
+  allAuditLogs:    (limit)           => get('/api/users/audit-logs/all', limit ? { limit } : {}),
+  // Role management
+  listRoles:       ()                => get('/api/users/roles/all'),
+  createRole:      (data)            => post('/api/users/roles/all', data),
+  updateRole:      (id, data)        => patch(`/api/users/roles/all/${id}`, data),
+};

@@ -30,12 +30,13 @@ class UserOut(OrmBase):
     full_name:      str
     email:          str
     username:       Optional[str]
-    farm_id:        int
+    farm_id:        Optional[int]
     role_id:        int
     department:     Optional[str]
     phone:          Optional[str]
     is_active:      bool
     is_first_login: bool
+    status:         str = "active"
     created_at:     datetime
 
 
@@ -43,21 +44,25 @@ class UserCreate(BaseModel):
     full_name:    str
     email:        str
     username:     Optional[str] = None
+    employee_id:  Optional[str] = None
     role_id:      int = 3
-    farm_id:      int = 1
+    farm_id:      Optional[int] = 1
     department:   Optional[str] = None
+    position:     Optional[str] = None
     phone:        Optional[str] = None
     is_active:    bool = True
 
 
 class UserUpdate(BaseModel):
-    full_name:  Optional[str] = None
-    email:      Optional[str] = None
-    username:   Optional[str] = None
-    role_id:    Optional[int] = None
-    department: Optional[str] = None
-    phone:      Optional[str] = None
-    is_active:  Optional[bool] = None
+    full_name:   Optional[str] = None
+    email:       Optional[str] = None
+    username:    Optional[str] = None
+    employee_id: Optional[str] = None
+    role_id:     Optional[int] = None
+    department:  Optional[str] = None
+    position:    Optional[str] = None
+    phone:       Optional[str] = None
+    is_active:   Optional[bool] = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -68,6 +73,92 @@ class ChangePasswordRequest(BaseModel):
 class FirstPasswordRequest(BaseModel):
     new_password:     str
     confirm_password: str
+
+
+# ── User Management Extended ──────────────────────────────────────────────────
+
+class RoleOut(OrmBase):
+    id:          int
+    name:        str
+    name_ar:     str
+    description: Optional[str]
+    permissions: dict
+    is_active:   bool
+    created_at:  Optional[datetime]
+
+
+class RoleCreate(BaseModel):
+    name:        str
+    name_ar:     str
+    description: Optional[str] = None
+    permissions: dict = {}
+    is_active:   bool = True
+
+
+class RoleUpdate(BaseModel):
+    name:        Optional[str] = None
+    name_ar:     Optional[str] = None
+    description: Optional[str] = None
+    permissions: Optional[dict] = None
+    is_active:   Optional[bool] = None
+
+
+class UserRoleAssign(BaseModel):
+    role_ids: list[int]
+
+
+class StatusChangePayload(BaseModel):
+    status: str
+    notes:  Optional[str] = None
+
+
+class LoginHistoryOut(OrmBase):
+    id:             int
+    user_id:        int
+    success:        bool
+    ip_address:     Optional[str]
+    user_agent:     Optional[str]
+    failure_reason: Optional[str]
+    created_at:     datetime
+
+
+class UserAuditLogOut(OrmBase):
+    id:             int
+    target_user_id: int
+    action_type:    str
+    old_value:      Optional[str]
+    new_value:      Optional[str]
+    performed_by:   int
+    actor_name:     Optional[str] = None
+    ip_address:     Optional[str]
+    notes:          Optional[str]
+    created_at:     datetime
+
+
+class UserDetailOut(OrmBase):
+    id:                      int
+    employee_id:             Optional[str]
+    full_name:               str
+    email:                   str
+    username:                Optional[str]
+    farm_id:                 Optional[int]
+    role_id:                 int
+    department:              Optional[str]
+    position:                Optional[str]
+    phone:                   Optional[str]
+    status:                  str
+    is_active:               bool
+    is_first_login:          bool
+    failed_login_count:      int = 0
+    last_login_at:           Optional[datetime]
+    last_password_change_at: Optional[datetime]
+    created_at:              datetime
+    updated_at:              Optional[datetime]
+    created_by:              Optional[int]
+    updated_by:              Optional[int]
+    role_name:               Optional[str] = None
+    all_role_ids:            list[int] = []
+    all_role_names:          list[str] = []
 
 
 # ── Support Tickets ───────────────────────────────────────────────────────────
