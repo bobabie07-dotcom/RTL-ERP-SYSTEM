@@ -130,6 +130,12 @@ export default function SalesPage() {
   const [updateForm,   setUpdateForm]   = useState({ status: '', payment_status: '' });
   const [updateSaving, setUpdateSaving] = useState(false);
 
+  // Sync inventory modal (for already-received POs)
+  const [syncTarget,   setSyncTarget]   = useState(null); // { id, po_no }
+  const [syncItems,    setSyncItems]    = useState([{ ...BLANK_PO_ITEM }]);
+  const [syncSaving,   setSyncSaving]   = useState(false);
+  const [syncErr,      setSyncErr]      = useState('');
+
   // Delete confirmation modal
   const [delTarget,  setDelTarget]  = useState(null); // { type: 'sale'|'po', id, label }
   const [deleting,   setDeleting]   = useState(false);
@@ -295,6 +301,32 @@ export default function SalesPage() {
     } catch (err) { setLoadError(err.message || 'Failed.'); }
   }
 
+  // ── Sync inventory (backfill for already-received POs) ────────────────────
+  function openSyncModal(row) {
+    setSyncTarget({ id: row.id, po_no: row.po_no || `PO-${String(row.id).padStart(6, '0')}` });
+    setSyncItems([{ ...BLANK_PO_ITEM }]);
+    setSyncErr('');
+    if (inventoryItems.length === 0) {
+      inventoryApi.items({ farm_id: farmId }).then(setInventoryItems).catch(() => {});
+    }
+    setSyncSaving(false);
+  }
+
+  async function handleSyncInventory() {
+    const validItems = syncItems.filter(it => it.item_id && it.qty_ordered && parseFloat(it.qty_ordered) > 0);
+    if (validItems.length === 0) { setSyncErr('Add at least one item with a quantity.'); return; }
+    setSyncSaving(true); setSyncErr('');
+    try {
+      await procurementApi.syncInventory(syncTarget.id, validItems.map(it => ({
+        item_id:     Number(it.item_id),
+        qty_ordered: parseFloat(it.qty_ordered),
+        unit_price:  parseFloat(it.unit_price || 0),
+      })));
+      setSyncTarget(null);
+    } catch (err) { setSyncErr(err.message || 'Failed to sync.'); }
+    finally { setSyncSaving(false); }
+  }
+
   // ── Delete ─────────────────────────────────────────────────────────────────
   async function handleDelete() {
     if (!delTarget) return;
@@ -401,6 +433,9 @@ export default function SalesPage() {
           )}
           {r.status === 'ordered' && isManager && (
             <Button variant="secondary" size="sm" onClick={() => handleReceivePo(r.id)}>Mark Received</Button>
+          )}
+          {r.status === 'received' && isManager && (
+            <Button variant="ghost" size="sm" onClick={() => openSyncModal(r)} style={{ color: 'var(--text-brand)' }}>Sync Inventory</Button>
           )}
           {isManager && (
             <Button variant="ghost" size="sm" icon={<I.trash w={12} />}
@@ -728,6 +763,48 @@ export default function SalesPage() {
           <b style={{ color: 'var(--text-strong)' }}>{delTarget?.label}</b>?
           This action cannot be undone.
         </p>
+      </Modal>
+
+      {/* Sync Inventory Modal */}
+      <Modal open={!!syncTarget} title={`Sync Inventory — ${syncTarget?.po_no}`} onClose={() => setSyncTarget(null)} onConfirm={handleSyncInventory} confirmLabel="Add to Inventory" loading={syncSaving} width={640}>
+        {syncErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{syncErr}</div>}
+        <div style={{ background: 'var(--info-bg,#eff6ff)', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 12, color: '#1e40af' }}>
+          Enter the items that were received on this PO. Each item's quantity will be added to inventory stock.
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <th style={{ padding: '4px 6px 8px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'left', width: '48%' }}>Inventory Item</th>
+              <th style={{ padding: '4px 6px 8px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'right', width: '18%' }}>Qty Received</th>
+              <th style={{ padding: '4px 6px 8px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'right', width: '22%' }}>Unit Price (₱)</th>
+              <th style={{ width: '12%' }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {syncItems.map((it, idx) => (
+              <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle,#f0f0f0)' }}>
+                <td style={{ padding: '4px 6px' }}>
+                  <FieldSelect value={it.item_id} onChange={e => setSyncItems(p => p.map((x, i) => i === idx ? { ...x, item_id: e.target.value } : x))}>
+                    <option value="">Select item…</option>
+                    {inventoryItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                  </FieldSelect>
+                </td>
+                <td style={{ padding: '4px 6px' }}>
+                  <FieldInput type="number" value={it.qty_ordered} onChange={e => setSyncItems(p => p.map((x, i) => i === idx ? { ...x, qty_ordered: e.target.value } : x))} min="0.01" step="0.01" style={{ textAlign: 'right' }} />
+                </td>
+                <td style={{ padding: '4px 6px' }}>
+                  <FieldInput type="number" value={it.unit_price} onChange={e => setSyncItems(p => p.map((x, i) => i === idx ? { ...x, unit_price: e.target.value } : x))} min="0" step="0.01" placeholder="optional" style={{ textAlign: 'right' }} />
+                </td>
+                <td style={{ padding: '4px 6px', textAlign: 'center' }}>
+                  {syncItems.length > 1 && (
+                    <button type="button" onClick={() => setSyncItems(p => p.filter((_, i) => i !== idx))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 18, lineHeight: 1 }}>×</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button type="button" onClick={() => setSyncItems(p => [...p, { ...BLANK_PO_ITEM }])} style={{ marginTop: 10, border: '1px dashed var(--border)', background: 'none', cursor: 'pointer', borderRadius: 6, padding: '4px 12px', fontSize: 12, color: 'var(--text-brand)', fontWeight: 600 }}>+ Add Row</button>
       </Modal>
 
       {/* Record Payment Modal */}

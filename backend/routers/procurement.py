@@ -11,7 +11,7 @@ from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
     ApprovalAction,
     POItemCreate, PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
-    SupplierCreate, SupplierOut,
+    SupplierCreate, SupplierOut, SyncInventoryPayload,
 )
 
 router = APIRouter(prefix="/procurement", tags=["procurement"])
@@ -276,3 +276,38 @@ def receive_purchase_order(
         WHERE po.id = :id
     """), {"id": po_id}).mappings().one()
     return PurchaseOrderRow(**dict(row))
+
+
+@router.post("/orders/{po_id}/sync-inventory", status_code=status.HTTP_204_NO_CONTENT)
+def sync_inventory_from_po(
+    po_id: int,
+    body: SyncInventoryPayload,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission("write", "procurement")),
+):
+    po = db.get(PurchaseOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    if po.status != "received":
+        raise HTTPException(status_code=400, detail="Only received POs can be synced to inventory")
+
+    for it in body.items:
+        if not it.item_id or float(it.qty_ordered) <= 0:
+            continue
+        inv_item = db.get(InventoryItem, it.item_id)
+        if not inv_item:
+            continue
+        inv_item.qty_on_hand = float(inv_item.qty_on_hand) + float(it.qty_ordered)
+        if float(it.unit_price or 0) > 0:
+            inv_item.cost_per_unit = float(it.unit_price)
+        db.add(InventoryMovement(
+            item_id=inv_item.id,
+            movement_type="in",
+            qty=it.qty_ordered,
+            reference_type="purchase",
+            reference_id=po.id,
+            notes=f"Backfilled from {po.po_no}",
+            created_by=current_user.id,
+        ))
+
+    db.commit()

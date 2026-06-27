@@ -141,10 +141,11 @@ export const procurementApi = {
   suppliers:       ()            => get('/api/procurement/suppliers'),
   createSupplier:  (data)        => post('/api/procurement/suppliers', data),
   createOrder:     (data)        => post('/api/procurement/orders', data),
-  approveOrder:   (id)         => post(`/api/procurement/orders/${id}/approve`),
-  rejectOrder:    (id, reason) => post(`/api/procurement/orders/${id}/reject`, { rejection_reason: reason }),
-  receiveOrder:   (id)         => post(`/api/procurement/orders/${id}/receive`),
-  deleteOrder:    (id)         => del(`/api/procurement/orders/${id}`),
+  approveOrder:    (id)          => post(`/api/procurement/orders/${id}/approve`),
+  rejectOrder:     (id, reason)  => post(`/api/procurement/orders/${id}/reject`, { rejection_reason: reason }),
+  receiveOrder:    (id)          => post(`/api/procurement/orders/${id}/receive`),
+  syncInventory:   (id, items)   => post(`/api/procurement/orders/${id}/sync-inventory`, { items }),
+  deleteOrder:     (id)          => del(`/api/procurement/orders/${id}`),
 };
 
 export const alertsApi = {

@@ -830,6 +830,10 @@ class PurchaseOrderCreate(BaseModel):
     items:         List[POItemCreate] = []
 
 
+class SyncInventoryPayload(BaseModel):
+    items: List[POItemCreate]
+
+
 class PurchaseOrderUpdate(BaseModel):
     supplier_id:   Optional[int] = None
     expected_date: Optional[date] = None
