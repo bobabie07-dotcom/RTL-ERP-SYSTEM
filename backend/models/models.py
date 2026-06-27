@@ -394,6 +394,7 @@ class InventoryItem(Base):
     sku           = Column(String(50))
     unit          = Column(String(20), nullable=False, default="pcs")
     qty_on_hand   = Column(Numeric(12, 2), nullable=False, default=0)
+    qty_reserved  = Column(Numeric(12, 2), nullable=False, default=0)
     reorder_level = Column(Numeric(12, 2), nullable=False, default=0)
     cost_per_unit = Column(Numeric(10, 4))
     expiry_date   = Column(Date)
@@ -404,10 +405,15 @@ class InventoryItem(Base):
     movements: list[InventoryMovement] = relationship("InventoryMovement", back_populates="item")
 
     @property
+    def qty_available(self) -> float:
+        return max(0.0, float(self.qty_on_hand) - float(self.qty_reserved))
+
+    @property
     def status(self) -> str:
-        if self.qty_on_hand <= 0:
+        available = self.qty_available
+        if available <= 0:
             return "out_of_stock"
-        if self.qty_on_hand <= self.reorder_level:
+        if available <= float(self.reorder_level):
             return "low_stock"
         return "in_stock"
 
@@ -632,7 +638,7 @@ class Alert(Base):
     farm_id    = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
     alert_type = Column(
         Enum("mortality_high", "feed_low", "vaccination_due", "withdrawal_active",
-             "batch_harvest", "other"),
+             "batch_harvest", "inventory_low", "inventory_expiry", "other"),
         nullable=False,
     )
     severity   = Column(

@@ -46,6 +46,15 @@ export default function InventoryPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting,     setDeleting]     = useState(false);
 
+  // Reserve modal
+  const [reserveModal,   setReserveModal]   = useState(false);
+  const [reserveTarget,  setReserveTarget]  = useState(null);
+  const [reserveMode,    setReserveMode]    = useState('reserve'); // 'reserve' | 'release'
+  const [reserveQty,     setReserveQty]     = useState('');
+  const [reserveReason,  setReserveReason]  = useState('');
+  const [reserveSaving,  setReserveSaving]  = useState(false);
+  const [reserveErr,     setReserveErr]     = useState('');
+
   function loadItems() {
     return Promise.all([
       inventoryApi.items({ farm_id: farmId }),
@@ -53,6 +62,8 @@ export default function InventoryPage() {
     ]).then(([it, cats]) => {
       setItems(it || []);
       setCategories(cats || []);
+      // Run alert check silently in background after loading
+      inventoryApi.checkAlerts(farmId).catch(() => {});
     });
   }
 
@@ -141,14 +152,43 @@ export default function InventoryPage() {
     finally { setDeleting(false); }
   }
 
+  function openReserve(r, mode = 'reserve') {
+    setReserveTarget(r);
+    setReserveMode(mode);
+    setReserveQty('');
+    setReserveReason('');
+    setReserveErr('');
+    setReserveModal(true);
+  }
+
+  async function handleReserve() {
+    if (!reserveQty || parseFloat(reserveQty) <= 0) {
+      setReserveErr('Enter a valid quantity.'); return;
+    }
+    setReserveSaving(true); setReserveErr('');
+    try {
+      const payload = { qty: parseFloat(reserveQty), reason: reserveReason || undefined };
+      if (reserveMode === 'reserve') {
+        await inventoryApi.reserveStock(reserveTarget.id, payload);
+      } else {
+        await inventoryApi.releaseStock(reserveTarget.id, payload);
+      }
+      await loadItems();
+      setReserveModal(false);
+    } catch (err) { setReserveErr(err.message || 'Failed to update reservation.'); }
+    finally { setReserveSaving(false); }
+  }
+
   const f = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }));
 
   const rows = filtered.map((i) => ({
     ...i,
-    categoryName:   categories.find((c) => c.id === i.category_id)?.name || '—',
-    qtyDisplay:     parseFloat(i.qty_on_hand).toLocaleString(),
-    reorderDisplay: parseFloat(i.reorder_level).toLocaleString(),
-    lastUpdated:    i.last_updated ? new Date(i.last_updated).toLocaleDateString() : '—',
+    categoryName:    categories.find((c) => c.id === i.category_id)?.name || '—',
+    qtyDisplay:      parseFloat(i.qty_on_hand).toLocaleString(),
+    qtyAvailable:    parseFloat(i.qty_available ?? i.qty_on_hand).toLocaleString(),
+    qtyReserved:     parseFloat(i.qty_reserved ?? 0).toLocaleString(),
+    reorderDisplay:  parseFloat(i.reorder_level).toLocaleString(),
+    lastUpdated:     i.last_updated ? new Date(i.last_updated).toLocaleDateString() : '—',
   }));
 
   return (
@@ -178,7 +218,9 @@ export default function InventoryPage() {
           <Button variant="secondary" size="md" icon={<I.download w={15} />} onClick={() => exportCsv(rows, [
             { key: 'name',           header: 'Item Name' },
             { key: 'categoryName',   header: 'Category' },
-            { key: 'qtyDisplay',     header: 'Quantity' },
+            { key: 'qtyDisplay',     header: 'Total Qty' },
+            { key: 'qtyReserved',    header: 'Reserved' },
+            { key: 'qtyAvailable',   header: 'Available' },
             { key: 'unit',           header: 'Unit' },
             { key: 'reorderDisplay', header: 'Reorder Level' },
             { key: 'status',         header: 'Status' },
@@ -187,17 +229,28 @@ export default function InventoryPage() {
         </div>
         <DataTable
           columns={[
-            { key: 'name',           header: 'Item Name',      strong: true },
-            { key: 'categoryName',   header: 'Category' },
-            { key: 'qtyDisplay',     header: 'Quantity',       align: 'right', numeric: true },
-            { key: 'unit',           header: 'Unit' },
-            { key: 'reorderDisplay', header: 'Reorder Level',  align: 'right', numeric: true },
-            { key: 'lastUpdated',    header: 'Last Updated' },
-            { key: 'status',         header: 'Status', render: (r) => (
+            { key: 'name',          header: 'Item Name',     strong: true },
+            { key: 'categoryName',  header: 'Category' },
+            { key: 'qtyDisplay',    header: 'Total',         align: 'right', numeric: true },
+            { key: 'qtyReserved',   header: 'Reserved',      align: 'right', numeric: true },
+            { key: 'qtyAvailable',  header: 'Available',     align: 'right', numeric: true },
+            { key: 'unit',          header: 'Unit' },
+            { key: 'reorderDisplay', header: 'Reorder',      align: 'right', numeric: true },
+            { key: 'lastUpdated',   header: 'Last Updated' },
+            { key: 'status',        header: 'Status', render: (r) => (
               <Badge tone={STATUS_TONE[r.status] || 'neutral'} dot>{STATUS_LABEL[r.status] || r.status}</Badge>
             )},
             { key: '_actions', header: '', render: (r) => (
               <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); openReserve(r, 'reserve'); }}
+                  style={ACTION_BTN}
+                  title="Reserve stock"
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--accent)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                >
+                  <I.lock w={14} />
+                </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); openEdit(r); }}
                   style={ACTION_BTN}
@@ -290,6 +343,57 @@ export default function InventoryPage() {
           Are you sure you want to delete <b>{deleteTarget?.name}</b>?<br />
           This action cannot be undone.
         </p>
+      </Modal>
+
+      {/* Reserve / Release Modal */}
+      <Modal
+        open={reserveModal}
+        title={reserveMode === 'reserve' ? 'Reserve Stock' : 'Release Reservation'}
+        onClose={() => setReserveModal(false)}
+        onConfirm={handleReserve}
+        confirmLabel={reserveMode === 'reserve' ? 'Reserve' : 'Release'}
+        loading={reserveSaving}
+        width={420}
+      >
+        {reserveErr && (
+          <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>
+            {reserveErr}
+          </div>
+        )}
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+          {reserveTarget?.name} — Available: <b>{parseFloat(reserveTarget?.qty_available ?? 0).toLocaleString()} {reserveTarget?.unit}</b>
+          {parseFloat(reserveTarget?.qty_reserved ?? 0) > 0 && (
+            <span> · Reserved: <b>{parseFloat(reserveTarget?.qty_reserved ?? 0).toLocaleString()}</b></span>
+          )}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <FormRow label="Quantity">
+            <FieldInput
+              type="number"
+              value={reserveQty}
+              onChange={(e) => setReserveQty(e.target.value)}
+              placeholder="0"
+              min="0.01"
+              step="0.01"
+              autoFocus
+            />
+          </FormRow>
+          <FormRow label="Reason (optional)">
+            <FieldInput
+              value={reserveReason}
+              onChange={(e) => setReserveReason(e.target.value)}
+              placeholder="e.g. Sales order #SO-001"
+            />
+          </FormRow>
+          {reserveMode === 'reserve' && parseFloat(reserveTarget?.qty_reserved ?? 0) > 0 && (
+            <button
+              style={{ alignSelf: 'flex-start', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 13, textDecoration: 'underline', padding: 0 }}
+              onClick={() => setReserveMode('release')}
+            >
+              Switch to release instead
+            </button>
+          )}
+        </div>
       </Modal>
     </div>
   );

@@ -22,6 +22,12 @@ def run_startup_migrations():
         _safe_add_column(conn, "ALTER TABLE feed_types ADD COLUMN inventory_item_id INT NULL")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN username VARCHAR(50) UNIQUE NULL")
         _safe_add_column(conn, "ALTER TABLE purchase_order_items ADD COLUMN qty_received NUMERIC(12,2) NOT NULL DEFAULT 0")
+        _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN qty_reserved NUMERIC(12,2) NOT NULL DEFAULT 0")
+        _safe_add_column(conn, """
+            ALTER TABLE alerts MODIFY COLUMN alert_type
+            ENUM('mortality_high','feed_low','vaccination_due','withdrawal_active',
+                 'batch_harvest','inventory_low','inventory_expiry','other') NOT NULL
+        """)
         conn.execute(text("INSERT IGNORE INTO inventory_categories (name, name_ar) VALUES ('Manual', 'يدوي')"))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS support_tickets (

@@ -113,13 +113,16 @@ export const healthApi = {
 };
 
 export const inventoryApi = {
-  items:      (params)   => get('/api/inventory/items', params),
-  categories: ()         => get('/api/inventory/categories'),
-  suppliers:  ()         => get('/api/inventory/suppliers'),
-  createItem: (data)     => post('/api/inventory/items', data),
-  updateItem: (id, data) => patch(`/api/inventory/items/${id}`, data),
-  deleteItem: (id)       => del(`/api/inventory/items/${id}`),
-  movement:   (data)     => post('/api/inventory/movements', data),
+  items:        (params)   => get('/api/inventory/items', params),
+  categories:   ()         => get('/api/inventory/categories'),
+  suppliers:    ()         => get('/api/inventory/suppliers'),
+  createItem:   (data)     => post('/api/inventory/items', data),
+  updateItem:   (id, data) => patch(`/api/inventory/items/${id}`, data),
+  deleteItem:   (id)       => del(`/api/inventory/items/${id}`),
+  movement:     (data)     => post('/api/inventory/movements', data),
+  reserveStock: (id, data) => post(`/api/inventory/items/${id}/reserve`, data),
+  releaseStock: (id, data) => post(`/api/inventory/items/${id}/release`, data),
+  checkAlerts:  (farm_id)  => post('/api/inventory/check-alerts', { farm_id }),
 };
 
 export const salesApi = {

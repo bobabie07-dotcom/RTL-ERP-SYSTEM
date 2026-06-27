@@ -571,11 +571,18 @@ class InventoryItemOut(OrmBase):
     sku:           Optional[str]
     unit:          str
     qty_on_hand:   Decimal
+    qty_reserved:  Decimal
+    qty_available: float
     reorder_level: Decimal
     cost_per_unit: Optional[Decimal]
     expiry_date:   Optional[date]
     last_updated:  Optional[datetime]
     status:        str
+
+
+class ReservePayload(BaseModel):
+    qty:    Decimal
+    reason: Optional[str] = None
 
 
 class MovementCreate(BaseModel):

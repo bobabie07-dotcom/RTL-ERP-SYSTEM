@@ -1,15 +1,17 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import InventoryCategory, InventoryItem, InventoryMovement, PurchaseOrder, Supplier
+from models import Alert, InventoryCategory, InventoryItem, InventoryMovement, PurchaseOrder, Supplier
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
     InventoryCategoryOut, InventoryItemCreate, InventoryItemOut, InventoryItemUpdate,
-    MovementCreate, MovementOut, SupplierOut,
+    MovementCreate, MovementOut, ReservePayload, SupplierOut,
 )
+from utils import check_and_create_inventory_alerts
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -120,13 +122,88 @@ def record_movement(
     movement = InventoryMovement(**body.model_dump(), created_by=current_user.id)
     db.add(movement)
 
-    # Update quantity on hand
     delta = float(body.qty) if body.movement_type == "in" else -float(body.qty)
     item.qty_on_hand = float(item.qty_on_hand) + delta
 
+    check_and_create_inventory_alerts(item, db)
     db.commit()
     db.refresh(movement)
     return movement
+
+
+# ── Reserve / Release ─────────────────────────────────────────────────────────
+
+@router.post("/items/{item_id}/reserve", response_model=InventoryItemOut)
+def reserve_stock(
+    item_id: int,
+    body: ReservePayload,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission("write", "inventory")),
+):
+    item = db.get(InventoryItem, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if float(body.qty) > item.qty_available:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot reserve {body.qty} — only {item.qty_available:.2f} {item.unit} available",
+        )
+    item.qty_reserved = float(item.qty_reserved) + float(body.qty)
+    db.add(InventoryMovement(
+        item_id=item.id,
+        movement_type="adjustment",
+        qty=body.qty,
+        reference_type="adjustment",
+        notes=f"Reserved: {body.reason or 'manual reservation'}",
+        created_by=current_user.id,
+    ))
+    check_and_create_inventory_alerts(item, db)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.post("/items/{item_id}/release", response_model=InventoryItemOut)
+def release_stock(
+    item_id: int,
+    body: ReservePayload,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission("write", "inventory")),
+):
+    item = db.get(InventoryItem, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    release_qty = min(float(body.qty), float(item.qty_reserved))
+    item.qty_reserved = max(0.0, float(item.qty_reserved) - release_qty)
+    db.add(InventoryMovement(
+        item_id=item.id,
+        movement_type="adjustment",
+        qty=release_qty,
+        reference_type="adjustment",
+        notes=f"Released reservation: {body.reason or 'manual release'}",
+        created_by=current_user.id,
+    ))
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+# ── Check Alerts ──────────────────────────────────────────────────────────────
+
+class CheckAlertsPayload(BaseModel):
+    farm_id: int
+
+
+@router.post("/check-alerts", status_code=status.HTTP_204_NO_CONTENT)
+def check_inventory_alerts(
+    body: CheckAlertsPayload,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    items = db.query(InventoryItem).filter(InventoryItem.farm_id == body.farm_id).all()
+    for item in items:
+        check_and_create_inventory_alerts(item, db)
+    db.commit()
 
 
 # ── Suppliers ─────────────────────────────────────────────────────────────────

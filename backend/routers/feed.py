@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Batch, FeedIssue, FeedPurchase, FeedStock, FeedType, House, InventoryItem, InventoryMovement
 from routers.auth import get_current_user, require_permission
+from utils import check_and_create_inventory_alerts
 from schemas.schemas import (
     FeedIssueCreate, FeedIssueOut, FeedIssueRow,
     FeedPurchaseCreate, FeedPurchaseOut, FeedPurchaseRow,
@@ -130,6 +131,7 @@ def create_feed_purchase(
                 notes=f"Feed purchase — {ft.name}" + (f" | Inv: {body.invoice_no}" if body.invoice_no else ""),
                 created_by=current_user.id,
             ))
+            check_and_create_inventory_alerts(inv_item, db)
 
     db.commit()
     db.refresh(purchase)
@@ -209,6 +211,7 @@ def create_feed_issue(
                 notes=f"Feed issue — {ft.name} to batch",
                 created_by=current_user.id,
             ))
+            check_and_create_inventory_alerts(inv_item, db)
 
     db.commit()
     db.refresh(issue)

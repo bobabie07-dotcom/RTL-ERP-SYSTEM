@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import InventoryItem, InventoryMovement, PurchaseOrder, PurchaseOrderItem, Supplier
 from routers.auth import get_current_user, require_permission
+from utils import check_and_create_inventory_alerts
 from schemas.schemas import (
     ApprovalAction,
     POItemCreate, PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
@@ -262,6 +263,7 @@ def receive_purchase_order(
             created_by=current_user.id,
         ))
         po_item.qty_received = float(po_item.qty_ordered)
+        check_and_create_inventory_alerts(inv_item, db)
 
     po.status = "received"
     db.commit()
