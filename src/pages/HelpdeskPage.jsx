@@ -37,9 +37,12 @@ function StatCard({ label, value, sub, tone }) {
 export default function HelpdeskPage() {
   const [tickets, setTickets]   = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [loadErr, setLoadErr]   = useState('');
   const [selected, setSelected] = useState(null);
   const [comments, setComments] = useState([]);
   const [commLoading, setCommLoading] = useState(false);
+  const [updateErr, setUpdateErr] = useState('');
+  const [commentErr, setCommentErr] = useState('');
 
   // Filters
   const [statusFilter,   setStatusF]   = useState('');
@@ -58,10 +61,13 @@ export default function HelpdeskPage() {
 
   async function loadTickets() {
     setLoading(true);
+    setLoadErr('');
     try {
       const data = await supportApi.listTickets({ status: statusFilter || undefined, priority: priorityFilter || undefined });
-      setTickets(data);
-    } catch { } finally { setLoading(false); }
+      setTickets(data || []);
+    } catch (e) {
+      setLoadErr(e.message || 'Failed to load tickets.');
+    } finally { setLoading(false); }
   }
 
   useEffect(() => { loadTickets(); }, [statusFilter, priorityFilter]);
@@ -78,6 +84,7 @@ export default function HelpdeskPage() {
 
   async function handleUpdate() {
     setUpdating(true);
+    setUpdateErr('');
     try {
       const updated = await supportApi.updateTicket(selected.id, {
         status: newStatus,
@@ -85,18 +92,23 @@ export default function HelpdeskPage() {
       });
       setSelected(updated);
       setTickets(p => p.map(t => t.id === updated.id ? updated : t));
-    } catch { } finally { setUpdating(false); }
+    } catch (e) {
+      setUpdateErr(e.message || 'Failed to update ticket.');
+    } finally { setUpdating(false); }
   }
 
   async function handleComment(e) {
     e.preventDefault();
     if (!commentText.trim()) return;
     setCommenting(true);
+    setCommentErr('');
     try {
       const c = await supportApi.addComment(selected.id, { comment: commentText, is_internal: isInternal });
       setComments(p => [...p, c]);
       setCommentText(''); setIsInternal(false);
-    } catch { } finally { setCommenting(false); }
+    } catch (e) {
+      setCommentErr(e.message || 'Failed to post comment.');
+    } finally { setCommenting(false); }
   }
 
   const filtered = tickets.filter(t => {
@@ -153,6 +165,9 @@ export default function HelpdeskPage() {
               </select>
             </div>
 
+            {loadErr && (
+              <div style={{ margin: '0 0 12px', padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{loadErr}</div>
+            )}
             {loading ? (
               <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading tickets…</div>
             ) : filtered.length === 0 ? (
@@ -232,6 +247,9 @@ export default function HelpdeskPage() {
                   placeholder="Describe the resolution or action taken…"
                   style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'var(--font-body)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
               </div>
+              {updateErr && (
+                <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{updateErr}</div>
+              )}
               <div style={{ marginTop: 12 }}>
                 <Button variant="primary" size="sm" onClick={handleUpdate} disabled={updating}>
                   {updating ? 'Saving…' : 'Save Update'}
@@ -268,6 +286,9 @@ export default function HelpdeskPage() {
                 <textarea value={commentText} onChange={e => setCommentText(e.target.value)} rows={3}
                   placeholder="Write a comment or update for the user…"
                   style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'var(--font-body)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
+                {commentErr && (
+                  <div style={{ marginBottom: 8, padding: '8px 12px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{commentErr}</div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
                     <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} />

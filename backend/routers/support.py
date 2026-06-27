@@ -14,7 +14,7 @@ from schemas.schemas import (
 
 router = APIRouter(prefix="/support", tags=["support"])
 
-ADMIN_ROLES = {1, 2}
+ADMIN_ROLES = {1, 2, 5}  # Administrator, Farm Manager, Owner
 
 
 def _gen_ticket_no(db: Session) -> str:
