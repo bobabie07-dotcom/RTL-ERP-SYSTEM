@@ -86,6 +86,7 @@ export default function NotificationsPage() {
             }}
             onMouseEnter={e => { if (getAlertRoute(n.alert_type)) e.currentTarget.style.background = 'var(--gray-50)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = n.is_read ? 'transparent' : 'var(--green-50)'; }}
+          >
             <Badge tone={SEVERITY_TONE[n.severity] || 'neutral'} variant="solid" style={{ marginTop: 2, flexShrink: 0 }}>
               {SEVERITY_LABEL[n.severity] || n.severity}
             </Badge>
