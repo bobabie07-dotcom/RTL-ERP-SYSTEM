@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -468,16 +469,23 @@ def list_roles(
     db: Session = Depends(get_db),
 ):
     roles = db.query(Role).order_by(Role.id).all()
+    # Count active users per role in one query to avoid N+1 lazy loads
+    user_counts: dict[int, int] = dict(
+        db.query(User.role_id, func.count(User.id))
+          .filter(User.deleted_at == None)  # noqa: E711
+          .group_by(User.role_id)
+          .all()
+    )
     return [
         {
             "id":          r.id,
             "name":        r.name,
             "name_ar":     r.name_ar,
-            "description": r.description,
-            "permissions": r.permissions,
+            "description": getattr(r, "description", None),
+            "permissions": r.permissions or {},
             "is_active":   getattr(r, "is_active", True),
-            "user_count":  len(r.users) if r.users else 0,
-            "created_at":  r.created_at,
+            "user_count":  user_counts.get(r.id, 0),
+            "created_at":  getattr(r, "created_at", None),
         }
         for r in roles
     ]
