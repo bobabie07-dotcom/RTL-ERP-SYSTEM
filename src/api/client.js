@@ -178,6 +178,17 @@ export const harvestApi = {
   pnl:    (batchId)       => get(`/api/harvest/${batchId}/pnl`),
 };
 
+export const batchFinanceApi = {
+  pnl:          (batchId)         => get(`/api/batches/${batchId}/finance/pnl`),
+  categories:   (batchId)         => get(`/api/batches/${batchId}/finance/categories`),
+  expenses:     (batchId, params) => get(`/api/batches/${batchId}/finance/expenses`, params),
+  addExpense:   (batchId, data)   => post(`/api/batches/${batchId}/finance/expenses`, data),
+  editExpense:  (batchId, expId, data) => patch(`/api/batches/${batchId}/finance/expenses/${expId}`, data),
+  voidExpense:  (batchId, expId, reason) => post(`/api/batches/${batchId}/finance/expenses/${expId}/void`, { void_reason: reason }),
+  revenues:     (batchId, params) => get(`/api/batches/${batchId}/finance/revenues`, params),
+  addRevenue:   (batchId, data)   => post(`/api/batches/${batchId}/finance/revenues`, data),
+};
+
 export const batchPlansApi = {
   get:    (batch_id)       => get(`/api/batch-plans/${batch_id}`),
   upsert: (batch_id, data) => request('PUT', `/api/batch-plans/${batch_id}`, data),

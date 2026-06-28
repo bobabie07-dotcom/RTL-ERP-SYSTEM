@@ -61,6 +61,81 @@ def check_and_create_inventory_alerts(item, db: Session) -> None:
                 ))
 
 
+def post_batch_expense(
+    batch_id: int,
+    category_code: str,
+    amount: float,
+    expense_date,
+    db: Session,
+    *,
+    qty=None,
+    unit=None,
+    unit_cost=None,
+    description=None,
+    source_module=None,
+    source_ref=None,
+    mortality_record_id=None,
+    house_id=None,
+    created_by=None,
+):
+    from models import BatchExpense, ExpenseCategory
+    cat = db.query(ExpenseCategory).filter(ExpenseCategory.code == category_code).first()
+    if not cat:
+        return None
+    exp = BatchExpense(
+        batch_id=batch_id,
+        house_id=house_id,
+        category_id=cat.id,
+        expense_date=expense_date,
+        amount=round(float(amount), 2),
+        qty=qty,
+        unit=unit,
+        unit_cost=round(float(unit_cost), 4) if unit_cost is not None else None,
+        description=description,
+        source_module=source_module,
+        source_ref=source_ref,
+        mortality_record_id=mortality_record_id,
+        is_voided=False,
+        created_by=created_by,
+    )
+    db.add(exp)
+    return exp
+
+
+def post_batch_revenue(
+    batch_id: int,
+    amount: float,
+    revenue_date,
+    db: Session,
+    *,
+    category="SALES",
+    qty_kg=None,
+    qty_birds=None,
+    price_per_kg=None,
+    description=None,
+    sales_order_id=None,
+    buyer_id=None,
+    created_by=None,
+):
+    from models import BatchRevenue
+    rev = BatchRevenue(
+        batch_id=batch_id,
+        revenue_date=revenue_date,
+        category=category,
+        amount=round(float(amount), 2),
+        qty_kg=qty_kg,
+        qty_birds=qty_birds,
+        price_per_kg=price_per_kg,
+        description=description,
+        sales_order_id=sales_order_id,
+        buyer_id=buyer_id,
+        is_voided=False,
+        created_by=created_by,
+    )
+    db.add(rev)
+    return rev
+
+
 def generate_farm_alerts(farm_id: int, db: Session) -> int:
     """
     Scan current farm data and create missing unread alerts.

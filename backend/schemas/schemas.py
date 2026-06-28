@@ -1019,3 +1019,62 @@ class PurchaseOrderRow(BaseModel):
     status:           str
     approved_by_name: Optional[str]
     notes:            Optional[str]
+
+
+# ── Batch Finance ─────────────────────────────────────────────────────────────
+
+class BatchExpenseCreate(BaseModel):
+    expense_date:  date
+    category_code: str
+    amount:        float
+    qty:           Optional[float] = None
+    unit:          Optional[str]   = None
+    unit_cost:     Optional[float] = None
+    description:   Optional[str]  = None
+
+
+class BatchExpenseRow(BaseModel):
+    id:            int
+    batch_id:      int
+    expense_date:  date
+    category_code: str
+    category_name: str
+    amount:        float
+    qty:           Optional[float]
+    unit:          Optional[str]
+    unit_cost:     Optional[float]
+    description:   Optional[str]
+    source_module: Optional[str]
+    source_ref:    Optional[str]
+    is_voided:     bool
+    void_reason:   Optional[str]
+    created_at:    datetime
+
+
+class BatchRevenueCreate(BaseModel):
+    revenue_date: date
+    category:     str   = "SALES"
+    amount:       float
+    qty_kg:       Optional[float] = None
+    qty_birds:    Optional[int]   = None
+    price_per_kg: Optional[float] = None
+    description:  Optional[str]  = None
+
+
+class BatchRevenueRow(BaseModel):
+    id:             int
+    batch_id:       int
+    revenue_date:   date
+    category:       str
+    amount:         float
+    qty_kg:         Optional[float]
+    qty_birds:      Optional[int]
+    price_per_kg:   Optional[float]
+    description:    Optional[str]
+    sales_order_id: Optional[int]
+    is_voided:      bool
+    created_at:     datetime
+
+
+class VoidRequest(BaseModel):
+    void_reason: Optional[str] = None

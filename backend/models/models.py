@@ -716,6 +716,65 @@ class BatchExpenseItem(Base):
     plan: BatchFinancialPlan = relationship("BatchFinancialPlan", back_populates="expense_items")
 
 
+# ── Batch Finance ────────────────────────────────────────────────────────────
+
+class ExpenseCategory(Base):
+    __tablename__ = "expense_categories"
+
+    id         = Column(SmallInteger, primary_key=True, autoincrement=True)
+    code       = Column(String(20), nullable=False, unique=True)
+    name       = Column(String(100), nullable=False)
+    sort_order = Column(SmallInteger, default=0)
+
+
+class BatchExpense(Base):
+    __tablename__ = "batch_expenses"
+
+    id                  = Column(Integer, primary_key=True, autoincrement=True)
+    batch_id            = Column(Integer, ForeignKey("batches.id"), nullable=False)
+    house_id            = Column(SmallInteger, ForeignKey("houses.id"), nullable=True)
+    category_id         = Column(SmallInteger, ForeignKey("expense_categories.id"), nullable=False)
+    expense_date        = Column(Date, nullable=False)
+    amount              = Column(Numeric(14, 2), nullable=False)
+    qty                 = Column(Numeric(12, 4), nullable=True)
+    unit                = Column(String(20), nullable=True)
+    unit_cost           = Column(Numeric(12, 4), nullable=True)
+    description         = Column(String(500), nullable=True)
+    source_module       = Column(String(30), nullable=True)
+    source_ref          = Column(String(50), nullable=True)
+    mortality_record_id = Column(Integer, ForeignKey("mortality_records.id"), nullable=True)
+    is_voided           = Column(Boolean, nullable=False, default=False)
+    void_reason         = Column(String(255), nullable=True)
+    voided_by           = Column(Integer, ForeignKey("users.id"), nullable=True)
+    voided_at           = Column(DateTime, nullable=True)
+    created_by          = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at          = Column(DateTime, default=func.now())
+
+    batch:    Batch           = relationship("Batch")
+    category: ExpenseCategory = relationship("ExpenseCategory")
+
+
+class BatchRevenue(Base):
+    __tablename__ = "batch_revenues"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    batch_id       = Column(Integer, ForeignKey("batches.id"), nullable=False)
+    revenue_date   = Column(Date, nullable=False)
+    category       = Column(String(20), nullable=False, default="SALES")
+    amount         = Column(Numeric(14, 2), nullable=False)
+    qty_kg         = Column(Numeric(12, 3), nullable=True)
+    qty_birds      = Column(Integer, nullable=True)
+    price_per_kg   = Column(Numeric(10, 4), nullable=True)
+    description    = Column(String(500), nullable=True)
+    sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=True)
+    buyer_id       = Column(Integer, ForeignKey("buyers.id"), nullable=True)
+    is_voided      = Column(Boolean, nullable=False, default=False)
+    created_by     = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at     = Column(DateTime, default=func.now())
+
+    batch: Batch = relationship("Batch")
+
+
 # ── Alerts ───────────────────────────────────────────────────────────────────
 
 class Alert(Base):

@@ -7,7 +7,7 @@ import { Badge } from '../components/core/Badge';
 import { Button } from '../components/core/Button';
 import { ProgressRing } from '../components/data/ProgressRing';
 import { LineChart } from '../charts';
-import { batchesApi, healthApi, batchPlansApi, salesApi, harvestApi } from '../api/client';
+import { batchesApi, healthApi, batchPlansApi, salesApi, harvestApi, batchFinanceApi } from '../api/client';
 import { getStoredMarketPrice } from '../utils/useMarketPrice';
 import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Modal';
 import { useFarm } from '../context/FarmContext';
@@ -121,6 +121,22 @@ export default function BatchDetailPage() {
   const [planDeleteModal, setPlanDeleteModal] = useState(false);
   const [planDeleting,    setPlanDeleting]    = useState(false);
 
+  // Finance
+  const [finPnl,          setFinPnl]          = useState(null);
+  const [finExpenses,     setFinExpenses]      = useState([]);
+  const [finRevenues,     setFinRevenues]      = useState([]);
+  const [finCategories,   setFinCategories]    = useState([]);
+  const [finLoading,      setFinLoading]       = useState(false);
+  const [finExpModal,     setFinExpModal]      = useState(false);
+  const [finRevModal,     setFinRevModal]      = useState(false);
+  const [finEditExp,      setFinEditExp]       = useState(null);
+  const [finExpForm,      setFinExpForm]       = useState({ expense_date: TODAY, category_code: 'LABOR', amount: '', qty: '', unit: '', description: '' });
+  const [finRevForm,      setFinRevForm]       = useState({ revenue_date: TODAY, category: 'SALES', amount: '', qty_kg: '', price_per_kg: '', description: '' });
+  const [finExpSaving,    setFinExpSaving]     = useState(false);
+  const [finRevSaving,    setFinRevSaving]     = useState(false);
+  const [finExpErr,       setFinExpErr]        = useState('');
+  const [finRevErr,       setFinRevErr]        = useState('');
+
   useEffect(() => {
     Promise.all([
       batchesApi.get(id),
@@ -142,6 +158,7 @@ export default function BatchDetailPage() {
     loadPlan();
     loadVaccinations();
     loadExpenses();
+    loadFinance();
     healthApi.medications('vaccine').then(setMedications).catch(() => {});
   }, [id]);
 
@@ -154,6 +171,20 @@ export default function BatchDetailPage() {
   }
   function loadExpenses() {
     salesApi.expenses({ batch_id: id }).then(e => setExpenses(e || [])).catch(() => {});
+  }
+  function loadFinance() {
+    setFinLoading(true);
+    Promise.all([
+      batchFinanceApi.pnl(id).catch(() => null),
+      batchFinanceApi.expenses(id).catch(() => []),
+      batchFinanceApi.revenues(id).catch(() => []),
+      batchFinanceApi.categories(id).catch(() => []),
+    ]).then(([pnl, exps, revs, cats]) => {
+      setFinPnl(pnl);
+      setFinExpenses(exps || []);
+      setFinRevenues(revs || []);
+      setFinCategories(cats || []);
+    }).finally(() => setFinLoading(false));
   }
 
   // ── Daily Log ──────────────────────────────────────────────────────────────
@@ -358,6 +389,68 @@ export default function BatchDetailPage() {
   function updateExpItem(idx, key, val) { setPlanForm(p => { const a = [...p.expense_items]; a[idx] = { ...a[idx], [key]: val }; return { ...p, expense_items: a }; }); }
   function addExpItem()    { setPlanForm(p => ({ ...p, expense_items: [...p.expense_items, { ...BLANK_EXPENSE_ITEM }] })); }
   function removeExpItem(i){ setPlanForm(p => ({ ...p, expense_items: p.expense_items.filter((_, j) => j !== i) })); }
+
+  // ── Finance handlers ───────────────────────────────────────────────────────
+  const ff  = k => e => setFinExpForm(p => ({ ...p, [k]: e.target.value }));
+  const frf = k => e => setFinRevForm(p => ({ ...p, [k]: e.target.value }));
+
+  function openFinExpAdd() {
+    setFinEditExp(null);
+    setFinExpForm({ expense_date: TODAY, category_code: finCategories[0]?.code || 'LABOR', amount: '', qty: '', unit: '', description: '' });
+    setFinExpErr(''); setFinExpModal(true);
+  }
+  function openFinExpEdit(row) {
+    setFinEditExp(row.id);
+    setFinExpForm({ expense_date: String(row.expense_date), category_code: row.category_code, amount: String(row.amount), qty: row.qty != null ? String(row.qty) : '', unit: row.unit || '', description: row.description || '' });
+    setFinExpErr(''); setFinExpModal(true);
+  }
+  async function handleFinExpSave() {
+    if (!finExpForm.amount || !finExpForm.expense_date) { setFinExpErr('Amount and date are required.'); return; }
+    setFinExpSaving(true); setFinExpErr('');
+    try {
+      const payload = {
+        expense_date:  finExpForm.expense_date,
+        category_code: finExpForm.category_code,
+        amount:        parseFloat(finExpForm.amount),
+        qty:           finExpForm.qty ? parseFloat(finExpForm.qty) : null,
+        unit:          finExpForm.unit || null,
+        description:   finExpForm.description || null,
+      };
+      if (finEditExp) {
+        await batchFinanceApi.editExpense(id, finEditExp, payload);
+      } else {
+        await batchFinanceApi.addExpense(id, payload);
+      }
+      loadFinance();
+      setFinExpModal(false); setFinEditExp(null);
+    } catch (e) { setFinExpErr(e.message || 'Failed to save.'); }
+    finally { setFinExpSaving(false); }
+  }
+  async function handleFinExpVoid(exp) {
+    if (!window.confirm(`Void expense: ${exp.category_name} — ₱${Number(exp.amount).toLocaleString()}?`)) return;
+    try {
+      await batchFinanceApi.voidExpense(id, exp.id, 'Voided by user');
+      loadFinance();
+    } catch (e) { setPageErr(e.message || 'Failed to void.'); }
+  }
+  async function handleFinRevSave() {
+    if (!finRevForm.amount || !finRevForm.revenue_date) { setFinRevErr('Amount and date are required.'); return; }
+    setFinRevSaving(true); setFinRevErr('');
+    try {
+      const payload = {
+        revenue_date: finRevForm.revenue_date,
+        category:     finRevForm.category,
+        amount:       parseFloat(finRevForm.amount),
+        qty_kg:       finRevForm.qty_kg ? parseFloat(finRevForm.qty_kg) : null,
+        price_per_kg: finRevForm.price_per_kg ? parseFloat(finRevForm.price_per_kg) : null,
+        description:  finRevForm.description || null,
+      };
+      await batchFinanceApi.addRevenue(id, payload);
+      loadFinance();
+      setFinRevModal(false);
+    } catch (e) { setFinRevErr(e.message || 'Failed to save.'); }
+    finally { setFinRevSaving(false); }
+  }
 
   if (loading) return <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 14 }}>Loading batch...</div>;
   if (notFound || !batch) {
@@ -784,6 +877,147 @@ export default function BatchDetailPage() {
         />
       </Card>
 
+      {/* ── Batch Finance ────────────────────────────────────────────────── */}
+      <Card
+        title="Batch Finance"
+        action={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button variant="secondary" size="sm" icon={<I.plus w={15} />} onClick={openFinExpAdd}>Add Expense</Button>
+            <Button variant="secondary" size="sm" icon={<I.plus w={15} />} onClick={() => { setFinRevForm({ revenue_date: TODAY, category: 'SALES', amount: '', qty_kg: '', price_per_kg: '', description: '' }); setFinRevErr(''); setFinRevModal(true); }}>Add Revenue</Button>
+          </div>
+        }
+      >
+        {finLoading ? (
+          <div style={{ padding: '16px 0', color: 'var(--text-muted)', fontSize: 13 }}>Loading finance data…</div>
+        ) : finPnl ? (
+          <>
+            {/* KPI Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12, marginBottom: 20 }}>
+              {[
+                { label: 'Total Revenue',    value: fmt(finPnl.total_revenue),    color: 'var(--success)' },
+                { label: 'Total Expenses',   value: fmt(finPnl.total_expenses),   color: 'var(--danger)' },
+                { label: 'Gross Profit',     value: fmt(finPnl.gross_profit),     color: pColor(finPnl.gross_profit) },
+                { label: 'Profit Margin',    value: finPnl.profit_margin_pct != null ? `${finPnl.profit_margin_pct.toFixed(1)}%` : '—', color: pColor(finPnl.profit_margin_pct) },
+                { label: 'ROI',              value: finPnl.roi_pct != null ? `${finPnl.roi_pct.toFixed(1)}%` : '—',                    color: pColor(finPnl.roi_pct) },
+              ].map(c => (
+                <div key={c.label} style={{ background: 'var(--surface-raised,rgba(0,0,0,.03))', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border-subtle,rgba(0,0,0,.06))' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{c.label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: c.color }}>{c.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Two-column: breakdown + per-bird */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+              {/* Expense breakdown */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 10 }}>Expense Breakdown</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <tbody>
+                    {finPnl.by_category.map(c => (
+                      <tr key={c.code}>
+                        <td style={{ padding: '5px 0', color: 'var(--text-primary)' }}>{c.name}</td>
+                        <td style={{ padding: '5px 0', textAlign: 'right', fontWeight: 600, color: 'var(--danger)' }}>{fmt(c.amount)}</td>
+                        <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', color: 'var(--text-muted)', fontSize: 11 }}>
+                          {finPnl.total_expenses > 0 ? `${((c.amount / finPnl.total_expenses) * 100).toFixed(0)}%` : ''}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: '1px solid var(--border-subtle,rgba(0,0,0,.1))' }}>
+                      <td style={{ padding: '7px 0', fontWeight: 700, fontSize: 12 }}>TOTAL EXPENSES</td>
+                      <td style={{ padding: '7px 0', textAlign: 'right', fontWeight: 700, color: 'var(--danger)' }}>{fmt(finPnl.total_expenses)}</td>
+                      <td/>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Per-bird metrics */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 10 }}>Per-Bird Metrics</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <tbody>
+                    {[
+                      ['Birds Placed',      `${finPnl.initial_count.toLocaleString()} heads`],
+                      ['Mortality',         `${finPnl.mortality_count.toLocaleString()} birds`],
+                      ['Surviving',         `${finPnl.surviving_count.toLocaleString()} birds`],
+                      ['Feed Consumed',     `${finPnl.total_feed_kg.toLocaleString()} kg`],
+                      ['FCR',               finPnl.fcr != null ? finPnl.fcr.toFixed(2) : '—'],
+                      ['Cost / Bird',       fmt(finPnl.cost_per_bird)],
+                      ['Cost / Surviving',  fmt(finPnl.cost_per_surviving)],
+                      ['Feed Cost / Bird',  fmt(finPnl.feed_cost_per_bird)],
+                      ['Revenue / Bird',    fmt(finPnl.revenue_per_bird)],
+                    ].map(([label, value]) => (
+                      <tr key={label}>
+                        <td style={{ padding: '5px 0', color: 'var(--text-secondary)' }}>{label}</td>
+                        <td style={{ padding: '5px 0', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)' }}>{value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Expense Ledger */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 10 }}>
+                Expense Ledger
+                <span style={{ marginLeft: 8, fontWeight: 400, fontSize: 11, color: 'var(--text-muted)' }}>(auto-posted + manual entries)</span>
+              </div>
+              {finExpenses.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>No expense entries yet. Add expenses using the button above.</div>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: 'expense_date',  header: 'Date',     strong: true },
+                    { key: 'category_name', header: 'Category' },
+                    { key: 'amount',        header: 'Amount',   render: r => <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{fmt(r.amount)}</span> },
+                    { key: 'description',   header: 'Description', render: r => r.description || '—' },
+                    { key: 'source_module', header: 'Source',  render: r => <Badge tone={r.source_module === 'MANUAL' ? 'neutral' : 'info'}>{r.source_module || '—'}</Badge> },
+                    { key: 'actions',       header: '',         render: r => (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {r.source_module === 'MANUAL' && !r.is_voided && (
+                          <Button variant="ghost" size="sm" onClick={() => openFinExpEdit(r)}>Edit</Button>
+                        )}
+                        {!r.is_voided && (
+                          <Button variant="ghost" size="sm" style={{ color: 'var(--danger)' }} onClick={() => handleFinExpVoid(r)}>Void</Button>
+                        )}
+                        {r.is_voided && <Badge tone="danger" dot>Voided</Badge>}
+                      </div>
+                    )},
+                  ]}
+                  rows={finExpenses}
+                  rowKey="id"
+                />
+              )}
+            </div>
+
+            {/* Revenue Ledger */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 10 }}>Revenue Ledger</div>
+              {finRevenues.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>No revenue entries yet. Sales order approvals auto-post here.</div>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: 'revenue_date', header: 'Date',     strong: true },
+                    { key: 'category',     header: 'Category' },
+                    { key: 'amount',       header: 'Amount',  render: r => <span style={{ color: 'var(--success)', fontWeight: 600 }}>{fmt(r.amount)}</span> },
+                    { key: 'qty_kg',       header: 'Qty (kg)', render: r => r.qty_kg != null ? `${Number(r.qty_kg).toLocaleString()} kg` : '—' },
+                    { key: 'price_per_kg', header: 'Price/kg', render: r => r.price_per_kg != null ? `₱${Number(r.price_per_kg).toFixed(2)}` : '—' },
+                    { key: 'description',  header: 'Description', render: r => r.description || '—' },
+                  ]}
+                  rows={finRevenues}
+                  rowKey="id"
+                />
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: '16px 0', color: 'var(--text-muted)', fontSize: 13 }}>Finance data unavailable.</div>
+        )}
+      </Card>
+
       {/* ══ MODALS ══════════════════════════════════════════════════════════ */}
 
       {/* Daily Log Modal */}
@@ -977,6 +1211,64 @@ export default function BatchDetailPage() {
           <b>{deleteVaccTarget && (medications.find(m => m.id === deleteVaccTarget.vaccine_id)?.name || `Vaccine #${deleteVaccTarget?.vaccine_id}`)}</b>{' '}
           scheduled for <b>{deleteVaccTarget?.scheduled_date}</b>? This cannot be undone.
         </p>
+      </Modal>
+
+      {/* Finance — Add/Edit Expense Modal */}
+      <Modal open={finExpModal} title={finEditExp ? 'Edit Expense' : 'Add Batch Expense'} onClose={() => { setFinExpModal(false); setFinEditExp(null); }} onConfirm={handleFinExpSave} confirmLabel={finEditExp ? 'Save Changes' : 'Add Expense'} loading={finExpSaving}>
+        {finExpErr && <ErrBox>{finExpErr}</ErrBox>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          <FormRow label="Date" required>
+            <FieldInput type="date" value={finExpForm.expense_date} onChange={ff('expense_date')} />
+          </FormRow>
+          <FormRow label="Category" required>
+            <FieldSelect value={finExpForm.category_code} onChange={ff('category_code')}>
+              {finCategories.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+            </FieldSelect>
+          </FormRow>
+          <FormRow label="Amount (₱)" required>
+            <FieldInput type="number" value={finExpForm.amount} onChange={ff('amount')} min="0" step="0.01" placeholder="e.g. 5000" />
+          </FormRow>
+          <FormRow label="Qty">
+            <FieldInput type="number" value={finExpForm.qty} onChange={ff('qty')} min="0" placeholder="Optional" />
+          </FormRow>
+          <FormRow label="Unit">
+            <FieldInput value={finExpForm.unit} onChange={ff('unit')} placeholder="kg, hrs, heads…" />
+          </FormRow>
+          <FormRow label="Description">
+            <FieldInput value={finExpForm.description} onChange={ff('description')} placeholder="What was this for?" />
+          </FormRow>
+        </div>
+      </Modal>
+
+      {/* Finance — Add Revenue Modal */}
+      <Modal open={finRevModal} title="Add Revenue Entry" onClose={() => setFinRevModal(false)} onConfirm={handleFinRevSave} confirmLabel="Add Revenue" loading={finRevSaving}>
+        {finRevErr && <ErrBox>{finRevErr}</ErrBox>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          <FormRow label="Date" required>
+            <FieldInput type="date" value={finRevForm.revenue_date} onChange={frf('revenue_date')} />
+          </FormRow>
+          <FormRow label="Category">
+            <FieldSelect value={finRevForm.category} onChange={frf('category')}>
+              <option value="SALES">Sales</option>
+              <option value="MANURE">Manure</option>
+              <option value="CULLS">Culls</option>
+              <option value="SALVAGE">Salvage</option>
+              <option value="MISC">Miscellaneous</option>
+            </FieldSelect>
+          </FormRow>
+          <FormRow label="Amount (₱)" required>
+            <FieldInput type="number" value={finRevForm.amount} onChange={frf('amount')} min="0" step="0.01" placeholder="e.g. 50000" />
+          </FormRow>
+          <FormRow label="Qty (kg)">
+            <FieldInput type="number" value={finRevForm.qty_kg} onChange={frf('qty_kg')} min="0" step="0.01" placeholder="Optional" />
+          </FormRow>
+          <FormRow label="Price / kg (₱)">
+            <FieldInput type="number" value={finRevForm.price_per_kg} onChange={frf('price_per_kg')} min="0" step="0.01" placeholder="Optional" />
+          </FormRow>
+          <FormRow label="Description">
+            <FieldInput value={finRevForm.description} onChange={frf('description')} placeholder="Optional notes" />
+          </FormRow>
+        </div>
       </Modal>
     </div>
   );

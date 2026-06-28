@@ -5,10 +5,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import MortalityRecord
+from models import Batch, MortalityRecord
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import MortalityCreate, MortalityOut, MortalityRate7d, MortalityRow, MortalityUpdate
 from sync_helpers import _delete_sentinel, sync_mortality_to_log
+from utils import post_batch_expense
 
 router = APIRouter(prefix="/mortality", tags=["mortality"])
 # current_count is derived in v_batch_summary from mortality_records directly —
@@ -66,6 +67,52 @@ def create_mortality_record(
     db.add(record)
     db.flush()
     sync_mortality_to_log(db, record.batch_id, record.record_date)
+
+    # Auto-post mortality loss expense (cost per bird × count)
+    try:
+        batch_obj = db.get(Batch, record.batch_id)
+        initial   = batch_obj.initial_count if batch_obj else 1
+
+        feed_cost = db.execute(text("""
+            SELECT COALESCE(SUM(fi.qty_kg * COALESCE(fp.avg_cost, 25.0)), 0)
+            FROM feed_issues fi
+            LEFT JOIN (SELECT feed_type_id, AVG(cost_per_kg) AS avg_cost
+                       FROM feed_purchases GROUP BY feed_type_id) fp
+                ON fp.feed_type_id = fi.feed_type_id
+            WHERE fi.batch_id = :bid
+        """), {"bid": record.batch_id}).scalar() or 0
+
+        legacy_exp = db.execute(text(
+            "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE batch_id=:bid"
+        ), {"bid": record.batch_id}).scalar() or 0
+
+        other_be = db.execute(text(
+            "SELECT COALESCE(SUM(amount),0) FROM batch_expenses WHERE batch_id=:bid AND is_voided=FALSE"
+        ), {"bid": record.batch_id}).scalar() or 0
+
+        total_cost    = float(feed_cost) + float(legacy_exp) + float(other_be)
+        cost_per_bird = total_cost / initial if initial else 0
+        loss_value    = cost_per_bird * record.count
+
+        post_batch_expense(
+            batch_id=record.batch_id,
+            category_code="MORTALITY_LOSS",
+            amount=loss_value,
+            expense_date=record.record_date,
+            db=db,
+            qty=record.count,
+            unit="birds",
+            unit_cost=cost_per_bird,
+            description=f"Mortality loss — {record.count} birds ({record.cause})",
+            source_module="MORTALITY",
+            source_ref=str(record.id),
+            mortality_record_id=record.id,
+            house_id=record.house_id,
+            created_by=current_user.id,
+        )
+    except Exception:
+        pass  # never block mortality recording due to finance hook failure
+
     db.commit()
     db.refresh(record)
     return record

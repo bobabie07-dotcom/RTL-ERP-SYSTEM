@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 from config import settings
 from database import engine
-from routers import alerts, auth, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support, users
+from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support, users
 
 
 def _safe_add_column(conn, sql: str):
@@ -169,7 +169,82 @@ def run_startup_migrations():
                 created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
-        # Recreate v_batch_pnl with LEFT JOIN so feed issues without purchase records
+        # ── Batch Finance tables ───────────────────────────────────────────────
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS expense_categories (
+                id         SMALLINT AUTO_INCREMENT PRIMARY KEY,
+                code       VARCHAR(20) NOT NULL UNIQUE,
+                name       VARCHAR(100) NOT NULL,
+                sort_order SMALLINT DEFAULT 0
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
+        # Seed categories (INSERT IGNORE = safe to re-run)
+        for code, name, order in [
+            ("FEED",          "Feed Cost",                  1),
+            ("MEDICINE",      "Medicine / Treatment",       2),
+            ("VACCINE",       "Vaccination",                3),
+            ("LABOR",         "Labor Cost",                 4),
+            ("ELECTRICITY",   "Electricity",                5),
+            ("WATER",         "Water",                      6),
+            ("BEDDING",       "Bedding / Litter",           7),
+            ("DISINFECTION",  "Disinfection / Biosecurity", 8),
+            ("MORTALITY_LOSS","Mortality Loss (value)",      9),
+            ("EQUIPMENT",     "Equipment",                  10),
+            ("TRANSPORT",     "Transportation",             11),
+            ("MAINTENANCE",   "Maintenance",                12),
+            ("MISC",          "Miscellaneous",              13),
+        ]:
+            conn.execute(text(
+                "INSERT IGNORE INTO expense_categories (code,name,sort_order) VALUES (:c,:n,:o)"
+            ), {"c": code, "n": name, "o": order})
+
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS batch_expenses (
+                id                  INT AUTO_INCREMENT PRIMARY KEY,
+                batch_id            INT NOT NULL,
+                house_id            SMALLINT NULL,
+                category_id         SMALLINT NOT NULL,
+                expense_date        DATE NOT NULL,
+                amount              DECIMAL(14,2) NOT NULL,
+                qty                 DECIMAL(12,4) NULL,
+                unit                VARCHAR(20) NULL,
+                unit_cost           DECIMAL(12,4) NULL,
+                description         VARCHAR(500) NULL,
+                source_module       VARCHAR(30) NULL,
+                source_ref          VARCHAR(50) NULL,
+                mortality_record_id INT NULL,
+                is_voided           TINYINT(1) NOT NULL DEFAULT 0,
+                void_reason         VARCHAR(255) NULL,
+                voided_by           INT NULL,
+                voided_at           DATETIME NULL,
+                created_by          INT NULL,
+                created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_be_batch (batch_id),
+                INDEX idx_be_date  (expense_date),
+                INDEX idx_be_cat   (category_id)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS batch_revenues (
+                id             INT AUTO_INCREMENT PRIMARY KEY,
+                batch_id       INT NOT NULL,
+                revenue_date   DATE NOT NULL,
+                category       VARCHAR(20) NOT NULL DEFAULT 'SALES',
+                amount         DECIMAL(14,2) NOT NULL,
+                qty_kg         DECIMAL(12,3) NULL,
+                qty_birds      INT NULL,
+                price_per_kg   DECIMAL(10,4) NULL,
+                description    VARCHAR(500) NULL,
+                sales_order_id INT NULL,
+                buyer_id       INT NULL,
+                is_voided      TINYINT(1) NOT NULL DEFAULT 0,
+                created_by     INT NULL,
+                created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_br_batch (batch_id),
+                INDEX idx_br_date  (revenue_date)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
+        # ── Recreate v_batch_pnl with LEFT JOIN so feed issues without purchase records
         # use a fallback price (25/kg) instead of being silently dropped.
         conn.execute(text("""
             CREATE OR REPLACE VIEW v_batch_pnl AS
@@ -254,7 +329,8 @@ app.include_router(inventory.router, prefix=API)
 app.include_router(sales.router,        prefix=API)
 app.include_router(procurement.router,  prefix=API)
 app.include_router(reports.router,      prefix=API)
-app.include_router(batch_plans.router, prefix=API)
+app.include_router(batch_plans.router,   prefix=API)
+app.include_router(batch_finance.router, prefix=API)
 app.include_router(harvest.router,     prefix=API)
 app.include_router(alerts.router,       prefix=API)
 app.include_router(maintenance.router,  prefix=API)

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Batch, Buyer, Expense, SalesOrder
 from routers.auth import get_current_user, require_permission
+from utils import post_batch_revenue
 from schemas.schemas import (
     ApprovalAction,
     BuyerCreate, BuyerOut,
@@ -130,6 +131,25 @@ def approve_order(
     order.status      = "pending"
     order.approved_by = current_user.id
     order.approved_at = datetime.utcnow()
+
+    # Auto-post revenue to batch_revenues
+    try:
+        post_batch_revenue(
+            batch_id=order.batch_id,
+            amount=float(order.qty_kg) * float(order.price_per_kg),
+            revenue_date=order.order_date,
+            db=db,
+            category="SALES",
+            qty_kg=float(order.qty_kg),
+            price_per_kg=float(order.price_per_kg),
+            description=f"Sales order {order.order_no}",
+            sales_order_id=order.id,
+            buyer_id=order.buyer_id,
+            created_by=current_user.id,
+        )
+    except Exception:
+        pass  # never block approval due to finance hook failure
+
     db.commit()
     db.refresh(order)
     return order
