@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from config import settings
 from database import get_db
 from models import SupportTicket, TicketActivityLog, TicketComment, User
 from routers.auth import get_current_user
@@ -394,14 +395,13 @@ def ai_suggest(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from config import settings
+    if current_user.role_id not in ADMIN_ROLES:
+        raise HTTPException(403, "Admin access required")
     ticket = db.get(SupportTicket, ticket_id)
     if not ticket:
         raise HTTPException(404, "Ticket not found")
-    if current_user.role_id not in ADMIN_ROLES and ticket.user_id != current_user.id:
-        raise HTTPException(403, "Access denied")
     if not settings.ANTHROPIC_API_KEY:
-        raise HTTPException(503, "AI suggestions are not configured on this server")
+        raise HTTPException(503, "AI suggestions are not configured — add ANTHROPIC_API_KEY to Render environment variables")
 
     try:
         import anthropic
