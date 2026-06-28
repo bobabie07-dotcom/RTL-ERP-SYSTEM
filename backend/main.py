@@ -169,6 +169,13 @@ def run_startup_migrations():
                 created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
+        # ── Batch Finance column additions ────────────────────────────────────
+        _safe_add_column(conn, "ALTER TABLE batches ADD COLUMN chick_cost_per_head DECIMAL(10,2) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE batches ADD COLUMN chick_supplier_id SMALLINT DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE purchase_orders ADD COLUMN batch_id INT DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE vaccination_schedules ADD COLUMN cost_per_dose DECIMAL(10,4) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE vaccination_schedules ADD COLUMN total_cost DECIMAL(12,2) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE health_events ADD COLUMN cost DECIMAL(12,2) DEFAULT NULL")
         # ── Batch Finance tables ───────────────────────────────────────────────
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS expense_categories (
@@ -180,6 +187,7 @@ def run_startup_migrations():
         """))
         # Seed categories (INSERT IGNORE = safe to re-run)
         for code, name, order in [
+            ("CHICK",         "Chick Purchase Cost",        0),
             ("FEED",          "Feed Cost",                  1),
             ("MEDICINE",      "Medicine / Treatment",       2),
             ("VACCINE",       "Vaccination",                3),
@@ -193,6 +201,7 @@ def run_startup_migrations():
             ("TRANSPORT",     "Transportation",             11),
             ("MAINTENANCE",   "Maintenance",                12),
             ("MISC",          "Miscellaneous",              13),
+            ("PURCHASE",      "Procurement Purchase",       14),
         ]:
             conn.execute(text(
                 "INSERT IGNORE INTO expense_categories (code,name,sort_order) VALUES (:c,:n,:o)"

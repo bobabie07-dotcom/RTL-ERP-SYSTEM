@@ -14,6 +14,7 @@ from schemas.schemas import (
     UpcomingVaccination,
     VaccinationCreate, VaccinationOut, VaccinationStatusUpdate, VaccinationUpdate,
 )
+from utils import post_batch_expense
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -72,13 +73,36 @@ def update_vaccination(
     vacc_id: int,
     body: VaccinationUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "vaccination_schedules")),
+    current_user=Depends(require_permission("write", "vaccination_schedules")),
 ):
     vacc = db.get(VaccinationSchedule, vacc_id)
     if not vacc:
         raise HTTPException(status_code=404, detail="Vaccination schedule not found")
+    prev_status = vacc.status
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(vacc, field, value)
+
+    # Auto-post VACCINE expense when marking done with a cost
+    if prev_status != "done" and vacc.status == "done":
+        try:
+            cost = float(vacc.total_cost or 0)
+            if cost > 0:
+                vaccine_name = vacc.vaccine.name if vacc.vaccine else f"Vaccine #{vacc.vaccine_id}"
+                post_batch_expense(
+                    batch_id=vacc.batch_id,
+                    category_code="VACCINE",
+                    amount=cost,
+                    expense_date=vacc.completed_date or vacc.scheduled_date,
+                    db=db,
+                    unit_cost=float(vacc.cost_per_dose or 0) or None,
+                    description=f"Vaccination — {vaccine_name}",
+                    source_module="VACCINATION",
+                    source_ref=str(vacc.id),
+                    created_by=current_user.id,
+                )
+        except Exception:
+            pass  # never block vaccination update
+
     db.commit()
     db.refresh(vacc)
     return vacc
@@ -141,6 +165,25 @@ def create_health_event(
         raise HTTPException(status_code=404, detail="Batch not found")
     event = HealthEvent(**body.model_dump(), performed_by=current_user.id)
     db.add(event)
+    db.flush()
+
+    # Auto-post MEDICINE expense if cost provided
+    if body.cost and float(body.cost) > 0:
+        try:
+            post_batch_expense(
+                batch_id=body.batch_id,
+                category_code="MEDICINE",
+                amount=float(body.cost),
+                expense_date=body.event_date,
+                db=db,
+                description=f"Health event — {body.event_type}: {body.description or ''}".strip(": "),
+                source_module="HEALTH_EVENT",
+                source_ref=str(event.id),
+                created_by=current_user.id,
+            )
+        except Exception:
+            pass  # never block health event creation
+
     db.commit()
     db.refresh(event)
     return event

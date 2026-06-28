@@ -334,38 +334,44 @@ class BreedOut(OrmBase):
 # ── Batches ──────────────────────────────────────────────────────────────────
 
 class BatchCreate(BaseModel):
-    batch_no:          str
-    house_id:          int
-    farm_id:           int
-    breed_id:          Optional[int] = None
-    placed_date:       date
-    initial_count:     int
-    cycle_length_days: int = 42
-    notes:             Optional[str] = None
+    batch_no:            str
+    house_id:            int
+    farm_id:             int
+    breed_id:            Optional[int]   = None
+    placed_date:         date
+    initial_count:       int
+    cycle_length_days:   int             = 42
+    chick_cost_per_head: Optional[float] = None
+    chick_supplier_id:   Optional[int]   = None
+    notes:               Optional[str]   = None
 
 
 class BatchUpdate(BaseModel):
-    house_id:          Optional[int] = None
-    breed_id:          Optional[int] = None
-    placed_date:       Optional[date] = None
-    initial_count:     Optional[int] = None
-    cycle_length_days: Optional[int] = None
-    status:            Optional[str] = None
-    notes:             Optional[str] = None
+    house_id:            Optional[int]   = None
+    breed_id:            Optional[int]   = None
+    placed_date:         Optional[date]  = None
+    initial_count:       Optional[int]   = None
+    cycle_length_days:   Optional[int]   = None
+    chick_cost_per_head: Optional[float] = None
+    chick_supplier_id:   Optional[int]   = None
+    status:              Optional[str]   = None
+    notes:               Optional[str]   = None
 
 
 class BatchOut(OrmBase):
-    id:                int
-    batch_no:          str
-    house_id:          int
-    farm_id:           int
-    breed_id:          Optional[int]
-    placed_date:       date
-    initial_count:     int
-    cycle_length_days: int
-    status:            str
-    notes:             Optional[str]
-    created_at:        datetime
+    id:                  int
+    batch_no:            str
+    house_id:            int
+    farm_id:             int
+    breed_id:            Optional[int]
+    placed_date:         date
+    initial_count:       int
+    cycle_length_days:   int
+    chick_cost_per_head: Optional[float]
+    chick_supplier_id:   Optional[int]
+    status:              str
+    notes:               Optional[str]
+    created_at:          datetime
 
 
 class BatchSummaryRow(BaseModel):
@@ -594,9 +600,11 @@ class VaccinationCreate(BaseModel):
     batch_id:       int
     vaccine_id:     int
     scheduled_date: date
-    route:          str = "water"
-    dose_per_bird:  Optional[str] = None
-    notes:          Optional[str] = None
+    route:          str            = "water"
+    dose_per_bird:  Optional[str]  = None
+    cost_per_dose:  Optional[float] = None
+    total_cost:     Optional[float] = None
+    notes:          Optional[str]  = None
 
 
 class VaccinationOut(OrmBase):
@@ -608,6 +616,8 @@ class VaccinationOut(OrmBase):
     route:          str
     status:         str
     dose_per_bird:  Optional[str]
+    cost_per_dose:  Optional[float] = None
+    total_cost:     Optional[float] = None
     notes:          Optional[str]
     created_by:     Optional[int] = None
 
@@ -618,22 +628,25 @@ class VaccinationStatusUpdate(BaseModel):
 
 
 class VaccinationUpdate(BaseModel):
-    vaccine_id:     Optional[int]  = None
-    scheduled_date: Optional[date] = None
-    route:          Optional[str]  = None
-    dose_per_bird:  Optional[str]  = None
-    notes:          Optional[str]  = None
-    status:         Optional[str]  = None
-    completed_date: Optional[date] = None
+    vaccine_id:     Optional[int]   = None
+    scheduled_date: Optional[date]  = None
+    route:          Optional[str]   = None
+    dose_per_bird:  Optional[str]   = None
+    cost_per_dose:  Optional[float] = None
+    total_cost:     Optional[float] = None
+    notes:          Optional[str]   = None
+    status:         Optional[str]   = None
+    completed_date: Optional[date]  = None
 
 
 class HealthEventCreate(BaseModel):
     batch_id:    int
     event_type:  str
     event_date:  date
-    description: Optional[str] = None
-    status:      str = "done"
-    notes:       Optional[str] = None
+    description: Optional[str]   = None
+    cost:        Optional[float]  = None
+    status:      str              = "done"
+    notes:       Optional[str]   = None
 
 
 class HealthEventOut(OrmBase):
@@ -642,6 +655,7 @@ class HealthEventOut(OrmBase):
     event_type:  str
     event_date:  date
     description: Optional[str]
+    cost:        Optional[float] = None
     status:      str
     notes:       Optional[str]
     created_at:  datetime
@@ -989,11 +1003,12 @@ class POItemCreate(BaseModel):
 
 class PurchaseOrderCreate(BaseModel):
     farm_id:       int
-    supplier_id:   Optional[int] = None
+    supplier_id:   Optional[int]     = None
+    batch_id:      Optional[int]     = None
     order_date:    date
-    expected_date: Optional[date] = None
+    expected_date: Optional[date]    = None
     total_amount:  Optional[Decimal] = None
-    notes:         Optional[str] = None
+    notes:         Optional[str]     = None
     items:         List[POItemCreate] = []
 
 

@@ -224,15 +224,17 @@ class Breed(Base):
 class Batch(Base):
     __tablename__ = "batches"
 
-    id                = Column(Integer, primary_key=True, autoincrement=True)
-    batch_no          = Column(String(30), nullable=False, unique=True)
-    house_id          = Column(SmallInteger, ForeignKey("houses.id"), nullable=False)
-    farm_id           = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
-    breed_id          = Column(SmallInteger, ForeignKey("breeds.id"))
-    placed_date       = Column(Date, nullable=False)
-    initial_count     = Column(Integer, nullable=False)
-    cycle_length_days = Column(SmallInteger, nullable=False, default=42)
-    status            = Column(
+    id                  = Column(Integer, primary_key=True, autoincrement=True)
+    batch_no            = Column(String(30), nullable=False, unique=True)
+    house_id            = Column(SmallInteger, ForeignKey("houses.id"), nullable=False)
+    farm_id             = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
+    breed_id            = Column(SmallInteger, ForeignKey("breeds.id"))
+    placed_date         = Column(Date, nullable=False)
+    initial_count       = Column(Integer, nullable=False)
+    cycle_length_days   = Column(SmallInteger, nullable=False, default=42)
+    chick_cost_per_head = Column(Numeric(10, 2), nullable=True)
+    chick_supplier_id   = Column(SmallInteger, ForeignKey("suppliers.id"), nullable=True)
+    status              = Column(
         Enum("active", "harvest_soon", "harvested", "terminated"),
         nullable=False, default="active",
     )
@@ -386,6 +388,8 @@ class VaccinationSchedule(Base):
     scheduled_date = Column(Date, nullable=False)
     completed_date = Column(Date)
     dose_per_bird  = Column(String(50))
+    cost_per_dose  = Column(Numeric(10, 4), nullable=True)
+    total_cost     = Column(Numeric(12, 2), nullable=True)
     route          = Column(
         Enum("water", "spray", "injection", "eye_drop", "wing_web"),
         nullable=False, default="water",
@@ -412,6 +416,7 @@ class HealthEvent(Base):
     )
     event_date   = Column(Date, nullable=False)
     description  = Column(String(500))
+    cost         = Column(Numeric(12, 2), nullable=True)
     status       = Column(
         Enum("upcoming", "done", "missed"), nullable=False, default="done"
     )
@@ -538,6 +543,7 @@ class PurchaseOrder(Base):
     po_no         = Column(String(30), unique=True)
     farm_id       = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
     supplier_id   = Column(SmallInteger, ForeignKey("suppliers.id"))
+    batch_id      = Column(Integer, ForeignKey("batches.id"), nullable=True)
     order_date    = Column(Date, nullable=False)
     expected_date = Column(Date)
     status        = Column(String(50), nullable=False, default="pending_approval")

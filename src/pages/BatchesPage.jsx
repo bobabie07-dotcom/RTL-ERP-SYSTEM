@@ -8,7 +8,7 @@ import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { StatCard } from '../components/data/StatCard';
 import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Modal';
-import { batchesApi } from '../api/client';
+import { batchesApi, procurementApi } from '../api/client';
 import { exportCsv } from '../utils/exportCsv';
 import { useFarm } from '../context/FarmContext';
 import Icons from '../icons';
@@ -19,7 +19,7 @@ const STATUS_LABEL = { active: 'Active', harvest_soon: 'Harvest Soon', harvested
 const STATUS_TONE  = { active: 'success', harvest_soon: 'warning', harvested: 'neutral', terminated: 'danger' };
 
 const TODAY = new Date().toISOString().split('T')[0];
-const BLANK_BATCH = { batch_no: '', house_id: '', breed_id: '', placed_date: TODAY, initial_count: '', cycle_length_days: 42 };
+const BLANK_BATCH = { batch_no: '', house_id: '', breed_id: '', placed_date: TODAY, initial_count: '', cycle_length_days: 42, chick_cost_per_head: '', chick_supplier_id: '' };
 
 const ACTION_BTN = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -37,6 +37,7 @@ export default function BatchesPage() {
   const [loadError,    setLoadError]    = useState('');
   const [houses,       setHouses]       = useState([]);
   const [breeds,       setBreeds]       = useState([]);
+  const [suppliers,    setSuppliers]    = useState([]);
 
   // Add / Edit modal
   const [modal,        setModal]        = useState(false);
@@ -57,6 +58,7 @@ export default function BatchesPage() {
       .finally(() => setLoading(false));
     batchesApi.houses({ farm_id: farmId }).then(setHouses).catch(() => {});
     batchesApi.breeds().then(setBreeds).catch(() => {});
+    procurementApi.suppliers().then(setSuppliers).catch(() => {});
   }, [farmId]);
 
   function nextBatchNo() {
@@ -81,12 +83,14 @@ export default function BatchesPage() {
   function openEdit(r) {
     setEditId(r.id);
     setForm({
-      batch_no:          r.batch_no,
-      house_id:          String(r.house_id || ''),
-      breed_id:          r.breed_id ? String(r.breed_id) : '',
-      placed_date:       String(r.placed_date),
-      initial_count:     String(r.initial_count),
-      cycle_length_days: String(r.cycle_length_days),
+      batch_no:            r.batch_no,
+      house_id:            String(r.house_id || ''),
+      breed_id:            r.breed_id ? String(r.breed_id) : '',
+      placed_date:         String(r.placed_date),
+      initial_count:       String(r.initial_count),
+      cycle_length_days:   String(r.cycle_length_days),
+      chick_cost_per_head: r.chick_cost_per_head ? String(r.chick_cost_per_head) : '',
+      chick_supplier_id:   r.chick_supplier_id ? String(r.chick_supplier_id) : '',
     });
     setFormError('');
     setModal(true);
@@ -106,9 +110,19 @@ export default function BatchesPage() {
         cycle_length_days: Number(form.cycle_length_days),
       };
       if (editId) {
-        await batchesApi.update(editId, payload);
+        await batchesApi.update(editId, {
+          ...payload,
+          chick_cost_per_head: form.chick_cost_per_head ? Number(form.chick_cost_per_head) : null,
+          chick_supplier_id:   form.chick_supplier_id ? Number(form.chick_supplier_id) : null,
+        });
       } else {
-        await batchesApi.create({ ...payload, batch_no: form.batch_no, farm_id: farmId });
+        await batchesApi.create({
+          ...payload,
+          batch_no:            form.batch_no,
+          farm_id:             farmId,
+          chick_cost_per_head: form.chick_cost_per_head ? Number(form.chick_cost_per_head) : null,
+          chick_supplier_id:   form.chick_supplier_id ? Number(form.chick_supplier_id) : null,
+        });
       }
       const updated = await batchesApi.list({ farm_id: farmId });
       setBatches(updated);
@@ -291,6 +305,15 @@ export default function BatchesPage() {
           </FormRow>
           <FormRow label="Cycle Length (days)">
             <FieldInput type="number" value={form.cycle_length_days} onChange={f('cycle_length_days')} min="1" />
+          </FormRow>
+          <FormRow label="Chick Cost / Head (SAR)">
+            <FieldInput type="number" value={form.chick_cost_per_head} onChange={f('chick_cost_per_head')} placeholder="e.g. 4.50" min="0" step="0.01" />
+          </FormRow>
+          <FormRow label="Chick Supplier">
+            <FieldSelect value={form.chick_supplier_id} onChange={f('chick_supplier_id')}>
+              <option value="">None</option>
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </FieldSelect>
           </FormRow>
         </div>
       </Modal>

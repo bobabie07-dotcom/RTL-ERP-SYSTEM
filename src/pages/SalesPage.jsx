@@ -53,7 +53,7 @@ const PO_STATUS_LABEL = {
 
 const TODAY = new Date().toISOString().split('T')[0];
 const BLANK_SALE = { order_no: '', batch_id: '', buyer_id: '', order_date: TODAY, qty_kg: '', price_per_kg: '', notes: '' };
-const BLANK_PO      = { supplier_id: '', order_date: TODAY, expected_date: '', notes: '' };
+const BLANK_PO      = { supplier_id: '', batch_id: '', order_date: TODAY, expected_date: '', notes: '' };
 const BLANK_PO_ITEM = { item_id: '', qty_ordered: '', unit_price: '', mode: 'select', new_name: '', new_unit: 'pcs', new_category_id: '' };
 
 function TabBar({ active, onChange, overdueCount }) {
@@ -235,6 +235,7 @@ export default function SalesPage() {
       await procurementApi.createOrder({
         farm_id:       farmId,
         supplier_id:   poForm.supplier_id ? Number(poForm.supplier_id) : null,
+        batch_id:      poForm.batch_id ? Number(poForm.batch_id) : null,
         order_date:    poForm.order_date,
         expected_date: poForm.expected_date || null,
         notes:         poForm.notes || null,
@@ -633,6 +634,14 @@ export default function SalesPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
           <FormRow label="Order Date" required><FieldInput type="date" value={poForm.order_date} onChange={pf('order_date')} /></FormRow>
           <FormRow label="Expected Delivery"><FieldInput type="date" value={poForm.expected_date} onChange={pf('expected_date')} /></FormRow>
+          <FormRow label="Link to Batch" style={{ gridColumn: '1/-1' }}>
+            <FieldSelect value={poForm.batch_id} onChange={pf('batch_id')}>
+              <option value="">No batch (farm-level PO)</option>
+              {batches.filter(b => ['active','harvest_soon'].includes(b.status)).map(b => (
+                <option key={b.id} value={b.id}>{b.batch_no} — {b.house}</option>
+              ))}
+            </FieldSelect>
+          </FormRow>
           <FormRow label="Supplier" style={{ gridColumn: '1/-1' }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <FieldSelect value={poForm.supplier_id} onChange={pf('supplier_id')} style={{ flex: 1 }}>

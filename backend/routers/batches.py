@@ -12,6 +12,7 @@ from schemas.schemas import (
     BreedOut, DailyLogCreate, DailyLogOut, DailyLogUpdate, FarmOut, HouseOut,
 )
 from sync_helpers import cleanup_sentinel_on_log_delete, sync_log_to_mortality
+from utils import post_batch_expense
 
 router = APIRouter(prefix="/batches", tags=["batches"])
 
@@ -52,6 +53,29 @@ def create_batch(
 
     batch = Batch(**body.model_dump(), created_by=current_user.id)
     db.add(batch)
+    db.flush()
+
+    # Auto-post chick purchase cost
+    if body.chick_cost_per_head and float(body.chick_cost_per_head) > 0:
+        try:
+            total_chick_cost = float(body.chick_cost_per_head) * body.initial_count
+            post_batch_expense(
+                batch_id=batch.id,
+                category_code="CHICK",
+                amount=total_chick_cost,
+                expense_date=body.placed_date,
+                db=db,
+                qty=body.initial_count,
+                unit="birds",
+                unit_cost=float(body.chick_cost_per_head),
+                description=f"Chick purchase — {body.initial_count} birds @ {body.chick_cost_per_head}/head",
+                source_module="BATCH",
+                source_ref=str(batch.id),
+                created_by=current_user.id,
+            )
+        except Exception:
+            pass  # never block batch creation
+
     db.commit()
     db.refresh(batch)
     return batch

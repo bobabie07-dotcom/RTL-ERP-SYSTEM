@@ -7,6 +7,7 @@ from database import get_db
 from models import Batch, Expense, MaintenanceLog
 from routers.auth import get_current_user
 from schemas.schemas import MaintenanceLogCreate, MaintenanceLogOut, MaintenanceLogUpdate
+from utils import post_batch_expense
 
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 
@@ -149,4 +150,23 @@ def _attach_expense(log: MaintenanceLog, body, db: Session, user_id: int):
 
     log.expense_id = expense.id
     log.batch_id   = batch_id
+
+    # Also post to batch_expenses ledger when allocated to a batch
+    if batch_id:
+        try:
+            post_batch_expense(
+                batch_id=batch_id,
+                category_code="MAINTENANCE",
+                amount=float(body.cost),
+                expense_date=body.log_date,
+                db=db,
+                description=desc,
+                source_module="MAINTENANCE",
+                source_ref=str(log.id) if log.id else None,
+                house_id=body.house_id,
+                created_by=user_id,
+            )
+        except Exception:
+            pass  # never block maintenance creation
+
     return log, expense

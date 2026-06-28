@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import InventoryItem, InventoryMovement, PurchaseOrder, PurchaseOrderItem, Supplier
 from routers.auth import get_current_user, require_permission
-from utils import check_and_create_inventory_alerts
+from utils import check_and_create_inventory_alerts, post_batch_expense
 from schemas.schemas import (
     ApprovalAction,
     POItemCreate, PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
@@ -92,6 +92,7 @@ def create_purchase_order(
     po = PurchaseOrder(
         farm_id=body.farm_id,
         supplier_id=body.supplier_id,
+        batch_id=body.batch_id,
         order_date=body.order_date,
         expected_date=body.expected_date,
         notes=body.notes,
@@ -273,6 +274,32 @@ def receive_purchase_order(
             check_and_create_inventory_alerts(inv_item, db)
 
         po.status = "received"
+
+        # Auto-post PURCHASE expense if PO is linked to a batch
+        if po.batch_id:
+            try:
+                for po_item in db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all():
+                    item_amount = float(po_item.qty_ordered) * float(po_item.unit_price or 0)
+                    if item_amount <= 0:
+                        continue
+                    inv_item = db.get(InventoryItem, po_item.item_id)
+                    item_name = inv_item.name if inv_item else f"Item #{po_item.item_id}"
+                    post_batch_expense(
+                        batch_id=po.batch_id,
+                        category_code="PURCHASE",
+                        amount=item_amount,
+                        expense_date=po.order_date,
+                        db=db,
+                        qty=float(po_item.qty_ordered),
+                        unit_cost=float(po_item.unit_price or 0),
+                        description=f"{item_name} via {po.po_no}",
+                        source_module="PROCUREMENT",
+                        source_ref=str(po.id),
+                        created_by=current_user.id,
+                    )
+            except Exception:
+                pass  # never block receiving due to finance hook failure
+
         db.commit()
 
         row = db.execute(text("""

@@ -55,9 +55,9 @@ export default function BatchDetailPage() {
   const { farmId } = useFarm();
   const { user } = useAuth();
 
-  const BLANK_EVENT   = { event_type: 'observation', event_date: TODAY, description: '', status: 'done' };
+  const BLANK_EVENT   = { event_type: 'observation', event_date: TODAY, description: '', cost: '', status: 'done' };
   const BLANK_LOG     = { log_date: TODAY, current_count: '', mortality_count: '0', avg_weight_g: '', culls: '0', notes: '' };
-  const BLANK_VACC    = { vaccine_id: '', scheduled_date: TODAY, route: 'water', dose_per_bird: '', notes: '' };
+  const BLANK_VACC    = { vaccine_id: '', scheduled_date: TODAY, route: 'water', dose_per_bird: '', cost_per_dose: '', total_cost: '', notes: '' };
   const BLANK_EXP     = { category: 'labor', amount: '', expense_date: TODAY, description: '' };
   const BLANK_HARVEST = { harvest_date: TODAY, birds_harvested: '', total_weight_kg: '', price_per_kg: '', buyer_name: '', notes: '' };
 
@@ -243,6 +243,8 @@ export default function BatchDetailPage() {
       scheduled_date: String(vacc.scheduled_date),
       route:          vacc.route,
       dose_per_bird:  vacc.dose_per_bird || '',
+      cost_per_dose:  vacc.cost_per_dose != null ? String(vacc.cost_per_dose) : '',
+      total_cost:     vacc.total_cost    != null ? String(vacc.total_cost)    : '',
       notes:          vacc.notes || '',
     });
     setEditVaccId(vacc.id);
@@ -253,10 +255,16 @@ export default function BatchDetailPage() {
     if (!vaccForm.vaccine_id || !vaccForm.scheduled_date) { setVaccErr('Vaccine and date required.'); return; }
     setVaccSaving(true); setVaccErr('');
     try {
+      const payload = {
+        ...vaccForm,
+        vaccine_id:    parseInt(vaccForm.vaccine_id),
+        cost_per_dose: vaccForm.cost_per_dose ? parseFloat(vaccForm.cost_per_dose) : null,
+        total_cost:    vaccForm.total_cost    ? parseFloat(vaccForm.total_cost)    : null,
+      };
       if (editVaccId) {
-        await healthApi.updateVaccination(editVaccId, { ...vaccForm, vaccine_id: parseInt(vaccForm.vaccine_id) });
+        await healthApi.updateVaccination(editVaccId, payload);
       } else {
-        await healthApi.createVaccination({ batch_id: parseInt(id), ...vaccForm, vaccine_id: parseInt(vaccForm.vaccine_id) });
+        await healthApi.createVaccination({ batch_id: parseInt(id), ...payload });
       }
       loadVaccinations();
       setVaccModal(false); setEditVaccId(null);
@@ -302,7 +310,11 @@ export default function BatchDetailPage() {
     if (!recForm.event_date || !recForm.event_type) { setRecErr('Event type and date are required.'); return; }
     setRecSaving(true); setRecErr('');
     try {
-      await healthApi.createEvent({ batch_id: Number(id), ...recForm });
+      await healthApi.createEvent({
+        batch_id: Number(id),
+        ...recForm,
+        cost: recForm.cost ? parseFloat(recForm.cost) : null,
+      });
       const updated = await healthApi.events({ batch_id: id });
       setEvents(updated || []);
       setRecordModal(false);
@@ -1054,7 +1066,9 @@ export default function BatchDetailPage() {
             </FieldSelect>
           </FormRow>
           <FormRow label="Dose per Bird"><FieldInput value={vaccForm.dose_per_bird} onChange={vf('dose_per_bird')} placeholder="e.g. 1 drop" /></FormRow>
-          <FormRow label="Notes"><FieldInput value={vaccForm.notes} onChange={vf('notes')} placeholder="Optional…" /></FormRow>
+          <FormRow label="Cost / Dose (SAR)"><FieldInput type="number" value={vaccForm.cost_per_dose} onChange={vf('cost_per_dose')} placeholder="e.g. 0.50" min="0" step="0.01" /></FormRow>
+          <FormRow label="Total Cost (SAR)"><FieldInput type="number" value={vaccForm.total_cost} onChange={vf('total_cost')} placeholder="Auto-fill or enter manually" min="0" step="0.01" /></FormRow>
+          <FormRow label="Notes" style={{ gridColumn: '1/-1' }}><FieldInput value={vaccForm.notes} onChange={vf('notes')} placeholder="Optional…" /></FormRow>
         </div>
       </Modal>
 
@@ -1101,6 +1115,7 @@ export default function BatchDetailPage() {
             </FieldSelect>
           </FormRow>
           <FormRow label="Description"><FieldInput value={recForm.description} onChange={rf('description')} placeholder="Optional notes…" /></FormRow>
+          <FormRow label="Cost (SAR)"><FieldInput type="number" value={recForm.cost} onChange={rf('cost')} placeholder="e.g. 250 — posts to MEDICINE expense" min="0" step="0.01" /></FormRow>
         </div>
       </Modal>
 
