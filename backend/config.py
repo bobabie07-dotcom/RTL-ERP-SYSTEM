@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 480
 
-    CORS_ORIGINS: str = "http://localhost:5173"
+    CORS_ORIGINS: str = "*"
     ANTHROPIC_API_KEY: str = ""
 
     @property
@@ -29,7 +29,10 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",")]
+        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        if not origins or origins == ["*"]:
+            return ["*"]
+        return origins
 
 
 settings = Settings()

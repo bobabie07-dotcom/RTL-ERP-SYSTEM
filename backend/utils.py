@@ -64,14 +64,14 @@ def check_and_create_inventory_alerts(item, db: Session) -> None:
 def generate_farm_alerts(farm_id: int, db: Session) -> int:
     """
     Scan current farm data and create missing unread alerts.
+    Each section is independently guarded so one bad query never blocks the rest.
     Returns the number of new alerts created.
-    Returns 0 if anything fails (non-critical).
     """
     from models import Alert
     created = 0
 
+    # ── Mortality high rate (last 7 days) ─────────────────────────────────────
     try:
-        # ── Mortality high rate (last 7 days) ─────────────────────────────────
         rows = db.execute(text("""
             SELECT
                 b.id          AS batch_id,
@@ -83,7 +83,7 @@ def generate_farm_alerts(farm_id: int, db: Session) -> int:
             LEFT JOIN mortality_records m
                 ON m.batch_id = b.id
                 AND m.record_date >= :cutoff
-            WHERE b.status IN ('Active','Harvest Soon')
+            WHERE b.status IN ('active','harvest_soon')
               AND h.farm_id = :farm_id
             GROUP BY b.id, b.batch_no, b.initial_count
         """), {"farm_id": farm_id, "cutoff": date.today() - timedelta(days=7)}).mappings().all()
@@ -115,8 +115,12 @@ def generate_farm_alerts(farm_id: int, db: Session) -> int:
                         ),
                     ))
                     created += 1
+        db.flush()
+    except Exception:
+        db.rollback()
 
-        # ── Batch harvest due (placed_date + target_days within 5 days) ───────
+    # ── Batch harvest due (placed_date + target_days within 5 days) ───────────
+    try:
         rows = db.execute(text("""
             SELECT
                 b.id        AS batch_id,
@@ -126,8 +130,8 @@ def generate_farm_alerts(farm_id: int, db: Session) -> int:
                 DATEDIFF(CURDATE(), b.placed_date) AS age_days
             FROM batches b
             JOIN houses h ON b.house_id = h.id
-            LEFT JOIN batch_plans bp ON bp.batch_id = b.id
-            WHERE b.status IN ('Active','Harvest Soon')
+            JOIN batch_plans bp ON bp.batch_id = b.id
+            WHERE b.status IN ('active','harvest_soon')
               AND h.farm_id = :farm_id
               AND bp.target_age_days IS NOT NULL
         """), {"farm_id": farm_id}).mappings().all()
@@ -159,25 +163,24 @@ def generate_farm_alerts(farm_id: int, db: Session) -> int:
                         message=msg,
                     ))
                     created += 1
+        db.flush()
+    except Exception:
+        db.rollback()
 
-        # ── Feed stock low ────────────────────────────────────────────────────
+    # ── Feed stock low (uses feed_stock table — global, not per-farm) ─────────
+    try:
         rows = db.execute(text("""
             SELECT
                 ft.id   AS feed_type_id,
                 ft.name AS feed_name,
-                COALESCE(SUM(fp.qty_kg), 0) - COALESCE(SUM(fi.qty_kg), 0) AS stock_kg
+                COALESCE(fs.qty_on_hand_kg, 0) AS stock_kg
             FROM feed_types ft
-            LEFT JOIN feed_purchases fp ON fp.feed_type_id = ft.id AND fp.farm_id = :farm_id
-            LEFT JOIN feed_issues    fi ON fi.feed_type_id = ft.id AND fi.farm_id = :farm_id
-            WHERE ft.farm_id = :farm_id OR ft.farm_id IS NULL
-            GROUP BY ft.id, ft.name
-            HAVING stock_kg <= 200
-        """), {"farm_id": farm_id}).mappings().all()
+            JOIN feed_stock fs ON fs.feed_type_id = ft.id
+            WHERE fs.qty_on_hand_kg <= 200
+        """)).mappings().all()
 
         for r in rows:
             stock = float(r["stock_kg"] or 0)
-            if stock < 0:
-                stock = 0
             key = f"[FEED-LOW:{r['feed_type_id']}]"
             exists = db.query(Alert).filter(
                 Alert.farm_id == farm_id,
@@ -194,22 +197,27 @@ def generate_farm_alerts(farm_id: int, db: Session) -> int:
                     message=f"{r['feed_name']} stock is low: {stock:.1f} kg remaining {key}",
                 ))
                 created += 1
+        db.flush()
+    except Exception:
+        db.rollback()
 
-        # ── Vaccination due ───────────────────────────────────────────────────
+    # ── Vaccination due (upcoming schedules within next 3 days) ───────────────
+    try:
         rows = db.execute(text("""
             SELECT
-                hr.id          AS record_id,
-                b.id           AS batch_id,
+                vs.id             AS record_id,
+                b.id              AS batch_id,
                 b.batch_no,
-                hr.vaccine_name,
-                hr.next_due_date
-            FROM health_records hr
-            JOIN batches b ON hr.batch_id = b.id
-            JOIN houses  h ON b.house_id  = h.id
-            WHERE b.status IN ('Active','Harvest Soon')
+                m.name            AS vaccine_name,
+                vs.scheduled_date AS next_due_date
+            FROM vaccination_schedules vs
+            JOIN batches b     ON vs.batch_id  = b.id
+            JOIN houses  h     ON b.house_id   = h.id
+            JOIN medications m ON vs.vaccine_id = m.id
+            WHERE b.status IN ('active','harvest_soon')
               AND h.farm_id = :farm_id
-              AND hr.next_due_date IS NOT NULL
-              AND hr.next_due_date <= :soon
+              AND vs.status = 'upcoming'
+              AND vs.scheduled_date <= :soon
         """), {"farm_id": farm_id, "soon": date.today() + timedelta(days=3)}).mappings().all()
 
         for r in rows:
@@ -241,11 +249,14 @@ def generate_farm_alerts(farm_id: int, db: Session) -> int:
                     message=msg,
                 ))
                 created += 1
-
-        if created > 0:
-            db.commit()
-
+        db.flush()
     except Exception:
         db.rollback()
+
+    if created > 0:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
 
     return created
