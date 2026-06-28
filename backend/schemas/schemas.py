@@ -587,6 +587,14 @@ class MortalityRate7d(BaseModel):
 
 # ── Health ───────────────────────────────────────────────────────────────────
 
+class MedicationCreate(BaseModel):
+    name:            str
+    category:        str = "vaccine"
+    unit:            str = "ml"
+    withdrawal_days: int = 0
+    notes:           Optional[str] = None
+
+
 class MedicationOut(OrmBase):
     id:              int
     name:            str

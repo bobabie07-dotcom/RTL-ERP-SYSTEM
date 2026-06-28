@@ -79,12 +79,16 @@ export default function BatchDetailPage() {
   const [deletingLog,    setDeletingLog]    = useState(false);
 
   // Vaccination
-  const [vaccinations, setVaccinations] = useState([]);
-  const [medications,  setMedications]  = useState([]);
-  const [vaccModal,    setVaccModal]    = useState(false);
-  const [vaccForm,     setVaccForm]     = useState(BLANK_VACC);
-  const [vaccSaving,   setVaccSaving]   = useState(false);
-  const [vaccErr,      setVaccErr]      = useState('');
+  const [vaccinations,       setVaccinations]       = useState([]);
+  const [medications,        setMedications]        = useState([]);
+  const [vaccModal,          setVaccModal]          = useState(false);
+  const [vaccForm,           setVaccForm]           = useState(BLANK_VACC);
+  const [vaccSaving,         setVaccSaving]         = useState(false);
+  const [vaccErr,            setVaccErr]            = useState('');
+  const [newMedOpen,         setNewMedOpen]         = useState(false);
+  const [newMedForm,         setNewMedForm]         = useState({ name: '', category: 'vaccine', unit: 'ml', withdrawal_days: '0' });
+  const [newMedSaving,       setNewMedSaving]       = useState(false);
+  const [newMedErr,          setNewMedErr]          = useState('');
   const [editVaccId,       setEditVaccId]       = useState(null);
   const [deleteVaccModal,  setDeleteVaccModal]  = useState(false);
   const [deleteVaccTarget, setDeleteVaccTarget] = useState(null);
@@ -280,6 +284,23 @@ export default function BatchDetailPage() {
       setDeleteVaccModal(false); setDeleteVaccTarget(null);
     } catch (e) { setDeleteVaccModal(false); setPageErr(e.message || 'Failed to delete vaccination.'); }
     finally { setDeletingVacc(false); }
+  }
+  async function handleAddMedication() {
+    if (!newMedForm.name.trim()) { setNewMedErr('Name is required.'); return; }
+    setNewMedSaving(true); setNewMedErr('');
+    try {
+      const created = await healthApi.createMedication({
+        name:            newMedForm.name.trim(),
+        category:        newMedForm.category,
+        unit:            newMedForm.unit || 'ml',
+        withdrawal_days: parseInt(newMedForm.withdrawal_days || '0'),
+      });
+      setMedications(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setVaccForm(prev => ({ ...prev, vaccine_id: String(created.id) }));
+      setNewMedOpen(false);
+      setNewMedForm({ name: '', category: 'vaccine', unit: 'ml', withdrawal_days: '0' });
+    } catch (e) { setNewMedErr(e.message || 'Failed to add vaccine.'); }
+    finally { setNewMedSaving(false); }
   }
   async function markVaccDone(vacc) {
     await healthApi.updateVaccination(vacc.id, { status: 'done', completed_date: TODAY });
@@ -677,7 +698,7 @@ export default function BatchDetailPage() {
       {/* ── Vaccination Schedule ─────────────────────────────────────────── */}
       <Card
         title={`Vaccination Schedule ${upcomingVaccs > 0 ? `· ${upcomingVaccs} upcoming` : ''}`}
-        action={<Button variant="secondary" size="sm" icon={<I.plus w={15} />} onClick={() => { setVaccForm(BLANK_VACC); setVaccErr(''); setEditVaccId(null); setVaccModal(true); }}>Schedule</Button>}
+        action={<Button variant="secondary" size="sm" icon={<I.plus w={15} />} onClick={() => { setVaccForm(BLANK_VACC); setVaccErr(''); setEditVaccId(null); setNewMedOpen(false); setNewMedErr(''); setVaccModal(true); }}>Schedule</Button>}
       >
         {vaccinations.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
@@ -1046,14 +1067,64 @@ export default function BatchDetailPage() {
       </Modal>
 
       {/* Vaccination Modal */}
-      <Modal open={vaccModal} title={editVaccId ? 'Edit Vaccination' : 'Schedule Vaccination'} onClose={() => { setVaccModal(false); setEditVaccId(null); }} onConfirm={handleVaccSave} confirmLabel={editVaccId ? 'Update' : 'Schedule'} loading={vaccSaving}>
+      <Modal open={vaccModal} title={editVaccId ? 'Edit Vaccination' : 'Schedule Vaccination'} onClose={() => { setVaccModal(false); setEditVaccId(null); setNewMedOpen(false); }} onConfirm={handleVaccSave} confirmLabel={editVaccId ? 'Update' : 'Schedule'} loading={vaccSaving}>
         {vaccErr && <ErrBox>{vaccErr}</ErrBox>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-          <FormRow label="Vaccine / Medication" required>
-            <FieldSelect value={vaccForm.vaccine_id} onChange={vf('vaccine_id')}>
-              <option value="">Select vaccine…</option>
-              {medications.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </FieldSelect>
+          <FormRow label="Vaccine / Medication" required style={{ gridColumn: '1/-1' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <FieldSelect value={vaccForm.vaccine_id} onChange={vf('vaccine_id')} style={{ flex: 1 }}>
+                <option value="">Select vaccine…</option>
+                {medications.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </FieldSelect>
+              <button
+                type="button"
+                onClick={() => { setNewMedOpen(s => !s); setNewMedErr(''); }}
+                style={{ flexShrink: 0, height: 36, padding: '0 12px', border: '1px dashed var(--border)', borderRadius: 8, background: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-brand)', fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                {newMedOpen ? '✕ Cancel' : '+ New Vaccine'}
+              </button>
+            </div>
+            {newMedOpen && (
+              <div style={{ marginTop: 10, padding: '12px 14px', background: 'var(--gray-50,#f9fafb)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>New Vaccine / Medication</div>
+                {newMedErr && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{newMedErr}</div>}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                  <FormRow label="Name" required style={{ gridColumn: '1/-1' }}>
+                    <FieldInput value={newMedForm.name} onChange={e => setNewMedForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Newcastle Disease Vaccine (ND)" />
+                  </FormRow>
+                  <FormRow label="Category">
+                    <FieldSelect value={newMedForm.category} onChange={e => setNewMedForm(p => ({ ...p, category: e.target.value }))}>
+                      <option value="vaccine">Vaccine</option>
+                      <option value="antibiotic">Antibiotic</option>
+                      <option value="vitamin">Vitamin</option>
+                      <option value="antifungal">Antifungal</option>
+                      <option value="antiparasitic">Antiparasitic</option>
+                      <option value="other">Other</option>
+                    </FieldSelect>
+                  </FormRow>
+                  <FormRow label="Unit">
+                    <FieldSelect value={newMedForm.unit} onChange={e => setNewMedForm(p => ({ ...p, unit: e.target.value }))}>
+                      <option value="ml">ml</option>
+                      <option value="dose">dose</option>
+                      <option value="tablet">tablet</option>
+                      <option value="g">g</option>
+                      <option value="pcs">pcs</option>
+                    </FieldSelect>
+                  </FormRow>
+                  <FormRow label="Withdrawal (days)" style={{ gridColumn: '1/-1' }}>
+                    <FieldInput type="number" value={newMedForm.withdrawal_days} onChange={e => setNewMedForm(p => ({ ...p, withdrawal_days: e.target.value }))} min="0" placeholder="0" />
+                  </FormRow>
+                </div>
+                <button
+                  type="button"
+                  disabled={newMedSaving}
+                  onClick={handleAddMedication}
+                  style={{ alignSelf: 'flex-start', padding: '6px 16px', borderRadius: 8, border: 'none', background: 'var(--color-brand,#16a34a)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: newMedSaving ? 'wait' : 'pointer' }}
+                >
+                  {newMedSaving ? 'Adding…' : 'Add Vaccine'}
+                </button>
+              </div>
+            )}
           </FormRow>
           <FormRow label="Scheduled Date" required><FieldInput type="date" value={vaccForm.scheduled_date} onChange={vf('scheduled_date')} /></FormRow>
           <FormRow label="Route">

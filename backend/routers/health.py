@@ -9,7 +9,7 @@ from models import Batch, HealthEvent, Medication, Treatment, VaccinationSchedul
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
     HealthEventCreate, HealthEventOut,
-    MedicationOut,
+    MedicationCreate, MedicationOut,
     TreatmentCreate, TreatmentOut,
     UpcomingVaccination,
     VaccinationCreate, VaccinationOut, VaccinationStatusUpdate, VaccinationUpdate,
@@ -31,6 +31,19 @@ def list_medications(
     if category:
         q = q.filter(Medication.category == category)
     return q.order_by(Medication.name).all()
+
+
+@router.post("/medications", response_model=MedicationOut, status_code=status.HTTP_201_CREATED)
+def create_medication(
+    body: MedicationCreate,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    med = Medication(**body.model_dump())
+    db.add(med)
+    db.commit()
+    db.refresh(med)
+    return med
 
 
 # ── Vaccination Schedules ─────────────────────────────────────────────────────

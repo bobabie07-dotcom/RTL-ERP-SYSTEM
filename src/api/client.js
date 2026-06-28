@@ -112,6 +112,7 @@ export const healthApi = {
   deleteVaccination:   (id)        => del(`/api/health/vaccinations/${id}`),
   createEvent:         (data)      => post('/api/health/events', data),
   medications:         (category)  => get('/api/health/medications', category ? { category } : undefined),
+  createMedication:    (data)      => post('/api/health/medications', data),
 };
 
 export const inventoryApi = {
