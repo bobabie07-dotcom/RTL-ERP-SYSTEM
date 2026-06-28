@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 480
 
     CORS_ORIGINS: str = "http://localhost:5173"
+    ANTHROPIC_API_KEY: str = ""
 
     @property
     def database_url(self) -> str:

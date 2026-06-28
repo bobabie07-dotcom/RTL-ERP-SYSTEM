@@ -217,6 +217,7 @@ export const supportApi = {
   getActivity:   (id)           => get(`/api/support/tickets/${id}/activity`),
   getDashboard:  (params)       => get('/api/support/dashboard', params),
   getStaff:      ()             => get('/api/support/staff'),
+  aiSuggest:     (id)          => get(`/api/support/tickets/${id}/ai-suggest`),
 };
 
 export const usersApi = {

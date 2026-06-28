@@ -118,6 +118,10 @@ export default function TicketDetailPage() {
 
   const [showActivity, setShowActivity] = useState(false);
 
+  const [aiSuggestion, setAiSuggestion] = useState('');
+  const [aiLoading,    setAiLoading]    = useState(false);
+  const [aiError,      setAiError]      = useState('');
+
   const bottomRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -140,6 +144,19 @@ export default function TicketDetailPage() {
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [ticket?.comments?.length]);
+
+  async function handleAiSuggest() {
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const res = await supportApi.aiSuggest(id);
+      setAiSuggestion(res.suggestion);
+    } catch (e) {
+      setAiError(e?.message || 'Failed to get AI suggestion');
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   async function handleReply(e) {
     e.preventDefault();
@@ -262,6 +279,61 @@ export default function TicketDetailPage() {
               </div>
             )}
           </div>
+
+          {/* AI Suggestion panel */}
+          <div style={{
+            background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12,
+            padding: 20, marginBottom: 16,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: aiSuggestion ? 14 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>✨</span>
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#5b21b6' }}>AI Suggestion</span>
+                <span style={{ fontSize: 11, color: '#7c3aed', background: '#f5f3ff', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Powered by Claude</span>
+              </div>
+              <button
+                onClick={handleAiSuggest}
+                disabled={aiLoading}
+                style={{
+                  background: aiLoading ? '#e9d5ff' : '#7c3aed',
+                  color: '#fff', border: 'none', borderRadius: 8,
+                  padding: '6px 14px', fontSize: 13, fontWeight: 600,
+                  cursor: aiLoading ? 'default' : 'pointer',
+                  opacity: aiLoading ? 0.8 : 1,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                {aiLoading ? (
+                  <>
+                    <span style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                    Thinking…
+                  </>
+                ) : aiSuggestion ? '↺ Refresh' : 'Get Suggestion'}
+              </button>
+            </div>
+            {aiLoading && !aiSuggestion && (
+              <p style={{ margin: '10px 0 0', fontSize: 13, color: '#7c3aed' }}>Analyzing your ticket, please wait…</p>
+            )}
+            {aiError && (
+              <p style={{ margin: '10px 0 0', fontSize: 13, color: '#dc2626' }}>{aiError}</p>
+            )}
+            {aiSuggestion && !aiLoading && (
+              <div style={{
+                background: '#f5f3ff', border: '1px solid #ddd6fe',
+                borderRadius: 10, padding: '14px 16px',
+                fontSize: 14, color: '#1e1b4b', lineHeight: 1.75,
+                whiteSpace: 'pre-wrap',
+              }}>
+                {aiSuggestion}
+              </div>
+            )}
+            {!aiSuggestion && !aiLoading && !aiError && (
+              <p style={{ margin: '10px 0 0', fontSize: 13, color: '#9ca3af' }}>
+                Click "Get Suggestion" to get AI-powered troubleshooting steps for this ticket.
+              </p>
+            )}
+          </div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
           {/* Comments thread */}
           {ticket.comments?.length > 0 && (
