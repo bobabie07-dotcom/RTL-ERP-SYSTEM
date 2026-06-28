@@ -400,34 +400,37 @@ def ai_suggest(
     ticket = db.get(SupportTicket, ticket_id)
     if not ticket:
         raise HTTPException(404, "Ticket not found")
-    if not settings.ANTHROPIC_API_KEY:
-        raise HTTPException(503, "AI suggestions are not configured — add ANTHROPIC_API_KEY to Render environment variables")
 
-    try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        prompt = (
-            "You are a helpful IT support assistant for RTL Poultry Farming ERP — "
-            "a web-based system used by poultry farms to manage batches, mortality, "
-            "feed, inventory, sales, procurement, and reports.\n\n"
-            "A user has submitted the following support ticket:\n\n"
-            f"Subject: {ticket.subject}\n"
-            f"Category: {ticket.category.replace('_', ' ').title()}\n"
-            f"Priority: {ticket.priority.title()}\n"
-            f"Affected Module: {ticket.affected_module or 'Not specified'}\n"
-            f"Description:\n{ticket.description}\n\n"
-            "Please provide a concise, practical response with:\n"
-            "1. **Likely Cause** — what probably triggered this issue\n"
-            "2. **Quick Fixes** — step-by-step things the user can try right now "
-            "(e.g. refresh, clear cache, re-login, check permissions)\n"
-            "3. **If It Persists** — what details the IT team will need to investigate\n\n"
-            "Keep it friendly and easy to follow. Use short bullet points."
-        )
-        message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return {"suggestion": message.content[0].text}
-    except Exception as e:
-        raise HTTPException(502, f"AI service error: {str(e)}")
+    # Use Claude API when key is available; fall back to built-in engine otherwise
+    if settings.ANTHROPIC_API_KEY:
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+            prompt = (
+                "You are a helpful IT support assistant for RTL Poultry Farming ERP — "
+                "a web-based system used by poultry farms to manage batches, mortality, "
+                "feed, inventory, sales, procurement, and reports.\n\n"
+                "A user has submitted the following support ticket:\n\n"
+                f"Subject: {ticket.subject}\n"
+                f"Category: {ticket.category.replace('_', ' ').title()}\n"
+                f"Priority: {ticket.priority.title()}\n"
+                f"Affected Module: {ticket.affected_module or 'Not specified'}\n"
+                f"Description:\n{ticket.description}\n\n"
+                "Please provide a concise, practical response with:\n"
+                "1. **Likely Cause** — what probably triggered this issue\n"
+                "2. **Quick Fixes** — step-by-step things the user can try right now "
+                "(e.g. refresh, clear cache, re-login, check permissions)\n"
+                "3. **If It Persists** — what details the IT team will need to investigate\n\n"
+                "Keep it friendly and easy to follow. Use short bullet points."
+            )
+            message = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return {"suggestion": message.content[0].text}
+        except Exception as e:
+            raise HTTPException(502, f"AI service error: {str(e)}")
+
+    from suggestion_engine import generate_suggestion
+    return {"suggestion": generate_suggestion(ticket)}

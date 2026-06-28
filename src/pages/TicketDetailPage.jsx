@@ -289,8 +289,8 @@ export default function TicketDetailPage() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: aiSuggestion ? 14 : 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 18, lineHeight: 1 }}>✨</span>
-                  <span style={{ fontWeight: 700, fontSize: 14, color: '#5b21b6' }}>AI Suggestion</span>
-                  <span style={{ fontSize: 11, color: '#7c3aed', background: '#f5f3ff', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Powered by Claude</span>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: '#5b21b6' }}>Smart Suggestion</span>
+                  <span style={{ fontSize: 11, color: '#7c3aed', background: '#f5f3ff', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>Troubleshooting Guide</span>
                 </div>
                 <button
                   onClick={handleAiSuggest}
@@ -313,7 +313,7 @@ export default function TicketDetailPage() {
                 </button>
               </div>
               {aiLoading && !aiSuggestion && (
-                <p style={{ margin: '10px 0 0', fontSize: 13, color: '#7c3aed' }}>Analyzing your ticket, please wait…</p>
+                <p style={{ margin: '10px 0 0', fontSize: 13, color: '#7c3aed' }}>Generating suggestion…</p>
               )}
               {aiError && (
                 <p style={{ margin: '10px 0 0', fontSize: 13, color: '#dc2626' }}>{aiError}</p>
@@ -330,7 +330,7 @@ export default function TicketDetailPage() {
               )}
               {!aiSuggestion && !aiLoading && !aiError && (
                 <p style={{ margin: '10px 0 0', fontSize: 13, color: '#9ca3af' }}>
-                  Click "Get Suggestion" to get AI-powered troubleshooting steps for this ticket.
+                  Click "Get Suggestion" to get troubleshooting steps based on this ticket.
                 </p>
               )}
             </div>
