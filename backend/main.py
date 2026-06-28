@@ -109,11 +109,20 @@ def run_startup_migrations():
                 INDEX idx_actor (performed_by)
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
-        _safe_add_column(conn, """
-            ALTER TABLE alerts MODIFY COLUMN alert_type
-            ENUM('mortality_high','feed_low','vaccination_due','withdrawal_active',
-                 'batch_harvest','inventory_low','inventory_expiry','other') NOT NULL
-        """)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS alerts (
+                id         INT AUTO_INCREMENT PRIMARY KEY,
+                farm_id    SMALLINT NOT NULL,
+                alert_type VARCHAR(50) NOT NULL,
+                severity   ENUM('info','warning','danger') NOT NULL DEFAULT 'warning',
+                batch_id   INT NULL,
+                message    VARCHAR(500) NOT NULL,
+                is_read    TINYINT(1) NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_alerts_farm (farm_id),
+                INDEX idx_alerts_read (is_read)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
         conn.execute(text("INSERT IGNORE INTO inventory_categories (name, name_ar) VALUES ('Manual', 'يدوي')"))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS support_tickets (

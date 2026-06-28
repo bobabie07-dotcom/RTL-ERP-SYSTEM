@@ -731,11 +731,7 @@ class Alert(Base):
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
     farm_id    = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
-    alert_type = Column(
-        Enum("mortality_high", "feed_low", "vaccination_due", "withdrawal_active",
-             "batch_harvest", "inventory_low", "inventory_expiry", "other"),
-        nullable=False,
-    )
+    alert_type = Column(String(50), nullable=False)
     severity   = Column(
         Enum("info", "warning", "danger"), nullable=False, default="warning"
     )
