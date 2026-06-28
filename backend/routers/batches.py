@@ -11,6 +11,7 @@ from schemas.schemas import (
     BatchCreate, BatchOut, BatchSummaryRow, BatchUpdate,
     BreedOut, DailyLogCreate, DailyLogOut, DailyLogUpdate, FarmOut, HouseOut,
 )
+from sync_helpers import cleanup_sentinel_on_log_delete, sync_log_to_mortality
 
 router = APIRouter(prefix="/batches", tags=["batches"])
 
@@ -141,6 +142,8 @@ def add_log(
 
     log = BatchDailyLog(**body.model_dump(), batch_id=batch_id, recorded_by=current_user.id)
     db.add(log)
+    db.flush()
+    sync_log_to_mortality(db, batch_id, log.log_date, log.mortality_count, current_user.id)
     db.commit()
     db.refresh(log)
     return log
@@ -152,13 +155,19 @@ def update_log(
     log_id: int,
     body: DailyLogUpdate,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
     log = db.query(BatchDailyLog).filter(BatchDailyLog.id == log_id, BatchDailyLog.batch_id == batch_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
+    old_date = log.log_date
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(log, field, value)
+    db.flush()
+    # If the log date changed, remove the sentinel from the old date
+    if old_date != log.log_date:
+        cleanup_sentinel_on_log_delete(db, batch_id, old_date)
+    sync_log_to_mortality(db, batch_id, log.log_date, log.mortality_count or 0, current_user.id)
     db.commit()
     db.refresh(log)
     return log
@@ -176,7 +185,10 @@ def delete_log(
         raise HTTPException(status_code=404, detail="Log not found")
     if log.recorded_by != current_user.id and current_user.role_id not in (1, 5):
         raise HTTPException(status_code=403, detail="You can only delete logs you created")
+    log_date = log.log_date
     db.delete(log)
+    db.flush()
+    cleanup_sentinel_on_log_delete(db, batch_id, log_date)
     db.commit()
 
 

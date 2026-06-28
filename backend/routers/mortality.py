@@ -8,6 +8,7 @@ from database import get_db
 from models import MortalityRecord
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import MortalityCreate, MortalityOut, MortalityRate7d, MortalityRow, MortalityUpdate
+from sync_helpers import _delete_sentinel, sync_mortality_to_log
 
 router = APIRouter(prefix="/mortality", tags=["mortality"])
 # current_count is derived in v_batch_summary from mortality_records directly —
@@ -59,8 +60,12 @@ def create_mortality_record(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "mortality")),
 ):
+    # Remove any sentinel for this date — a real record now takes precedence
+    _delete_sentinel(db, body.batch_id, body.record_date)
     record = MortalityRecord(**body.model_dump(), recorded_by=current_user.id)
     db.add(record)
+    db.flush()
+    sync_mortality_to_log(db, record.batch_id, record.record_date)
     db.commit()
     db.refresh(record)
     return record
@@ -76,8 +81,15 @@ def update_mortality_record(
     record = db.get(MortalityRecord, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
+    old_date = record.record_date
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(record, field, value)
+    db.flush()
+    # If date changed, also sync the old date (record moved away from it)
+    if old_date != record.record_date:
+        sync_mortality_to_log(db, record.batch_id, old_date)
+    _delete_sentinel(db, record.batch_id, record.record_date)
+    sync_mortality_to_log(db, record.batch_id, record.record_date)
     db.commit()
     db.refresh(record)
     return record
@@ -92,7 +104,10 @@ def delete_mortality_record(
     record = db.get(MortalityRecord, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
+    batch_id, record_date = record.batch_id, record.record_date
     db.delete(record)
+    db.flush()
+    sync_mortality_to_log(db, batch_id, record_date)
     db.commit()
 
 
