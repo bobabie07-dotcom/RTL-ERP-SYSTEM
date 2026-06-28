@@ -381,13 +381,13 @@ export default function MortalityPage() {
             columns={[
               { key: 'batch_no', header: 'Batch', render: r => <BatchLink id={r.batch_id} name={r.batch_no} /> },
               { key: 'house',           header: 'House' },
-              { key: 'initial_count',   header: 'Placed',          align: 'right', numeric: true, render: r => r.initial_count.toLocaleString() },
-              { key: 'deaths',          header: 'Deaths',          align: 'right', numeric: true, render: r => <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{r.deaths.toLocaleString()} <small style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>({r.mortality_pct}%)</small></span> },
+              { key: 'initial_count',   header: 'Placed',          align: 'right', numeric: true, render: r => (r.initial_count ?? 0).toLocaleString() },
+              { key: 'deaths',          header: 'Deaths',          align: 'right', numeric: true, render: r => <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{(r.deaths ?? 0).toLocaleString()} <small style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>({r.mortality_pct}%)</small></span> },
               { key: 'total_expenses',  header: 'Total Expenses',  align: 'right', render: r => fmt(r.total_expenses) },
               { key: 'mortality_loss',  header: 'Mortality Loss',  align: 'right', render: r => <span style={{ color: 'var(--danger)' }}>{fmt(r.mortality_loss)}</span> },
               { key: 'proj_revenue',    header: 'Proj. Revenue',   align: 'right', render: r => r.proj_weight_kg > 0 ? fmt(r.proj_revenue) : <span style={{ color: 'var(--text-secondary)' }}>No weight data</span> },
               { key: 'proj_profit',     header: 'Proj. Profit',    align: 'right', render: r => r.proj_weight_kg > 0 ? <span style={{ fontWeight: 600, color: r.proj_profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{fmt(r.proj_profit)}</span> : '—' },
-              { key: 'breakeven_price', header: 'Break-even',      align: 'right', render: r => r.proj_weight_kg > 0 ? `₱${r.breakeven_price.toFixed(2)}/${isByBird ? 'bird' : 'kg'}` : '—' },
+              { key: 'breakeven_price', header: 'Break-even',      align: 'right', render: r => r.proj_weight_kg > 0 ? `₱${(r.breakeven_price ?? 0).toFixed(2)}/${isByBird ? 'bird' : 'kg'}` : '—' },
               { key: 'status',          header: 'Status',          render: r => <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge> },
             ]}
             rows={impact}
@@ -411,7 +411,7 @@ export default function MortalityPage() {
               { key: 'batch_no', header: 'Batch', render: r => <BatchLink id={r.batch_id} name={r.batch_no} /> },
               { key: 'house',    header: 'House' },
               { key: 'deaths',   header: 'Total Deaths',   align: 'right', numeric: true,
-                render: r => <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{r.deaths.toLocaleString()}</span> },
+                render: r => <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{(r.deaths ?? 0).toLocaleString()}</span> },
               { key: 'feedCostLoss', header: 'Feed Cost Loss', align: 'right',
                 render: r => <span style={{ color: 'var(--danger)' }}>{fmt(r.feedCostLoss)}</span> },
               { key: 'vitCostLoss',  header: 'Vit. Cost Loss', align: 'right',

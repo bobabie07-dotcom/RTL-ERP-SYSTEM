@@ -103,7 +103,7 @@ export default function HousesPage() {
   const cols = [
     { key: 'name',       header: 'House Name', render: r => <b style={{ color: 'var(--text-strong)' }}>{r.name}</b> },
     { key: 'house_type', header: 'Type',       render: r => <Badge tone={TYPE_TONE[r.house_type] || 'neutral'}>{TYPE_LABEL[r.house_type] || r.house_type}</Badge> },
-    { key: 'capacity',   header: 'Capacity',   render: r => r.capacity.toLocaleString() + ' birds' },
+    { key: 'capacity',   header: 'Capacity',   render: r => (r.capacity ?? 0).toLocaleString() + ' birds' },
     { key: 'is_active',  header: 'Status',     render: r => <Badge tone={r.is_active ? 'success' : 'neutral'}>{r.is_active ? 'Active' : 'Inactive'}</Badge> },
     {
       key: 'actions', header: '',

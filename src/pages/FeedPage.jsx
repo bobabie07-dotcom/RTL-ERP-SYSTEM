@@ -193,7 +193,7 @@ export default function FeedPage() {
   const avgFcr         = issues.length ? (issues.reduce((s, i) => s + (i.fcr_snapshot || 0), 0) / issues.filter(i => i.fcr_snapshot).length || 0) : 0;
   const lowStockCount  = stock.filter((s) => s.stock_status === 'low' || s.stock_status === 'out_of_stock').length;
 
-  const barData   = weekly.map((w) => ({ value: w.total_kg, label2: w.total_kg.toLocaleString(), color: 'var(--viz-feed)' }));
+  const barData   = weekly.map((w) => ({ value: w.total_kg ?? 0, label2: (w.total_kg ?? 0).toLocaleString(), color: 'var(--viz-feed)' }));
   const barLabels = weekly.map((w) => w.house);
 
   const tableRows = issues.map((i) => ({
