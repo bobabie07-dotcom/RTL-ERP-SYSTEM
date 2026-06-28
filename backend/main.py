@@ -85,6 +85,22 @@ def run_startup_migrations():
                 INDEX idx_ual_actor  (performed_by)
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
+        # purchase_orders optional columns (may be missing in older installs)
+        _safe_add_column(conn, "ALTER TABLE purchase_orders ADD COLUMN rejection_reason VARCHAR(500) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE purchase_orders ADD COLUMN approved_by INT DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE purchase_orders ADD COLUMN approved_at DATETIME DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE purchase_orders ADD COLUMN created_by INT DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE purchase_orders ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+        # Allow pending_approval / draft statuses if schema predates them
+        _safe_add_column(conn, "ALTER TABLE purchase_orders MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'pending_approval'")
+        # sales_orders optional columns (may be missing in older installs)
+        _safe_add_column(conn, "ALTER TABLE sales_orders ADD COLUMN rejection_reason VARCHAR(500) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE sales_orders ADD COLUMN approved_by INT DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE sales_orders ADD COLUMN approved_at DATETIME DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE sales_orders ADD COLUMN created_by INT DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE sales_orders ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+        # Allow pending_approval status if schema predates it
+        _safe_add_column(conn, "ALTER TABLE sales_orders MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'pending_approval'")
         # Support ticket extended fields
         _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN affected_module VARCHAR(100) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE support_tickets ADD COLUMN contact_info VARCHAR(255) DEFAULT NULL")

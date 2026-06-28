@@ -540,10 +540,7 @@ class PurchaseOrder(Base):
     supplier_id   = Column(SmallInteger, ForeignKey("suppliers.id"))
     order_date    = Column(Date, nullable=False)
     expected_date = Column(Date)
-    status        = Column(
-        Enum("pending_approval", "draft", "ordered", "partial", "received", "cancelled"),
-        nullable=False, default="pending_approval",
-    )
+    status        = Column(String(50), nullable=False, default="pending_approval")
     total_amount     = Column(Numeric(12, 2))
     notes            = Column(Text)
     rejection_reason = Column(String(500))
@@ -599,13 +596,8 @@ class SalesOrder(Base):
     delivery_date  = Column(Date)
     qty_kg         = Column(Numeric(10, 2), nullable=False)
     price_per_kg   = Column(Numeric(8, 4), nullable=False)
-    status         = Column(
-        Enum("pending_approval", "pending", "delivered", "completed", "cancelled"),
-        nullable=False, default="pending_approval",
-    )
-    payment_status = Column(
-        Enum("unpaid", "partial", "paid"), nullable=False, default="unpaid"
-    )
+    status         = Column(String(50), nullable=False, default="pending_approval")
+    payment_status = Column(String(20), nullable=False, default="unpaid")
     notes            = Column(Text)
     rejection_reason = Column(String(500))
     approved_by      = Column(Integer, ForeignKey("users.id"))

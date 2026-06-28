@@ -158,28 +158,34 @@ def approve_purchase_order(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "procurement")),
 ):
-    if current_user.role_id not in (1, 2):
-        raise HTTPException(status_code=403, detail="Only managers and admins can approve purchase orders")
-    po = db.get(PurchaseOrder, po_id)
-    if not po:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
-    if po.status != "pending_approval":
-        raise HTTPException(status_code=400, detail=f"Purchase order is already {po.status}")
-    po.status      = "ordered"
-    po.approved_by = current_user.id
-    po.approved_at = datetime.utcnow()
-    db.commit()
+    try:
+        if current_user.role_id not in (1, 2):
+            raise HTTPException(status_code=403, detail="Only managers and admins can approve purchase orders")
+        po = db.get(PurchaseOrder, po_id)
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+        if po.status != "pending_approval":
+            raise HTTPException(status_code=400, detail=f"Purchase order is already {po.status}")
+        po.status      = "ordered"
+        po.approved_by = current_user.id
+        po.approved_at = datetime.utcnow()
+        db.commit()
 
-    row = db.execute(text("""
-        SELECT po.id, po.po_no, po.order_date, po.expected_date,
-               s.name AS supplier, po.total_amount, po.status,
-               au.full_name AS approved_by_name, po.notes
-        FROM purchase_orders po
-        LEFT JOIN suppliers s ON po.supplier_id = s.id
-        LEFT JOIN users    au ON po.approved_by = au.id
-        WHERE po.id = :id
-    """), {"id": po_id}).mappings().one()
-    return PurchaseOrderRow(**dict(row))
+        row = db.execute(text("""
+            SELECT po.id, po.po_no, po.order_date, po.expected_date,
+                   s.name AS supplier, po.total_amount, po.status,
+                   au.full_name AS approved_by_name, po.notes
+            FROM purchase_orders po
+            LEFT JOIN suppliers s ON po.supplier_id = s.id
+            LEFT JOIN users    au ON po.approved_by = au.id
+            WHERE po.id = :id
+        """), {"id": po_id}).mappings().one()
+        return PurchaseOrderRow(**dict(row))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/orders/{po_id}/reject", response_model=PurchaseOrderRow)
@@ -237,47 +243,53 @@ def receive_purchase_order(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "procurement")),
 ):
-    po = db.get(PurchaseOrder, po_id)
-    if not po:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
-    if po.status not in ("ordered", "partial"):
-        raise HTTPException(status_code=400, detail="Only ordered POs can be marked received")
+    try:
+        po = db.get(PurchaseOrder, po_id)
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+        if po.status not in ("ordered", "partial"):
+            raise HTTPException(status_code=400, detail="Only ordered POs can be marked received")
 
-    for po_item in po.items:
-        delta = float(po_item.qty_ordered) - float(po_item.qty_received)
-        if delta <= 0 or not po_item.item_id:
-            continue
-        inv_item = db.get(InventoryItem, po_item.item_id)
-        if not inv_item:
-            continue
-        inv_item.qty_on_hand = float(inv_item.qty_on_hand) + delta
-        if float(po_item.unit_price or 0) > 0:
-            inv_item.cost_per_unit = float(po_item.unit_price)
-        db.add(InventoryMovement(
-            item_id=inv_item.id,
-            movement_type="in",
-            qty=delta,
-            reference_type="purchase",
-            reference_id=po.id,
-            notes=f"Received via {po.po_no}",
-            created_by=current_user.id,
-        ))
-        po_item.qty_received = float(po_item.qty_ordered)
-        check_and_create_inventory_alerts(inv_item, db)
+        for po_item in po.items:
+            delta = float(po_item.qty_ordered) - float(po_item.qty_received)
+            if delta <= 0 or not po_item.item_id:
+                continue
+            inv_item = db.get(InventoryItem, po_item.item_id)
+            if not inv_item:
+                continue
+            inv_item.qty_on_hand = float(inv_item.qty_on_hand) + delta
+            if float(po_item.unit_price or 0) > 0:
+                inv_item.cost_per_unit = float(po_item.unit_price)
+            db.add(InventoryMovement(
+                item_id=inv_item.id,
+                movement_type="in",
+                qty=delta,
+                reference_type="purchase",
+                reference_id=po.id,
+                notes=f"Received via {po.po_no}",
+                created_by=current_user.id,
+            ))
+            po_item.qty_received = float(po_item.qty_ordered)
+            check_and_create_inventory_alerts(inv_item, db)
 
-    po.status = "received"
-    db.commit()
+        po.status = "received"
+        db.commit()
 
-    row = db.execute(text("""
-        SELECT po.id, po.po_no, po.order_date, po.expected_date,
-               s.name AS supplier, po.total_amount, po.status,
-               au.full_name AS approved_by_name, po.notes
-        FROM purchase_orders po
-        LEFT JOIN suppliers s ON po.supplier_id = s.id
-        LEFT JOIN users    au ON po.approved_by = au.id
-        WHERE po.id = :id
-    """), {"id": po_id}).mappings().one()
-    return PurchaseOrderRow(**dict(row))
+        row = db.execute(text("""
+            SELECT po.id, po.po_no, po.order_date, po.expected_date,
+                   s.name AS supplier, po.total_amount, po.status,
+                   au.full_name AS approved_by_name, po.notes
+            FROM purchase_orders po
+            LEFT JOIN suppliers s ON po.supplier_id = s.id
+            LEFT JOIN users    au ON po.approved_by = au.id
+            WHERE po.id = :id
+        """), {"id": po_id}).mappings().one()
+        return PurchaseOrderRow(**dict(row))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/orders/{po_id}/sync-inventory", status_code=status.HTTP_204_NO_CONTENT)
