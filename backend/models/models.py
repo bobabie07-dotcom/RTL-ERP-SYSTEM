@@ -550,7 +550,7 @@ class PurchaseOrder(Base):
     created_at       = Column(DateTime, default=func.now())
 
     supplier: Optional[Supplier]          = relationship("Supplier", back_populates="orders")
-    items:    list[PurchaseOrderItem]      = relationship("PurchaseOrderItem", back_populates="order")
+    items:    list[PurchaseOrderItem]      = relationship("PurchaseOrderItem", back_populates="order", uselist=True)
 
 
 class PurchaseOrderItem(Base):

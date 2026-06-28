@@ -231,7 +231,7 @@ def delete_purchase_order(
     po = db.get(PurchaseOrder, po_id)
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
-    for item in po.items:
+    for item in db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all():
         db.delete(item)
     db.delete(po)
     db.commit()
@@ -250,7 +250,7 @@ def receive_purchase_order(
         if po.status not in ("ordered", "partial"):
             raise HTTPException(status_code=400, detail="Only ordered POs can be marked received")
 
-        for po_item in po.items:
+        for po_item in db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all():
             delta = float(po_item.qty_ordered) - float(po_item.qty_received)
             if delta <= 0 or not po_item.item_id:
                 continue
