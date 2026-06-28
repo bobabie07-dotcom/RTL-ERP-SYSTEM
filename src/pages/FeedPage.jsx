@@ -399,7 +399,7 @@ export default function FeedPage() {
                     return (
                       <tr key={row.week} style={{ background: i % 2 === 0 ? 'var(--white)' : 'var(--gray-50)', borderBottom: '1px solid var(--border-subtle)' }}>
                         <td style={{ padding: '9px 14px', textAlign: 'center', fontWeight: 700, color: 'var(--text-strong)', fontSize: 13 }}>{row.week}</td>
-                        <td style={{ padding: '9px 14px', textAlign: 'center', color: 'var(--text-secondary)' }}>{row.bw.toLocaleString()}</td>
+                        <td style={{ padding: '9px 14px', textAlign: 'center', color: 'var(--text-secondary)' }}>{(row.bw ?? 0).toLocaleString()}</td>
                         <td style={{ padding: '9px 14px', textAlign: 'center', fontWeight: 600, color: 'var(--text-strong)' }}>{row.budget}</td>
                         <td style={{ padding: '9px 14px' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600, background: ps.bg, color: ps.color, whiteSpace: 'nowrap' }}>

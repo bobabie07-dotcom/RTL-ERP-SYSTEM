@@ -475,7 +475,7 @@ export default function BatchDetailPage() {
             <div style={kpiChip}>
               <span style={chipLabel}>Birds Sold</span>
               <span style={chipVal}>{Number(harvest.birds_harvested).toLocaleString()}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>of {batch.initial_count.toLocaleString()} placed</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>of {(batch.initial_count ?? 0).toLocaleString()} placed</span>
             </div>
             <div style={kpiChip}>
               <span style={chipLabel}>Total Weight</span>
@@ -549,7 +549,7 @@ export default function BatchDetailPage() {
           <DataTable
             columns={[
               { key: 'log_date',        header: 'Date',       strong: true },
-              { key: 'current_count',   header: 'Live Birds', align: 'right', numeric: true, render: r => r.current_count.toLocaleString() },
+              { key: 'current_count',   header: 'Live Birds', align: 'right', numeric: true, render: r => (r.current_count ?? 0).toLocaleString() },
               { key: 'mortality_count', header: 'Deaths',     align: 'right', numeric: true, render: r => r.mortality_count > 0 ? <span style={{ color: 'var(--danger)' }}>{r.mortality_count}</span> : '0' },
               { key: 'culls',           header: 'Culls',      align: 'right', numeric: true },
               { key: 'avg_weight_g',    header: 'Avg Weight', align: 'right', render: r => r.avg_weight_g ? `${(r.avg_weight_g / 1000).toFixed(3)} kg` : '—' },
@@ -685,7 +685,7 @@ export default function BatchDetailPage() {
                 <PlanSectionTitle>Revenue Projections</PlanSectionTitle>
                 <PlanTable><tbody>
                   <PlanRow label="Contract Price per Head" value={plan.contract_price_per_head ? fmt(plan.contract_price_per_head) : '—'} />
-                  <PlanRow label="Initial Head Count" value={plan.initial_count.toLocaleString()} />
+                  <PlanRow label="Initial Head Count" value={(plan.initial_count ?? 0).toLocaleString()} />
                   <PlanRow label="Expected Total Revenue" value={fmt(plan.expected_revenue)} />
                   <PlanRow label="Total Assumed Expenses" value={fmt(plan.total_expenses)} />
                   <PlanTotalRow label="EXPECTED GROSS PROFIT" value={fmt(plan.gross_profit)} valueColor={pColor(plan.gross_profit)} />

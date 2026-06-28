@@ -74,7 +74,7 @@ export default function DashboardPage() {
     };
   });
 
-  const barData   = weekly.map((w) => ({ value: w.total_kg, label2: w.total_kg.toLocaleString(), color: 'var(--viz-feed)' }));
+  const barData   = weekly.map((w) => ({ value: w.total_kg ?? 0, label2: (w.total_kg ?? 0).toLocaleString(), color: 'var(--viz-feed)' }));
   const barLabels = weekly.map((w) => w.house);
 
   const totalExpenses = expenses.reduce((s, e) => s + e.value, 0);

@@ -174,12 +174,12 @@ export default function FarmsPage() {
               </div>
               <div style={kpiBox}>
                 <span style={kpiLabel}>Current Flock</span>
-                <span style={kpiValue}>{finances.active_birds.toLocaleString()}</span>
-                <span style={kpiSub}>from {finances.initial_birds.toLocaleString()} placed</span>
+                <span style={kpiValue}>{(finances.active_birds ?? 0).toLocaleString()}</span>
+                <span style={kpiSub}>from {(finances.initial_birds ?? 0).toLocaleString()} placed</span>
               </div>
               <div style={kpiBox}>
                 <span style={kpiLabel}>Total Deaths</span>
-                <span style={{ ...kpiValue, color: 'var(--danger)' }}>{finances.total_deaths.toLocaleString()}</span>
+                <span style={{ ...kpiValue, color: 'var(--danger)' }}>{(finances.total_deaths ?? 0).toLocaleString()}</span>
                 <span style={kpiSub}>active batches only</span>
               </div>
               <div style={kpiBox}>
