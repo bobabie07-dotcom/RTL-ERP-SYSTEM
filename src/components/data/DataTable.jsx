@@ -9,7 +9,7 @@ import { EmptyState } from '../core/EmptyState';
  */
 export function DataTable({ columns = [], rows = [], rowKey = 'id', style = {} }) {
   return (
-    <div style={{ width: '100%', overflowX: 'auto', ...style }}>
+    <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', ...style }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)' }}>
         <thead>
           <tr>
@@ -23,6 +23,12 @@ export function DataTable({ columns = [], rows = [], rowKey = 'id', style = {} }
                 textTransform: 'none',
                 borderBottom: '1px solid var(--border)',
                 whiteSpace: 'nowrap',
+                ...(c.sticky === 'right' ? {
+                  position: 'sticky', right: 0,
+                  background: 'var(--surface-card)',
+                  zIndex: 2,
+                  boxShadow: '-2px 0 4px rgba(0,0,0,0.06)',
+                } : {}),
               }}>{c.header}</th>
             ))}
           </tr>
@@ -49,6 +55,12 @@ export function DataTable({ columns = [], rows = [], rowKey = 'id', style = {} }
                   borderBottom: i < rows.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                   fontVariantNumeric: c.numeric ? 'tabular-nums' : 'normal',
                   whiteSpace: 'nowrap',
+                  ...(c.sticky === 'right' ? {
+                    position: 'sticky', right: 0,
+                    background: 'var(--surface-card)',
+                    zIndex: 1,
+                    boxShadow: '-2px 0 4px rgba(0,0,0,0.06)',
+                  } : {}),
                 }}>
                   {c.render ? c.render(row) : row[c.key]}
                 </td>

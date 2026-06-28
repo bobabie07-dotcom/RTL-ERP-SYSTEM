@@ -415,7 +415,7 @@ export default function SalesPage() {
         : <Badge tone={PAY_TONE[r.payment_status] || 'neutral'}>{PAY_LABEL[r.payment_status] || r.payment_status}</Badge>,
     },
     {
-      key: 'actions', header: '',
+      key: 'actions', header: '', sticky: 'right',
       render: r => (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
           {r.status === 'pending_approval' && isManager && (
@@ -455,7 +455,7 @@ export default function SalesPage() {
       ? <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.approved_by_name}</span>
       : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span> },
     {
-      key: 'actions', header: '',
+      key: 'actions', header: '', sticky: 'right',
       render: r => (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
           {r.status === 'pending_approval' && isManager && (
@@ -537,7 +537,7 @@ export default function SalesPage() {
       </div>
 
       {/* Tabs */}
-      <Card>
+      <Card style={{ overflow: 'visible' }}>
         <TabBar active={tab} onChange={setTab} overdueCount={overdueCount} />
         <div style={{ marginTop: 16 }}>
           {tab === 'sales' && <>
