@@ -172,6 +172,9 @@ def list_feed_issues(
     sql = """
         SELECT
             fi.id,
+            fi.batch_id,
+            fi.house_id,
+            fi.feed_type_id,
             fi.issue_date   AS date,
             b.batch_no      AS batch,
             h.name          AS house,
@@ -235,6 +238,56 @@ def create_feed_issue(
                 created_by=current_user.id,
             ))
             check_and_create_inventory_alerts(inv_item, db)
+
+    db.commit()
+    db.refresh(issue)
+    return issue
+
+
+@router.patch("/issues/{issue_id}", response_model=FeedIssueOut)
+def update_feed_issue(
+    issue_id: int,
+    body: FeedIssueCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission("write", "feed")),
+):
+    issue = db.get(FeedIssue, issue_id)
+    if not issue:
+        raise HTTPException(status_code=404, detail="Feed issue not found")
+
+    old_qty = float(issue.qty_kg)
+    old_ft_id = issue.feed_type_id
+    new_qty = float(body.qty_kg)
+    new_ft_id = body.feed_type_id
+
+    # Reverse old stock deduction
+    old_stock = db.get(FeedStock, old_ft_id)
+    if old_stock:
+        old_stock.qty_on_hand_kg = float(old_stock.qty_on_hand_kg) + old_qty
+    old_ft = db.get(FeedType, old_ft_id)
+    if old_ft and old_ft.inventory_item_id:
+        old_inv = db.get(InventoryItem, old_ft.inventory_item_id)
+        if old_inv:
+            old_inv.qty_on_hand = float(old_inv.qty_on_hand) + old_qty
+
+    # Apply updated fields
+    issue.batch_id     = body.batch_id
+    issue.house_id     = body.house_id
+    issue.feed_type_id = new_ft_id
+    issue.issue_date   = body.issue_date
+    issue.qty_kg       = new_qty
+    issue.fcr_snapshot = body.fcr_snapshot
+
+    # Apply new stock deduction
+    new_stock = db.get(FeedStock, new_ft_id)
+    if new_stock:
+        new_stock.qty_on_hand_kg = float(new_stock.qty_on_hand_kg) - new_qty
+    new_ft = db.get(FeedType, new_ft_id)
+    if new_ft and new_ft.inventory_item_id:
+        new_inv = db.get(InventoryItem, new_ft.inventory_item_id)
+        if new_inv:
+            new_inv.qty_on_hand = float(new_inv.qty_on_hand) - new_qty
+            check_and_create_inventory_alerts(new_inv, db)
 
     db.commit()
     db.refresh(issue)

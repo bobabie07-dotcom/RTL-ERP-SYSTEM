@@ -513,6 +513,9 @@ class FeedIssueOut(OrmBase):
 
 class FeedIssueRow(BaseModel):
     id:           int
+    batch_id:     int
+    house_id:     int
+    feed_type_id: int
     date:         date
     batch:        str
     house:        str

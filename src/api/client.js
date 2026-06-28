@@ -90,6 +90,7 @@ export const feedApi = {
   weekly:         (farm_id)      => get('/api/feed/weekly', { farm_id }),
   createPurchase: (data)         => post('/api/feed/purchases', data),
   createIssue:    (data)         => post('/api/feed/issues', data),
+  updateIssue:    (id, data)     => patch(`/api/feed/issues/${id}`, data),
   linkInventory:  (typeId, itemId) => patch(`/api/feed/types/${typeId}`, { inventory_item_id: itemId }),
   unlinkInventory:(typeId)        => patch(`/api/feed/types/${typeId}`, { inventory_item_id: null }),
 };

@@ -62,6 +62,7 @@ export default function FeedPage() {
   const [batches,   setBatches]   = useState([]);
   const [houses,    setHouses]    = useState([]);
   const [modal,     setModal]     = useState(false);
+  const [editTarget,setEditTarget]= useState(null); // issue id being edited
   const [form,      setForm]      = useState(BLANK_ISSUE);
   const [saving,    setSaving]    = useState(false);
   const [formErr,   setFormErr]   = useState('');
@@ -120,7 +121,23 @@ export default function FeedPage() {
   }
 
   function openModal() {
+    setEditTarget(null);
     setForm(BLANK_ISSUE); setFormErr('');
+    setAddTypeOpen(false); setNewTypeName(''); setNewTypeErr('');
+    setModal(true);
+  }
+
+  function openEditModal(row) {
+    setEditTarget(row.id);
+    setForm({
+      batch_id:     String(row.batch_id     || ''),
+      house_id:     String(row.house_id     || ''),
+      feed_type_id: String(row.feed_type_id || ''),
+      issue_date:   row.date ? String(row.date) : TODAY,
+      qty_kg:       String(row.qty_kg       || ''),
+      fcr_snapshot: row.fcr_snapshot != null ? String(row.fcr_snapshot) : '',
+    });
+    setFormErr('');
     setAddTypeOpen(false); setNewTypeName(''); setNewTypeErr('');
     setModal(true);
   }
@@ -177,8 +194,20 @@ export default function FeedPage() {
       setFormErr('Please fill in all required fields.'); return;
     }
     setSaving(true); setFormErr('');
+    const payload = {
+      batch_id:     Number(form.batch_id),
+      house_id:     Number(form.house_id),
+      feed_type_id: Number(form.feed_type_id),
+      issue_date:   form.issue_date,
+      qty_kg:       parseFloat(form.qty_kg),
+      fcr_snapshot: form.fcr_snapshot ? parseFloat(form.fcr_snapshot) : null,
+    };
     try {
-      await feedApi.createIssue({ ...form, batch_id: Number(form.batch_id), house_id: Number(form.house_id), feed_type_id: Number(form.feed_type_id), qty_kg: parseFloat(form.qty_kg), fcr_snapshot: form.fcr_snapshot ? parseFloat(form.fcr_snapshot) : null });
+      if (editTarget) {
+        await feedApi.updateIssue(editTarget, payload);
+      } else {
+        await feedApi.createIssue(payload);
+      }
       await loadFeed();
       setModal(false);
     } catch (err) { setFormErr(err.message || 'Failed to save.'); }
@@ -306,6 +335,17 @@ export default function FeedPage() {
             { key: 'qty',        header: 'Qty (kg)',  align: 'right', numeric: true },
             { key: 'fcr',        header: 'FCR',       align: 'right', numeric: true },
             { key: 'recordedBy', header: 'Recorded By' },
+            {
+              key: '_edit', header: '', sticky: 'right',
+              render: (row) => (
+                <button
+                  onClick={() => openEditModal(row)}
+                  style={{ border: '1px solid var(--border)', background: 'var(--white)', cursor: 'pointer', borderRadius: 6, padding: '3px 10px', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}
+                >
+                  Edit
+                </button>
+              ),
+            },
           ]}
           rows={filteredIssueRows}
           rowKey="id"
@@ -509,7 +549,7 @@ export default function FeedPage() {
         )}
       </Modal>
 
-      <Modal open={modal} title="Issue Feed" onClose={() => setModal(false)} onConfirm={handleSave} confirmLabel="Record Issue" loading={saving}>
+      <Modal open={modal} title={editTarget ? 'Edit Feed Issue' : 'Issue Feed'} onClose={() => setModal(false)} onConfirm={handleSave} confirmLabel={editTarget ? 'Save Changes' : 'Record Issue'} loading={saving}>
         {formErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{formErr}</div>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
           <FormRow label="Batch" required>
