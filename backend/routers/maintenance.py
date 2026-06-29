@@ -1,12 +1,15 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Batch, Expense, MaintenanceLog
 from routers.auth import get_current_user
 from schemas.schemas import MaintenanceLogCreate, MaintenanceLogOut, MaintenanceLogUpdate
+from utils import post_batch_expense
+
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 
 CATEGORY_LABELS = {
@@ -42,12 +45,12 @@ def create_log(
     current_user=Depends(get_current_user),
 ):
     log = MaintenanceLog(**body.model_dump(), recorded_by=current_user.id)
-
-    # If completed with cost, create an expense record immediately
-    if body.status == "completed" and float(body.cost) > 0:
-        log, _ = _attach_expense(log, body, db, current_user.id)
-
     db.add(log)
+    db.flush()  # get log.id before posting to batch_expenses
+
+    if body.status == "completed" and float(body.cost) > 0:
+        _attach_expense(log, body, db, current_user.id)
+
     db.commit()
     db.refresh(log)
     return log
@@ -73,9 +76,9 @@ def update_log(
     for field, value in data.items():
         setattr(log, field, value)
 
-    # Create expense when transitioning to completed with a cost
-    if not was_completed and new_status == "completed" and new_cost > 0 and not log.expense_id:
-        log, _ = _attach_expense(log, _log_as_body(log, new_alloc), db, current_user.id)
+    # Post to batch_expenses when transitioning to completed with a cost
+    if not was_completed and new_status == "completed" and new_cost > 0:
+        _attach_expense(log, _log_as_body(log, new_alloc), db, current_user.id)
 
     db.commit()
     db.refresh(log)
@@ -91,11 +94,15 @@ def delete_log(
     log = db.get(MaintenanceLog, log_id)
     if not log:
         raise HTTPException(status_code=404, detail="Maintenance log not found")
-    # Remove linked expense so financial totals stay accurate
+    # Remove linked legacy expense record (old system)
     if log.expense_id:
         exp = db.get(Expense, log.expense_id)
         if exp:
             db.delete(exp)
+    # Remove linked batch_expenses entry (new system)
+    db.execute(text(
+        "DELETE FROM batch_expenses WHERE source_module = 'MAINTENANCE' AND source_ref = :ref"
+    ), {"ref": str(log_id)})
     db.delete(log)
     db.commit()
 
@@ -124,29 +131,40 @@ class _log_as_body:
 
 
 def _attach_expense(log: MaintenanceLog, body, db: Session, user_id: int):
-    """Create an Expense record tied to this maintenance log."""
+    """Post maintenance cost to batch_expenses ledger."""
     batch_id = None
     if body.batch_allocated:
         active = _active_batch_for_house(body.house_id, db)
         if active:
             batch_id = active.id
 
+    log.batch_id = batch_id
+
+    if not batch_id:
+        return
+
     label = CATEGORY_LABELS.get(body.category, "Maintenance")
     desc  = f"[Maintenance – {label}] {body.description or ''}".strip()
 
-    expense = Expense(
-        farm_id      = body.farm_id,
-        batch_id     = batch_id,
-        category     = "maintenance",
-        amount       = body.cost,
-        expense_date = body.log_date,
-        description  = desc,
-        recorded_by  = user_id,
-    )
-    db.add(expense)
-    db.flush()          # get expense.id before committing
+    # Avoid duplicate posting if already recorded for this log
+    existing = db.execute(text(
+        "SELECT id FROM batch_expenses WHERE source_module = 'MAINTENANCE' AND source_ref = :ref LIMIT 1"
+    ), {"ref": str(log.id)}).scalar()
+    if existing:
+        return
 
-    log.expense_id = expense.id
-    log.batch_id   = batch_id
-
-    return log, expense
+    try:
+        post_batch_expense(
+            batch_id=batch_id,
+            category_code="MAINTENANCE",
+            amount=float(body.cost),
+            expense_date=body.log_date,
+            db=db,
+            description=desc,
+            source_module="MAINTENANCE",
+            source_ref=str(log.id),
+            house_id=body.house_id,
+            created_by=user_id,
+        )
+    except Exception:
+        pass
