@@ -278,8 +278,18 @@ def get_batch_pnl(
     """), {"bid": batch_id}).scalar() or 0)
 
     # Legacy expenses table (backward compat for old records)
+    # Exclude maintenance rows already captured in batch_expenses to avoid double-count
     legacy_expenses = float(db.execute(text("""
-        SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE batch_id = :bid
+        SELECT COALESCE(SUM(amount), 0) FROM expenses
+        WHERE batch_id = :bid
+          AND NOT (
+            category = 'maintenance'
+            AND EXISTS (
+                SELECT 1 FROM batch_expenses be
+                JOIN expense_categories ec ON ec.id = be.category_id
+                WHERE be.batch_id = :bid AND be.is_voided = FALSE AND ec.code = 'MAINTENANCE'
+            )
+          )
     """), {"bid": batch_id}).scalar() or 0)
 
     total_expenses = feed_cost + mortality_loss + other_batch + legacy_expenses
