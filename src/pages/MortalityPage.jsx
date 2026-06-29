@@ -573,12 +573,48 @@ export default function MortalityPage() {
             </div>
           );
         })()}
-        {form.count > 0 && !hasCostParams && (isByBird || form.chicken_weight_kg) && (
-          <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, fontSize: 13 }}>
-            Est. Financial Loss: <b style={{ color: 'var(--danger)' }}>{fmt(calcFinancialLoss(Number(form.count), parseFloat(form.chicken_weight_kg) || 0, marketPrice, pricingMode))}</b>
-            <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>@ ₱{marketPrice}/{isByBird ? 'bird' : 'kg'}</span>
-          </div>
-        )}
+        {form.count > 0 && !hasCostParams && (() => {
+          const selBatch = batches.find(b => b.id === Number(form.batch_id));
+          const count = Number(form.count) || 0;
+          const chickCostPerHead = selBatch?.chick_cost_per_head ? Number(selBatch.chick_cost_per_head) : 0;
+          const pf = Number(costParams.pf) || 0;
+          const totalFeedKg = Number(selBatch?.total_feed_kg) || 0;
+          const initialCount = Math.max(Number(selBatch?.initial_count) || 1, 1);
+          const batchAge = Math.max(Number(selBatch?.age_days) || 1, 1);
+          const ad = selBatch ? getAgeAtDeath(form.record_date, selBatch.placed_date) : 0;
+          const hasChickData = chickCostPerHead > 0;
+          const hasFeedData = pf > 0 && totalFeedKg > 0;
+          if (!hasChickData && !hasFeedData) {
+            if (!isByBird && !form.chicken_weight_kg) return null;
+            return (
+              <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, fontSize: 13 }}>
+                Est. Financial Loss: <b style={{ color: 'var(--danger)' }}>{fmt(calcFinancialLoss(count, parseFloat(form.chicken_weight_kg) || 0, marketPrice, pricingMode))}</b>
+                <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>@ ₱{marketPrice}/{isByBird ? 'bird' : 'kg'}</span>
+              </div>
+            );
+          }
+          const ageFraction = ad > 0 && batchAge > 0 ? Math.min(ad / batchAge, 1) : 1;
+          const feedCostPerBirdAtDeath = hasFeedData ? (totalFeedKg * pf / initialCount) * ageFraction : 0;
+          const costPerBird = chickCostPerHead + feedCostPerBirdAtDeath;
+          const totalLoss = costPerBird * count;
+          return (
+            <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--danger-bg)', borderRadius: 8, fontSize: 13 }}>
+              <div style={{ fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>Estimated Mortality Loss — Day {ad}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 3, columnGap: 16 }}>
+                {hasChickData && <>
+                  <span style={{ color: 'var(--text-body)' }}>Chick Cost ({count} × {fmt(chickCostPerHead)}/head)</span>
+                  <span style={{ textAlign: 'right', color: 'var(--danger)' }}>{fmt(chickCostPerHead * count)}</span>
+                </>}
+                {hasFeedData && <>
+                  <span style={{ color: 'var(--text-body)' }}>Feed Cost (Day {ad}/{batchAge} × {fmt(totalFeedKg * pf / initialCount)}/bird)</span>
+                  <span style={{ textAlign: 'right', color: 'var(--danger)' }}>{fmt(feedCostPerBirdAtDeath * count)}</span>
+                </>}
+                <span style={{ fontWeight: 700, color: 'var(--text-strong)', borderTop: '1px solid rgba(239,68,68,0.25)', paddingTop: 4 }}>Total Est. Loss</span>
+                <span style={{ textAlign: 'right', fontWeight: 700, color: 'var(--danger)', borderTop: '1px solid rgba(239,68,68,0.25)', paddingTop: 4 }}>{fmt(totalLoss)}</span>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       {/* ── Edit Record Modal ── */}
@@ -633,12 +669,48 @@ export default function MortalityPage() {
             </div>
           );
         })()}
-        {editForm.count > 0 && !hasCostParams && (isByBird || editForm.chicken_weight_kg) && (
-          <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, fontSize: 13 }}>
-            Est. Financial Loss: <b style={{ color: 'var(--danger)' }}>{fmt(calcFinancialLoss(Number(editForm.count), parseFloat(editForm.chicken_weight_kg) || 0, marketPrice, pricingMode))}</b>
-            <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>@ ₱{marketPrice}/{isByBird ? 'bird' : 'kg'}</span>
-          </div>
-        )}
+        {editForm.count > 0 && !hasCostParams && (() => {
+          const selBatch = editTarget ? batches.find(b => b.id === editTarget.batch_id) : null;
+          const count = Number(editForm.count) || 0;
+          const chickCostPerHead = selBatch?.chick_cost_per_head ? Number(selBatch.chick_cost_per_head) : 0;
+          const pf = Number(costParams.pf) || 0;
+          const totalFeedKg = Number(selBatch?.total_feed_kg) || 0;
+          const initialCount = Math.max(Number(selBatch?.initial_count) || 1, 1);
+          const batchAge = Math.max(Number(selBatch?.age_days) || 1, 1);
+          const ad = selBatch ? getAgeAtDeath(editForm.record_date, selBatch.placed_date) : 0;
+          const hasChickData = chickCostPerHead > 0;
+          const hasFeedData = pf > 0 && totalFeedKg > 0;
+          if (!hasChickData && !hasFeedData) {
+            if (!isByBird && !editForm.chicken_weight_kg) return null;
+            return (
+              <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, fontSize: 13 }}>
+                Est. Financial Loss: <b style={{ color: 'var(--danger)' }}>{fmt(calcFinancialLoss(count, parseFloat(editForm.chicken_weight_kg) || 0, marketPrice, pricingMode))}</b>
+                <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>@ ₱{marketPrice}/{isByBird ? 'bird' : 'kg'}</span>
+              </div>
+            );
+          }
+          const ageFraction = ad > 0 && batchAge > 0 ? Math.min(ad / batchAge, 1) : 1;
+          const feedCostPerBirdAtDeath = hasFeedData ? (totalFeedKg * pf / initialCount) * ageFraction : 0;
+          const costPerBird = chickCostPerHead + feedCostPerBirdAtDeath;
+          const totalLoss = costPerBird * count;
+          return (
+            <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--danger-bg)', borderRadius: 8, fontSize: 13 }}>
+              <div style={{ fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>Estimated Mortality Loss — Day {ad}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 3, columnGap: 16 }}>
+                {hasChickData && <>
+                  <span style={{ color: 'var(--text-body)' }}>Chick Cost ({count} × {fmt(chickCostPerHead)}/head)</span>
+                  <span style={{ textAlign: 'right', color: 'var(--danger)' }}>{fmt(chickCostPerHead * count)}</span>
+                </>}
+                {hasFeedData && <>
+                  <span style={{ color: 'var(--text-body)' }}>Feed Cost (Day {ad}/{batchAge} × {fmt(totalFeedKg * pf / initialCount)}/bird)</span>
+                  <span style={{ textAlign: 'right', color: 'var(--danger)' }}>{fmt(feedCostPerBirdAtDeath * count)}</span>
+                </>}
+                <span style={{ fontWeight: 700, color: 'var(--text-strong)', borderTop: '1px solid rgba(239,68,68,0.25)', paddingTop: 4 }}>Total Est. Loss</span>
+                <span style={{ textAlign: 'right', fontWeight: 700, color: 'var(--danger)', borderTop: '1px solid rgba(239,68,68,0.25)', paddingTop: 4 }}>{fmt(totalLoss)}</span>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       {/* ── Delete Confirmation Modal ── */}
