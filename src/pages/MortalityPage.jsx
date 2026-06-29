@@ -8,7 +8,7 @@ import { Select } from '../components/forms/Select';
 import { StatCard } from '../components/data/StatCard';
 import { LineChart } from '../charts';
 import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Modal';
-import { mortalityApi, batchesApi, reportsApi } from '../api/client';
+import { mortalityApi, batchesApi, reportsApi, batchFinanceApi } from '../api/client';
 import { exportCsv } from '../utils/exportCsv';
 import { useFarm } from '../context/FarmContext';
 import Icons from '../icons';
@@ -42,8 +42,9 @@ export default function MortalityPage() {
   const [records,  setRecords]  = useState([]);
   const [rates,    setRates]    = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const [batches,  setBatches]  = useState([]);
-  const [houses,   setHouses]   = useState([]);
+  const [batches,      setBatches]      = useState([]);
+  const [houses,       setHouses]       = useState([]);
+  const [batchPnlCache, setBatchPnlCache] = useState({});
 
   // Add modal
   const [modal,    setModal]    = useState(false);
@@ -100,6 +101,15 @@ export default function MortalityPage() {
     ]).then(([r, rt]) => { setRecords(r || []); setRates(rt || []); });
   }
 
+  function fetchBatchPnl(batchId) {
+    const id = Number(batchId);
+    if (!id || batchPnlCache[id] !== undefined) return;
+    setBatchPnlCache(prev => ({ ...prev, [id]: null })); // mark as loading
+    batchFinanceApi.pnl(id)
+      .then(data => setBatchPnlCache(prev => ({ ...prev, [id]: data || null })))
+      .catch(() => setBatchPnlCache(prev => ({ ...prev, [id]: null })));
+  }
+
   const pricingMode = classType === 'broiler' ? 'per_kg' : 'per_bird';
   const isByBird    = classType !== 'broiler';
 
@@ -118,6 +128,10 @@ export default function MortalityPage() {
     batchesApi.houses({ farm_id: farmId }).then(setHouses).catch(() => {});
     loadImpact(marketPrice);
   }, [farmId]);
+
+  useEffect(() => {
+    if (modal && form.batch_id) fetchBatchPnl(form.batch_id);
+  }, [modal, form.batch_id]);
 
   function applyPrice() {
     const p = parseFloat(priceInput);
@@ -163,6 +177,7 @@ export default function MortalityPage() {
       cause:             row.cause,
       cause_notes:       row.cause_notes === '—' ? '' : (row.cause_notes || ''),
     });
+    fetchBatchPnl(row.batch_id);
     setEditErr('');
     setEditModal(true);
   }
@@ -258,7 +273,20 @@ export default function MortalityPage() {
         PF: costParams.pf, PV: costParams.pv || 0, PC: costParams.pc,
       }).totalLoss;
     } else {
-      financialLoss = calcFinancialLoss(r.count, r.chicken_weight_kg, marketPrice, pricingMode);
+      const batch = batches.find(b => b.id === r.batch_id);
+      const chickCostPerHead = batch?.chick_cost_per_head ? Number(batch.chick_cost_per_head) : 0;
+      const pnl = batchPnlCache[r.batch_id];
+      const feedCostTotal = pnl?.by_category?.find(c => c.code === 'FEED')?.amount || 0;
+      if (chickCostPerHead > 0 || feedCostTotal > 0) {
+        const initialCount = Math.max(Number(batch?.initial_count) || 1, 1);
+        const batchAge = Math.max(Number(batch?.age_days) || 1, 1);
+        const AD = batch ? getAgeAtDeath(r.date, batch.placed_date) : 0;
+        const ageFraction = AD > 0 ? Math.min(AD / batchAge, 1) : 1;
+        const feedPerBird = feedCostTotal > 0 ? (feedCostTotal / initialCount) * ageFraction : 0;
+        financialLoss = (chickCostPerHead + feedPerBird) * r.count;
+      } else {
+        financialLoss = calcFinancialLoss(r.count, r.chicken_weight_kg, marketPrice, pricingMode);
+      }
     }
     return {
       ...r,
@@ -491,7 +519,7 @@ export default function MortalityPage() {
             { key: 'count',        header: 'Count',        align: 'right', numeric: true },
             ...(!isByBird ? [{ key: 'chicken_weight_kg', header: 'Weight (kg)', align: 'right', render: r => r.chicken_weight_kg != null ? `${Number(r.chicken_weight_kg).toFixed(2)} kg` : '—' }] : []),
             { key: 'financialLoss', header: 'Est. Loss', align: 'right', render: r => {
-              const hasData = isByBird || r.chicken_weight_kg;
+              const hasData = r.financialLoss > 0 || isByBird || r.chicken_weight_kg;
               return hasData ? <span style={{ color: 'var(--danger)' }}>{fmt(r.financialLoss)}</span> : <span style={{ color: 'var(--text-secondary)' }}>—</span>;
             }},
             { key: 'causeLabel',   header: 'Cause',        render: r => <Badge tone={CAUSE_TONE[r.cause] || 'neutral'}>{r.causeLabel}</Badge> },
@@ -577,13 +605,13 @@ export default function MortalityPage() {
           const selBatch = batches.find(b => b.id === Number(form.batch_id));
           const count = Number(form.count) || 0;
           const chickCostPerHead = selBatch?.chick_cost_per_head ? Number(selBatch.chick_cost_per_head) : 0;
-          const pf = Number(costParams.pf) || 0;
-          const totalFeedKg = Number(selBatch?.total_feed_kg) || 0;
+          const pnl = batchPnlCache[Number(form.batch_id)];
+          const feedCostTotal = pnl?.by_category?.find(c => c.code === 'FEED')?.amount || 0;
           const initialCount = Math.max(Number(selBatch?.initial_count) || 1, 1);
           const batchAge = Math.max(Number(selBatch?.age_days) || 1, 1);
           const ad = selBatch ? getAgeAtDeath(form.record_date, selBatch.placed_date) : 0;
           const hasChickData = chickCostPerHead > 0;
-          const hasFeedData = pf > 0 && totalFeedKg > 0;
+          const hasFeedData = feedCostTotal > 0;
           if (!hasChickData && !hasFeedData) {
             if (!isByBird && !form.chicken_weight_kg) return null;
             return (
@@ -594,7 +622,7 @@ export default function MortalityPage() {
             );
           }
           const ageFraction = ad > 0 && batchAge > 0 ? Math.min(ad / batchAge, 1) : 1;
-          const feedCostPerBirdAtDeath = hasFeedData ? (totalFeedKg * pf / initialCount) * ageFraction : 0;
+          const feedCostPerBirdAtDeath = hasFeedData ? (feedCostTotal / initialCount) * ageFraction : 0;
           const costPerBird = chickCostPerHead + feedCostPerBirdAtDeath;
           const totalLoss = costPerBird * count;
           return (
@@ -606,7 +634,7 @@ export default function MortalityPage() {
                   <span style={{ textAlign: 'right', color: 'var(--danger)' }}>{fmt(chickCostPerHead * count)}</span>
                 </>}
                 {hasFeedData && <>
-                  <span style={{ color: 'var(--text-body)' }}>Feed Cost (Day {ad}/{batchAge} × {fmt(totalFeedKg * pf / initialCount)}/bird)</span>
+                  <span style={{ color: 'var(--text-body)' }}>Feed Cost (Day {ad}/{batchAge} × {fmt(feedCostTotal / initialCount)}/bird)</span>
                   <span style={{ textAlign: 'right', color: 'var(--danger)' }}>{fmt(feedCostPerBirdAtDeath * count)}</span>
                 </>}
                 <span style={{ fontWeight: 700, color: 'var(--text-strong)', borderTop: '1px solid rgba(239,68,68,0.25)', paddingTop: 4 }}>Total Est. Loss</span>
@@ -673,13 +701,13 @@ export default function MortalityPage() {
           const selBatch = editTarget ? batches.find(b => b.id === editTarget.batch_id) : null;
           const count = Number(editForm.count) || 0;
           const chickCostPerHead = selBatch?.chick_cost_per_head ? Number(selBatch.chick_cost_per_head) : 0;
-          const pf = Number(costParams.pf) || 0;
-          const totalFeedKg = Number(selBatch?.total_feed_kg) || 0;
+          const pnl = editTarget ? batchPnlCache[editTarget.batch_id] : null;
+          const feedCostTotal = pnl?.by_category?.find(c => c.code === 'FEED')?.amount || 0;
           const initialCount = Math.max(Number(selBatch?.initial_count) || 1, 1);
           const batchAge = Math.max(Number(selBatch?.age_days) || 1, 1);
           const ad = selBatch ? getAgeAtDeath(editForm.record_date, selBatch.placed_date) : 0;
           const hasChickData = chickCostPerHead > 0;
-          const hasFeedData = pf > 0 && totalFeedKg > 0;
+          const hasFeedData = feedCostTotal > 0;
           if (!hasChickData && !hasFeedData) {
             if (!isByBird && !editForm.chicken_weight_kg) return null;
             return (
@@ -690,7 +718,7 @@ export default function MortalityPage() {
             );
           }
           const ageFraction = ad > 0 && batchAge > 0 ? Math.min(ad / batchAge, 1) : 1;
-          const feedCostPerBirdAtDeath = hasFeedData ? (totalFeedKg * pf / initialCount) * ageFraction : 0;
+          const feedCostPerBirdAtDeath = hasFeedData ? (feedCostTotal / initialCount) * ageFraction : 0;
           const costPerBird = chickCostPerHead + feedCostPerBirdAtDeath;
           const totalLoss = costPerBird * count;
           return (
@@ -702,7 +730,7 @@ export default function MortalityPage() {
                   <span style={{ textAlign: 'right', color: 'var(--danger)' }}>{fmt(chickCostPerHead * count)}</span>
                 </>}
                 {hasFeedData && <>
-                  <span style={{ color: 'var(--text-body)' }}>Feed Cost (Day {ad}/{batchAge} × {fmt(totalFeedKg * pf / initialCount)}/bird)</span>
+                  <span style={{ color: 'var(--text-body)' }}>Feed Cost (Day {ad}/{batchAge} × {fmt(feedCostTotal / initialCount)}/bird)</span>
                   <span style={{ textAlign: 'right', color: 'var(--danger)' }}>{fmt(feedCostPerBirdAtDeath * count)}</span>
                 </>}
                 <span style={{ fontWeight: 700, color: 'var(--text-strong)', borderTop: '1px solid rgba(239,68,68,0.25)', paddingTop: 4 }}>Total Est. Loss</span>
