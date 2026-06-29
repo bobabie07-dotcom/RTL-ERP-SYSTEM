@@ -241,6 +241,36 @@ def create_expense(
     return expense
 
 
+@router.patch("/expenses/{expense_id}", response_model=ExpenseOut)
+def update_expense(
+    expense_id: int,
+    body: ExpenseCreate,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    expense = db.get(Expense, expense_id)
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(expense, field, value)
+    db.commit()
+    db.refresh(expense)
+    return expense
+
+
+@router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    expense = db.get(Expense, expense_id)
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    db.delete(expense)
+    db.commit()
+
+
 # ── Payment recording ─────────────────────────────────────────────────────────
 
 @router.patch("/orders/{order_id}/payment", response_model=SalesOrderOut)

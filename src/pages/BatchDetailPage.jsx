@@ -95,11 +95,14 @@ export default function BatchDetailPage() {
   const [deletingVacc,     setDeletingVacc]     = useState(false);
 
   // Expenses
-  const [expenses,    setExpenses]    = useState([]);
-  const [expModal,    setExpModal]    = useState(false);
-  const [expForm,     setExpForm]     = useState(BLANK_EXP);
-  const [expSaving,   setExpSaving]   = useState(false);
-  const [expErr,      setExpErr]      = useState('');
+  const [expenses,        setExpenses]        = useState([]);
+  const [expModal,        setExpModal]        = useState(false);
+  const [expEditTarget,   setExpEditTarget]   = useState(null);
+  const [expForm,         setExpForm]         = useState(BLANK_EXP);
+  const [expSaving,       setExpSaving]       = useState(false);
+  const [expErr,          setExpErr]          = useState('');
+  const [expDeleteTarget, setExpDeleteTarget] = useState(null);
+  const [expDeleting,     setExpDeleting]     = useState(false);
 
   // Harvest
   const [harvest,         setHarvest]         = useState(null);
@@ -308,22 +311,45 @@ export default function BatchDetailPage() {
   }
 
   // ── Expenses ───────────────────────────────────────────────────────────────
+  function openExpEdit(row) {
+    setExpEditTarget(row);
+    setExpForm({ category: row.category, amount: String(row.amount), expense_date: row.expense_date, description: row.description || '' });
+    setExpErr('');
+    setExpModal(true);
+  }
+
   async function handleExpSave() {
     if (!expForm.amount || !expForm.expense_date) { setExpErr('Amount and date are required.'); return; }
     setExpSaving(true); setExpErr('');
+    const payload = {
+      batch_id:     parseInt(id),
+      farm_id:      farmId,
+      category:     expForm.category,
+      amount:       parseFloat(expForm.amount),
+      expense_date: expForm.expense_date,
+      description:  expForm.description || null,
+    };
     try {
-      await salesApi.createExpense({
-        batch_id:     parseInt(id),
-        farm_id:      farmId,
-        category:     expForm.category,
-        amount:       parseFloat(expForm.amount),
-        expense_date: expForm.expense_date,
-        description:  expForm.description || null,
-      });
+      if (expEditTarget) {
+        await salesApi.updateExpense(expEditTarget.id, payload);
+      } else {
+        await salesApi.createExpense(payload);
+      }
       loadExpenses();
-      setExpModal(false);
+      setExpModal(false); setExpEditTarget(null);
     } catch (e) { setExpErr(e.message || 'Failed to save.'); }
     finally { setExpSaving(false); }
+  }
+
+  async function handleExpDelete() {
+    if (!expDeleteTarget) return;
+    setExpDeleting(true);
+    try {
+      await salesApi.deleteExpense(expDeleteTarget.id);
+      loadExpenses();
+      setExpDeleteTarget(null);
+    } catch (e) { /* silently close */ setExpDeleteTarget(null); }
+    finally { setExpDeleting(false); }
   }
 
   // ── Health event ───────────────────────────────────────────────────────────
@@ -732,7 +758,7 @@ export default function BatchDetailPage() {
       {/* ── Batch Expenses ───────────────────────────────────────────────── */}
       <Card
         title="Actual Expenses"
-        action={<Button variant="secondary" size="sm" icon={<I.plus w={15} />} onClick={() => { setExpForm(BLANK_EXP); setExpErr(''); setExpModal(true); }}>Add Expense</Button>}
+        action={<Button variant="secondary" size="sm" icon={<I.plus w={15} />} onClick={() => { setExpForm(BLANK_EXP); setExpErr(''); setExpEditTarget(null); setExpModal(true); }}>Add Expense</Button>}
       >
         {/* Budget vs Actual summary bar */}
         {plan && plan.total_expenses > 0 && (
@@ -762,6 +788,12 @@ export default function BatchDetailPage() {
               { key: 'category',     header: 'Category',    render: r => <Badge tone="neutral">{EXP_LABEL[r.category] || r.category}</Badge> },
               { key: 'amount',       header: 'Amount',      align: 'right', render: r => <b style={{ color: 'var(--danger)' }}>{fmt(r.amount)}</b> },
               { key: 'description',  header: 'Description', render: r => r.description || '—' },
+              { key: '_actions', header: '', render: r => (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <Button variant="ghost" size="sm" icon={<I.pencil w={13} />} onClick={() => openExpEdit(r)}>Edit</Button>
+                  <Button variant="ghost" size="sm" icon={<I.trash w={13} />} onClick={() => setExpDeleteTarget(r)} style={{ color: 'var(--danger)' }}>Delete</Button>
+                </div>
+              )},
             ]}
             rows={expenses}
             rowKey="id"
@@ -1144,7 +1176,7 @@ export default function BatchDetailPage() {
       </Modal>
 
       {/* Expense Modal */}
-      <Modal open={expModal} title="Add Expense" onClose={() => setExpModal(false)} onConfirm={handleExpSave} confirmLabel="Save Expense" loading={expSaving}>
+      <Modal open={expModal} title={expEditTarget ? 'Edit Expense' : 'Add Expense'} onClose={() => { setExpModal(false); setExpEditTarget(null); }} onConfirm={handleExpSave} confirmLabel={expEditTarget ? 'Save Changes' : 'Save Expense'} loading={expSaving}>
         {expErr && <ErrBox>{expErr}</ErrBox>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
           <FormRow label="Category">
@@ -1272,6 +1304,14 @@ export default function BatchDetailPage() {
           <tfoot><tr><td colSpan={4} style={{ ...tdStyle, fontWeight:700, fontSize:11, textTransform:'uppercase', letterSpacing:'0.04em' }}>TOTAL OTHER EXPENSES</td><td style={{ ...tdStyle, textAlign:'right', fontWeight:700 }}>{fmt(previewExpItemTotal)}</td><td/><td/></tr></tfoot>
         </table>
         <button onClick={addExpItem} style={{ fontSize:13, color:'var(--text-brand)', background:'none', border:'none', cursor:'pointer', padding:'2px 0' }}>+ Add Expense Row</button>
+      </Modal>
+
+      {/* Delete Expense Confirmation Modal */}
+      <Modal open={!!expDeleteTarget} title="Delete Expense" onClose={() => setExpDeleteTarget(null)} onConfirm={handleExpDelete} confirmLabel="Delete" confirmVariant="danger" loading={expDeleting} width={420}>
+        <p style={{ margin: 0, fontSize: 14, color: 'var(--text-body)', lineHeight: 1.6 }}>
+          Delete the <b>{EXP_LABEL[expDeleteTarget?.category] || expDeleteTarget?.category}</b> expense of <b>{fmt(expDeleteTarget?.amount)}</b> on <b>{expDeleteTarget?.expense_date}</b>?
+          This cannot be undone.
+        </p>
       </Modal>
 
       {/* Delete Plan Confirmation Modal */}
