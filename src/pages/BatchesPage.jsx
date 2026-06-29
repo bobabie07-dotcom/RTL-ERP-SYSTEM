@@ -164,14 +164,15 @@ export default function BatchesPage() {
 
   const rows = filtered.map((b) => ({
     ...b,
-    id:      b.id,
-    breed:   b.breed || '—',
-    placed:  b.placed_date,
-    birds:   (b.current_count || 0).toLocaleString(),
-    age:     `${b.age_days}d`,
-    mort:    `${(b.mortality_pct || 0).toFixed(2)}%`,
-    fcr:     (b.fcr || 0).toFixed(2),
-    avgWt:   b.avg_weight_g ? `${(b.avg_weight_g / 1000).toFixed(2)} kg` : '—',
+    id:        b.id,
+    breed:     b.breed || '—',
+    placed:    b.placed_date,
+    birds:     (b.current_count || 0).toLocaleString(),
+    age:       `${b.age_days}d`,
+    mort:      `${(b.mortality_pct || 0).toFixed(2)}%`,
+    fcr:       (b.fcr || 0).toFixed(2),
+    avgWt:     b.avg_weight_g ? `${(b.avg_weight_g / 1000).toFixed(2)} kg` : '—',
+    chickCost: b.chick_cost_per_head != null ? `${Number(b.chick_cost_per_head).toFixed(2)}` : '—',
     statusLabel: STATUS_LABEL[b.status] || b.status,
   }));
 
@@ -214,6 +215,7 @@ export default function BatchesPage() {
             { key: 'mort',        header: 'Mortality %' },
             { key: 'fcr',         header: 'FCR' },
             { key: 'avgWt',       header: 'Avg. Weight' },
+            { key: 'chickCost',   header: 'Chick Cost/Head' },
             { key: 'statusLabel', header: 'Status' },
           ], 'batches.csv')}>Export CSV</Button>
         </div>
@@ -226,11 +228,12 @@ export default function BatchesPage() {
             { key: 'farm',        header: 'Farm' },
             { key: 'breed',       header: 'Breed' },
             { key: 'placed',      header: 'Date Placed' },
-            { key: 'birds',       header: 'Birds',       align: 'right', numeric: true },
-            { key: 'age',         header: 'Age',         align: 'right' },
-            { key: 'mort',        header: 'Mortality %', align: 'right', numeric: true },
-            { key: 'fcr',         header: 'FCR',         align: 'right', numeric: true },
-            { key: 'avgWt',       header: 'Avg. Weight', align: 'right' },
+            { key: 'birds',       header: 'Birds',          align: 'right', numeric: true },
+            { key: 'age',         header: 'Age',            align: 'right' },
+            { key: 'mort',        header: 'Mortality %',    align: 'right', numeric: true },
+            { key: 'fcr',         header: 'FCR',            align: 'right', numeric: true },
+            { key: 'avgWt',       header: 'Avg. Weight',    align: 'right' },
+            { key: 'chickCost',   header: 'Chick Cost/Head', align: 'right', numeric: true },
             { key: 'statusLabel', header: 'Status', render: (r) => (
               <Badge tone={STATUS_TONE[r.status] || 'neutral'} dot>{r.statusLabel}</Badge>
             )},

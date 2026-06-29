@@ -253,6 +253,51 @@ def run_startup_migrations():
                 INDEX idx_br_date  (revenue_date)
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
+        # ── Recreate v_batch_summary to include chick cost fields ───────────
+        conn.execute(text("""
+            CREATE OR REPLACE VIEW v_batch_summary AS
+            SELECT
+              b.id,
+              b.batch_no,
+              b.farm_id,
+              b.house_id,
+              b.breed_id,
+              h.name                                           AS house,
+              f.name                                           AS farm,
+              br.name                                          AS breed,
+              b.placed_date,
+              b.initial_count,
+              DATEDIFF(CURDATE(), b.placed_date)               AS age_days,
+              b.cycle_length_days,
+              b.chick_cost_per_head,
+              b.chick_supplier_id,
+              b.status,
+              COALESCE(dl.current_count, b.initial_count)      AS current_count,
+              COALESCE(
+                (b.initial_count - dl.current_count) / b.initial_count * 100, 0
+              )                                                AS mortality_pct,
+              COALESCE(fi.total_feed_kg, 0)                    AS total_feed_kg,
+              COALESCE(
+                fi.total_feed_kg / NULLIF((dl.current_count * dl.avg_weight_g / 1000), 0), 0
+              )                                                AS fcr,
+              dl.avg_weight_g
+            FROM batches b
+            JOIN houses h  ON b.house_id  = h.id
+            JOIN farms  f  ON b.farm_id   = f.id
+            LEFT JOIN breeds br ON b.breed_id = br.id
+            LEFT JOIN (
+              SELECT batch_id, current_count, avg_weight_g
+              FROM batch_daily_logs
+              WHERE (batch_id, log_date) IN (
+                SELECT batch_id, MAX(log_date) FROM batch_daily_logs GROUP BY batch_id
+              )
+            ) dl ON dl.batch_id = b.id
+            LEFT JOIN (
+              SELECT batch_id, SUM(qty_kg) AS total_feed_kg
+              FROM feed_issues
+              GROUP BY batch_id
+            ) fi ON fi.batch_id = b.id
+        """))
         # ── Recreate v_batch_pnl with LEFT JOIN so feed issues without purchase records
         # use a fallback price (25/kg) instead of being silently dropped.
         conn.execute(text("""

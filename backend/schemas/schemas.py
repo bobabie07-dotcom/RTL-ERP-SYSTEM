@@ -376,23 +376,25 @@ class BatchOut(OrmBase):
 
 class BatchSummaryRow(BaseModel):
     """Row from v_batch_summary view."""
-    id:               int
-    batch_no:         str
-    house_id:         int
-    breed_id:         Optional[int]
-    house:            str
-    farm:             str
-    breed:            Optional[str]
-    placed_date:      date
-    initial_count:    int
-    age_days:         int
-    cycle_length_days: int
-    status:           str
-    current_count:    int
-    mortality_pct:    float
-    total_feed_kg:    float
-    fcr:              float
-    avg_weight_g:     Optional[int]
+    id:                  int
+    batch_no:            str
+    house_id:            int
+    breed_id:            Optional[int]
+    house:               str
+    farm:                str
+    breed:               Optional[str]
+    placed_date:         date
+    initial_count:       int
+    age_days:            int
+    cycle_length_days:   int
+    chick_cost_per_head: Optional[float] = None
+    chick_supplier_id:   Optional[int]   = None
+    status:              str
+    current_count:       int
+    mortality_pct:       float
+    total_feed_kg:       float
+    fcr:                 float
+    avg_weight_g:        Optional[int]
 
 
 # ── Daily Logs ───────────────────────────────────────────────────────────────
