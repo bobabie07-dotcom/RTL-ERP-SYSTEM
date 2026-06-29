@@ -277,22 +277,7 @@ def get_batch_pnl(
         WHERE be.batch_id = :bid AND be.is_voided = FALSE AND ec.code != 'MORTALITY_LOSS'
     """), {"bid": batch_id}).scalar() or 0)
 
-    # Legacy expenses table (backward compat for old records)
-    # Exclude maintenance rows already captured in batch_expenses to avoid double-count
-    legacy_expenses = float(db.execute(text("""
-        SELECT COALESCE(SUM(amount), 0) FROM expenses
-        WHERE batch_id = :bid
-          AND NOT (
-            category = 'maintenance'
-            AND EXISTS (
-                SELECT 1 FROM batch_expenses be
-                JOIN expense_categories ec ON ec.id = be.category_id
-                WHERE be.batch_id = :bid AND be.is_voided = FALSE AND ec.code = 'MAINTENANCE'
-            )
-          )
-    """), {"bid": batch_id}).scalar() or 0)
-
-    total_expenses = feed_cost + mortality_loss + other_batch + legacy_expenses
+    total_expenses = feed_cost + mortality_loss + other_batch
     gross_profit   = total_revenue - total_expenses
 
     initial_count = batch.initial_count or 1
@@ -325,8 +310,6 @@ def get_batch_pnl(
 
     by_category = [{"code": "FEED", "name": "Feed Cost", "amount": round(feed_cost, 2)}]
     by_category += [{"code": r["code"], "name": r["name"], "amount": round(float(r["total"]), 2)} for r in cat_rows]
-    if legacy_expenses > 0:
-        by_category.append({"code": "LEGACY", "name": "Expenses (legacy)", "amount": round(legacy_expenses, 2)})
 
     def r2(v): return round(float(v), 2) if v is not None else None
 
@@ -335,7 +318,6 @@ def get_batch_pnl(
         "feed_cost":            r2(feed_cost),
         "mortality_loss":       r2(mortality_loss),
         "other_batch_expenses": r2(other_batch),
-        "legacy_expenses":      r2(legacy_expenses),
         "total_expenses":       r2(total_expenses),
         "gross_profit":         r2(gross_profit),
         "profit_margin_pct":    r2(margin),
