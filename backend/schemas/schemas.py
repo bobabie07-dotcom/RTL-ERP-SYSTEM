@@ -1040,6 +1040,8 @@ class PurchaseOrderRow(BaseModel):
     order_date:       date
     expected_date:    Optional[date]
     supplier:         Optional[str]
+    batch_id:         Optional[int]  = None
+    batch:            Optional[str]  = None
     total_amount:     Optional[float]
     status:           str
     approved_by_name: Optional[str]

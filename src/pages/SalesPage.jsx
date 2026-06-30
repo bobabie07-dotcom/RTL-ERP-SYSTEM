@@ -444,6 +444,10 @@ export default function SalesPage() {
     { key: 'po_no',       header: 'PO No.',     strong: true, render: r => r.po_no || `PO-${String(r.id).padStart(6,'0')}` },
     { key: 'order_date',  header: 'Date' },
     { key: 'expected_date', header: 'Expected',  render: r => r.expected_date || '—' },
+    { key: 'batch',       header: 'Batch',      render: r => r.batch_id
+      ? <span onClick={() => navigate(`/batches/${r.batch_id}`)} style={{ color: 'var(--text-brand)', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>{r.batch}</span>
+      : <span style={{ color: 'var(--text-secondary)' }}>—</span>
+    },
     { key: 'supplier',    header: 'Supplier',   render: r => r.supplier || 'Unknown' },
     { key: 'total_amount', header: 'Amount',    align: 'right', numeric: true,
       render: r => r.total_amount ? `₱${parseFloat(r.total_amount).toLocaleString()}` : '—' },
@@ -563,6 +567,7 @@ export default function SalesPage() {
                 { key: 'po_no',        header: 'PO No.' },
                 { key: 'order_date',   header: 'Date' },
                 { key: 'expected_date',header: 'Expected' },
+                { key: 'batch',        header: 'Batch' },
                 { key: 'supplier',     header: 'Supplier' },
                 { key: 'total_amount', header: 'Amount' },
                 { key: 'notes',        header: 'Description' },

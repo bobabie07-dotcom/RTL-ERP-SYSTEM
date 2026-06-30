@@ -54,14 +54,17 @@ def list_purchase_orders(
             po.po_no,
             po.order_date,
             po.expected_date,
-            s.name      AS supplier,
+            s.name       AS supplier,
+            po.batch_id,
+            b.batch_no   AS batch,
             po.total_amount,
             po.status,
             au.full_name AS approved_by_name,
             po.notes
         FROM purchase_orders po
-        LEFT JOIN suppliers s ON po.supplier_id = s.id
-        LEFT JOIN users     au ON po.approved_by = au.id
+        LEFT JOIN suppliers s  ON po.supplier_id = s.id
+        LEFT JOIN batches   b  ON po.batch_id    = b.id
+        LEFT JOIN users     au ON po.approved_by  = au.id
         WHERE 1=1
     """
     params: dict = {"limit": limit}
