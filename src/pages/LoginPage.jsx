@@ -7,17 +7,59 @@ import { Input } from '../components/forms/Input';
 import { Checkbox } from '../components/forms/Checkbox';
 import Icons from '../icons';
 
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin@rtl-poultry.com';
+
+function ContactModal({ onClose }) {
+  return (
+    <div
+      onClick={e => e.target === e.currentTarget && onClose()}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+        zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <div style={{
+        background: '#fff', borderRadius: 14, width: '100%', maxWidth: 380,
+        padding: 28, boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111827' }}>Contact Administrator</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#6b7280', lineHeight: 1 }}>×</button>
+        </div>
+        <p style={{ fontSize: 14, color: '#374151', margin: '0 0 16px', lineHeight: 1.6 }}>
+          For account issues, password resets, or new account requests, please contact your system administrator.
+        </p>
+        <a
+          href={`mailto:${ADMIN_EMAIL}?subject=RTL Poultry ERP — Account Assistance`}
+          style={{
+            display: 'block', textAlign: 'center',
+            background: '#16a34a', color: '#fff', borderRadius: 8,
+            padding: '10px 16px', fontSize: 14, fontWeight: 600,
+            textDecoration: 'none',
+          }}
+        >
+          Email Administrator
+        </a>
+        <p style={{ margin: '12px 0 0', textAlign: 'center', fontSize: 12, color: '#9ca3af' }}>
+          {ADMIN_EMAIL}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const navigate  = useNavigate();
   const { login } = useAuth();
   const I = Icons;
 
-  const [show, setShow]       = useState(false);
-  const [email, setEmail]     = useState('admin@rtl-poultry.com');
-  const [pass, setPass]       = useState('');
-  const [remember, setRemember] = useState(true);
-  const [error, setError]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [show, setShow]           = useState(false);
+  const [email, setEmail]         = useState('');
+  const [pass, setPass]           = useState('');
+  const [remember, setRemember]   = useState(false);
+  const [error, setError]         = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [showContact, setContact] = useState(false);
 
   const features = [
     ['birds', 'Track flocks, batches & poultry houses'],
@@ -41,6 +83,8 @@ export default function LoginPage() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', minHeight: 560, fontFamily: 'var(--font-body)' }}>
+      {showContact && <ContactModal onClose={() => setContact(false)} />}
+
       {/* Hero */}
       <div className="login-hero" style={{
         flex: '1 1 52%', position: 'relative',
@@ -104,13 +148,26 @@ export default function LoginPage() {
           />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Checkbox label="Remember me" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Contact admin to reset password</span>
+            <button
+              type="button"
+              onClick={() => setContact(true)}
+              style={{ fontSize: 13, color: 'var(--text-brand, #16a34a)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit', textDecoration: 'underline' }}
+            >
+              Contact admin to reset password
+            </button>
           </div>
           <Button type="submit" variant="primary" size="lg" fullWidth disabled={loading}>
             {loading ? 'Signing in...' : 'Login'}
           </Button>
           <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-            Don't have an account? <span style={{ fontWeight: 600, color: 'var(--text-body)' }}>Contact your administrator</span>
+            Don't have an account?{' '}
+            <button
+              type="button"
+              onClick={() => setContact(true)}
+              style={{ fontWeight: 600, color: 'var(--text-body)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontSize: 'inherit', textDecoration: 'underline' }}
+            >
+              Contact your administrator
+            </button>
           </p>
         </form>
       </div>
