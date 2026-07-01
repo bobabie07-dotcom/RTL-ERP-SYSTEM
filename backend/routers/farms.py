@@ -12,8 +12,11 @@ router = APIRouter(prefix="/farms", tags=["farms"])
 # ── Farms ─────────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=list[FarmOut])
-def list_farms(db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Farm).order_by(Farm.id).all()
+def list_farms(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    if current_user.role_id in (1, 5):
+        return db.query(Farm).order_by(Farm.id).all()
+    else:
+        return db.query(Farm).filter(Farm.id == current_user.farm_id).all()
 
 
 @router.post("", response_model=FarmOut, status_code=status.HTTP_201_CREATED)
@@ -82,8 +85,10 @@ def update_farm(
 def list_houses(
     farm_id: int,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5) and farm_id != current_user.farm_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     return db.query(House).filter(House.farm_id == farm_id).order_by(House.name).all()
 
 

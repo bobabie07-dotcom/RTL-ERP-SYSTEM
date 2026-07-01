@@ -43,10 +43,12 @@ _REV_SELECT = """
 """
 
 
-def _get_batch_or_404(batch_id: int, db: Session) -> Batch:
+def _get_batch_or_404(batch_id: int, db: Session, current_user=None) -> Batch:
     batch = db.get(Batch, batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+    if current_user and current_user.role_id not in (1, 5) and batch.farm_id != current_user.farm_id:
+        raise HTTPException(status_code=403, detail="Access denied to this batch")
     return batch
 
 
@@ -69,9 +71,9 @@ def list_batch_expenses(
     batch_id: int,
     include_voided: bool = Query(False),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    _get_batch_or_404(batch_id, db)
+    _get_batch_or_404(batch_id, db, current_user)
     sql = _EXP_SELECT + " WHERE be.batch_id = :bid"
     params = {"bid": batch_id}
     if not include_voided:
@@ -88,7 +90,7 @@ def add_batch_expense(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "batches")),
 ):
-    _get_batch_or_404(batch_id, db)
+    _get_batch_or_404(batch_id, db, current_user)
     cat = db.query(ExpenseCategory).filter(ExpenseCategory.code == body.category_code).first()
     if not cat:
         raise HTTPException(status_code=404, detail=f"Expense category '{body.category_code}' not found")
@@ -120,6 +122,7 @@ def update_batch_expense(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "batches")),
 ):
+    _get_batch_or_404(batch_id, db, current_user)
     exp = db.get(BatchExpense, exp_id)
     if not exp or exp.batch_id != batch_id:
         raise HTTPException(status_code=404, detail="Expense not found")
@@ -153,6 +156,7 @@ def void_batch_expense(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "batches")),
 ):
+    _get_batch_or_404(batch_id, db, current_user)
     exp = db.get(BatchExpense, exp_id)
     if not exp or exp.batch_id != batch_id:
         raise HTTPException(status_code=404, detail="Expense not found")
@@ -173,9 +177,9 @@ def list_batch_revenues(
     batch_id: int,
     include_voided: bool = Query(False),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    _get_batch_or_404(batch_id, db)
+    _get_batch_or_404(batch_id, db, current_user)
     sql = _REV_SELECT + " WHERE br.batch_id = :bid"
     params = {"bid": batch_id}
     if not include_voided:
@@ -192,7 +196,7 @@ def add_batch_revenue(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "batches")),
 ):
-    _get_batch_or_404(batch_id, db)
+    _get_batch_or_404(batch_id, db, current_user)
     rev = post_batch_revenue(
         batch_id=batch_id,
         amount=body.amount,
@@ -217,9 +221,9 @@ def add_batch_revenue(
 def get_batch_pnl(
     batch_id: int,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    batch = _get_batch_or_404(batch_id, db)
+    batch = _get_batch_or_404(batch_id, db, current_user)
 
     # Revenue from batch_revenues (auto-posted when sales orders are approved)
     rev_captured = float(db.execute(text("""

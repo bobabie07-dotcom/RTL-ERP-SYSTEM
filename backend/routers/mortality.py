@@ -22,8 +22,10 @@ def list_mortality(
     farm_id:  Optional[int] = Query(None),
     limit: int = Query(100, le=500),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     sql = """
         SELECT
             m.id,
@@ -162,8 +164,10 @@ def delete_mortality_record(
 def mortality_rates_7d(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     rows = db.execute(text("""
         SELECT
             m.batch_id,
@@ -203,8 +207,12 @@ def mortality_trend(
     batch_id: int = Query(...),
     days: int = Query(7, le=90),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        batch = db.get(Batch, batch_id)
+        if batch and batch.farm_id != current_user.farm_id:
+            raise HTTPException(status_code=403, detail="Access denied")
     rows = db.execute(text("""
         SELECT record_date AS date, SUM(count) AS deaths
         FROM mortality_records

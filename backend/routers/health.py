@@ -140,8 +140,10 @@ def delete_vaccination(
 def upcoming_vaccinations(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     rows = db.execute(text("""
         SELECT v.*
         FROM v_upcoming_vaccinations v
@@ -238,8 +240,10 @@ def create_treatment(
 def active_withdrawals(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     """Batches with an active withdrawal period — must not be sold yet."""
     rows = db.execute(text("""
         SELECT
