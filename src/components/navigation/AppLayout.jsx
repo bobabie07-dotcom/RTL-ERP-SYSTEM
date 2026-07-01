@@ -173,7 +173,7 @@ export function AppLayout({ children }) {
 
   const filteredNavItems = navItems.filter(item => {
     if (roleId === 6) {
-      return item.key === 'superadmin' || item.key === 'settings' || item.key === 'notifications';
+      return item.key === 'superadmin' || item.key === 'usermgmt' || item.key === 'settings' || item.key === 'notifications';
     }
     if (item.key === 'superadmin') return false;
     if (item.key === 'usermgmt') return hasRole(1);
