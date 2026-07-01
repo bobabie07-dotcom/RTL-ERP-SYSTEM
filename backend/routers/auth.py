@@ -179,7 +179,24 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
-    return current_user
+    extra_ids = [ur.role_id for ur in (getattr(current_user, 'extra_roles', None) or []) if ur.role]
+    all_ids   = [current_user.role_id] + [rid for rid in extra_ids if rid != current_user.role_id]
+    return {
+        "id":             current_user.id,
+        "company_id":     current_user.company_id,
+        "full_name":      current_user.full_name,
+        "email":          current_user.email,
+        "username":       current_user.username,
+        "farm_id":        current_user.farm_id,
+        "role_id":        current_user.role_id,
+        "department":     current_user.department,
+        "phone":          current_user.phone,
+        "is_active":      current_user.is_active,
+        "is_first_login": current_user.is_first_login,
+        "status":         getattr(current_user, 'status', 'active'),
+        "created_at":     current_user.created_at,
+        "all_role_ids":   all_ids,
+    }
 
 
 @router.put("/first-password")

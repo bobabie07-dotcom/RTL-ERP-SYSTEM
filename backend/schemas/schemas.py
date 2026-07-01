@@ -39,6 +39,7 @@ class UserOut(OrmBase):
     is_first_login: bool
     status:         str = "active"
     created_at:     datetime
+    all_role_ids:   list[int] = []
 
 
 class UserCreate(BaseModel):

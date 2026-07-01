@@ -167,15 +167,18 @@ export function AppLayout({ children }) {
     setAlerts(prev => prev.filter(a => a.id !== alert.id));
   }
 
-  const roleId = user?.role_id;
+  const roleId     = user?.role_id;
+  const allRoleIds = user?.all_role_ids?.length ? user.all_role_ids : [roleId];
+  const hasRole    = (...ids) => ids.some(id => allRoleIds.includes(id));
+
   const filteredNavItems = navItems.filter(item => {
     if (roleId === 6) {
       return item.key === 'superadmin' || item.key === 'settings' || item.key === 'notifications';
     }
     if (item.key === 'superadmin') return false;
-    if (item.key === 'usermgmt') return roleId === 1;
-    if (item.key === 'helpdesk') return roleId === 1 || roleId === 2 || roleId === 5;
-    if (item.key === 'support')  return roleId === 3 || roleId === 4;
+    if (item.key === 'usermgmt') return hasRole(1);
+    if (item.key === 'helpdesk') return hasRole(1, 2, 5);
+    if (item.key === 'support')  return hasRole(3, 4);
     return true;
   });
 

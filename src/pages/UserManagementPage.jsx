@@ -445,9 +445,10 @@ export default function UserManagementPage() {
     finally { setHistLoading(false); }
   }
 
+  const myRoles = me?.all_role_ids?.length ? me.all_role_ids : [me?.role_id];
   const roleOptions = [
     ...Object.entries(ROLE_MAP)
-      .filter(([id]) => parseInt(id) !== 6 || me?.role_id === 6)
+      .filter(([id]) => parseInt(id) !== 6 || myRoles.includes(6) || myRoles.includes(1))
       .map(([id, r]) => ({ id: parseInt(id), label: r.label })),
     ...roles.filter(r => !ROLE_MAP[r.id]).map(r => ({ id: r.id, label: r.name })),
   ];
