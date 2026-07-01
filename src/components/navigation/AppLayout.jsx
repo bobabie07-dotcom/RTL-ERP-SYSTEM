@@ -191,31 +191,47 @@ export function AppLayout({ children }) {
           active={activeKey}
           onSelect={handleNavSelect}
           footer={
-            farms.length > 0 ? (
-              <select
-                value={farmId}
-                onChange={e => selectFarm(Number(e.target.value))}
-                style={{
-                  width: '100%', padding: '8px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  background: 'rgba(255,255,255,0.08)',
-                  color: '#fff',
-                  fontSize: '13px',
-                  fontFamily: 'var(--font-body)',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  outline: 'none',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 10px center',
-                  paddingRight: 32,
-                }}
-              >
-                {farms.map(f => <option key={f.id} value={f.id} style={{ background: '#1a2e22', color: '#fff' }}>{f.name}</option>)}
-              </select>
+            (user?.role_id === 1 || user?.role_id === 5) ? (
+              farms.length > 0 ? (
+                <select
+                  value={farmId}
+                  onChange={e => selectFarm(Number(e.target.value))}
+                  style={{
+                    width: '100%', padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: '#fff',
+                    fontSize: '13px',
+                    fontFamily: 'var(--font-body)',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    outline: 'none',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 10px center',
+                    paddingRight: 32,
+                  }}
+                >
+                  {farms.map(f => <option key={f.id} value={f.id} style={{ background: '#1a2e22', color: '#fff' }}>{f.name}</option>)}
+                </select>
+              ) : null
+            ) : selectedFarm ? (
+              <div style={{
+                color: 'rgba(232,240,235,0.85)',
+                fontSize: '13px',
+                fontFamily: 'var(--font-body)',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 4px'
+              }}>
+                <span style={{ fontSize: '15px' }}>🏢</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFarm.name}</span>
+              </div>
             ) : null
           }
         />
