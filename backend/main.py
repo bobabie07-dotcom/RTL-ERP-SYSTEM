@@ -27,8 +27,17 @@ def run_startup_migrations():
         _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN brand VARCHAR(100) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN remarks TEXT DEFAULT NULL")
         # User management extended fields
-        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN employee_id VARCHAR(50) UNIQUE DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE users ADD COLUMN employee_id VARCHAR(50) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN position VARCHAR(100) DEFAULT NULL")
+        # Convert global unique on employee_id → per-company composite unique (idempotent)
+        try:
+            conn.execute(text("ALTER TABLE users DROP INDEX employee_id"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE users ADD UNIQUE KEY uq_user_emp_company (company_id, employee_id)"))
+        except Exception:
+            pass
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN failed_login_count INT NOT NULL DEFAULT 0")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN locked_until DATETIME DEFAULT NULL")

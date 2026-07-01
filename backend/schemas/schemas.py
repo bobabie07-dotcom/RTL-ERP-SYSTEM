@@ -46,7 +46,6 @@ class UserCreate(BaseModel):
     full_name:    str
     email:        str
     username:     Optional[str] = None
-    employee_id:  Optional[str] = None
     role_id:      int = 3
     company_id:   Optional[int] = 1
     farm_id:      Optional[int] = 1

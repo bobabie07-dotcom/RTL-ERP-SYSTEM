@@ -76,6 +76,25 @@ def _build_detail(user: User) -> dict:
     }
 
 
+def _next_employee_id(db: Session, company_id: int) -> str:
+    """Return the next sequential EMP-NNNN for this company, starting at EMP-0001."""
+    rows = db.query(User.employee_id).filter(
+        User.company_id == company_id,
+        User.employee_id.ilike('EMP-%'),
+        User.deleted_at == None,  # noqa: E711
+    ).all()
+    max_n = 0
+    for (eid,) in rows:
+        if eid:
+            try:
+                n = int(eid.split('-', 1)[1])
+                if n > max_n:
+                    max_n = n
+            except (IndexError, ValueError):
+                pass
+    return f"EMP-{max_n + 1:04d}"
+
+
 # ── User List & Detail ────────────────────────────────────────────────────────
 
 @router.get("")
@@ -172,12 +191,11 @@ def create_user(
         raise HTTPException(400, "Email already registered")
     if body.username and db.query(User).filter(User.username == body.username).first():
         raise HTTPException(400, "Username already taken")
-    if body.employee_id and db.query(User).filter(User.employee_id == body.employee_id).first():
-        raise HTTPException(400, "Employee ID already exists")
 
-    company_id = body.company_id if (current_user.role_id == 6 and body.company_id) else current_user.company_id
+    company_id  = body.company_id if (current_user.role_id == 6 and body.company_id) else current_user.company_id
+    employee_id = _next_employee_id(db, company_id)
     user = User(
-        employee_id=body.employee_id or None,
+        employee_id=employee_id,
         full_name=body.full_name,
         email=body.email,
         username=body.username or None,

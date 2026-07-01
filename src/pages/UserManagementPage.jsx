@@ -27,7 +27,7 @@ const DEPARTMENTS = ['Management','Operations','Finance','IT','Veterinary','Logi
 const POSITIONS   = ['Manager','Supervisor','Staff','Coordinator','Analyst','Officer','Assistant','Encoder','Specialist'];
 
 const EMPTY_FORM = {
-  full_name: '', email: '', username: '', employee_id: '',
+  full_name: '', email: '', username: '',
   role_id: '3', farm_id: '', department: '', position: '', phone: '',
   company_id: '',
 };
@@ -155,9 +155,6 @@ function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions
         </FieldRow>
         <FieldRow label="Username">
           <input style={INP} value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} placeholder="Optional" />
-        </FieldRow>
-        <FieldRow label="Employee ID">
-          <input style={INP} value={form.employee_id} onChange={e => setForm(p => ({ ...p, employee_id: e.target.value }))} placeholder="EMP-0001" />
         </FieldRow>
         <FieldRow label="Phone">
           <input style={INP} value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
@@ -309,7 +306,6 @@ export default function UserManagementPage() {
           full_name:   form.full_name,
           email:       form.email,
           username:    form.username || undefined,
-          employee_id: form.employee_id || undefined,
           role_id:     parseInt(form.role_id),
           farm_id:     form.farm_id ? parseInt(form.farm_id) : undefined,
           department:  form.department || undefined,
@@ -324,7 +320,6 @@ export default function UserManagementPage() {
           full_name:   form.full_name,
           email:       form.email,
           username:    form.username || undefined,
-          employee_id: form.employee_id || undefined,
           role_id:     parseInt(form.role_id),
           farm_id:     form.farm_id ? parseInt(form.farm_id) : undefined,
           department:  form.department || undefined,
@@ -402,7 +397,6 @@ export default function UserManagementPage() {
       full_name:   u.full_name   || '',
       email:       u.email       || '',
       username:    u.username    || '',
-      employee_id: u.employee_id || '',
       role_id:     String(u.role_id || 3),
       farm_id:     u.farm_id ? String(u.farm_id) : '',
       department:  u.department  || '',

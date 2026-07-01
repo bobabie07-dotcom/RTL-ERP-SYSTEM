@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, Enum, ForeignKey,
     Integer, JSON, Numeric, SmallInteger, String, Text,
-    func,
+    UniqueConstraint, func,
 )
 from sqlalchemy.orm import relationship
 
@@ -73,9 +73,10 @@ class Farm(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint('company_id', 'employee_id', name='uq_user_emp_company'),)
 
     id                      = Column(Integer, primary_key=True, autoincrement=True)
-    employee_id             = Column(String(50), unique=True, nullable=True)
+    employee_id             = Column(String(50), nullable=True)
     company_id              = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     farm_id                 = Column(SmallInteger, ForeignKey("farms.id"), nullable=True)
     role_id                 = Column(SmallInteger, ForeignKey("roles.id"), nullable=False, default=3)
