@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { usersApi, farmsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useFarm } from '../context/FarmContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -428,18 +430,23 @@ export default function UserManagementPage() {
     <div style={{ padding: 24, fontFamily: 'system-ui, sans-serif', maxWidth: 1400, margin: '0 auto' }}>
       <Toast msg={toast.msg} ok={toast.ok} />
 
+      <PrintPageHeader title="User Management" />
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#111827' }}>User Management</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, color: '#6b7280' }}>Create accounts, manage roles, monitor access and activity.</p>
         </div>
-        <button
-          onClick={() => { setForm(EMPTY_FORM); setFormErr(''); setAddModal(true); }}
-          style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
-        >
-          + Add User
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PrintButton title="User Management" />
+          <button
+            onClick={() => { setForm(EMPTY_FORM); setFormErr(''); setAddModal(true); }}
+            style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+          >
+            + Add User
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

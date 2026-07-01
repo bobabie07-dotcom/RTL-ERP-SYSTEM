@@ -1,0 +1,70 @@
+@media print {
+  /* ── Hide UI chrome ─────────────────────────────────────────────────────── */
+  .no-print { display: none !important; }
+
+  /* ── Show print-only elements ───────────────────────────────────────────── */
+  .print-only { display: block !important; }
+
+  /* ── Page setup ─────────────────────────────────────────────────────────── */
+  @page { margin: 1.5cm 1.5cm 2cm; }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /* ── App shell — override flex/overflow so content flows normally ──────── */
+  .app-shell {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .page-content {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* ── Cards ───────────────────────────────────────────────────────────────── */
+  .card-root {
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* ── Tables ──────────────────────────────────────────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: auto;
+  }
+
+  thead { display: table-header-group; }
+
+  tr { page-break-inside: avoid; page-break-after: auto; }
+
+  th, td {
+    border: 1px solid #e5e7eb;
+    padding: 6px 10px;
+    font-size: 11pt;
+    text-align: left;
+  }
+
+  th {
+    background: #f9fafb !important;
+    font-weight: 700;
+  }
+
+  /* ── Stat cards — keep on one line ──────────────────────────────────────── */
+  .stat-grid { break-inside: avoid; page-break-inside: avoid; }
+
+  /* ── Charts — allow page break before if needed ─────────────────────────── */
+  .chart-split { page-break-before: auto; }
+}

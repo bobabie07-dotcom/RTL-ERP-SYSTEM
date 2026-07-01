@@ -12,6 +12,7 @@ import { getStoredMarketPrice } from '../utils/useMarketPrice';
 import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Modal';
 import { useFarm } from '../context/FarmContext';
 import { useAuth } from '../context/AuthContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 
 const I = Icons;
@@ -566,10 +567,12 @@ export default function BatchDetailPage() {
 
       {pageErr && <div style={{ padding: '12px 16px', background: 'var(--danger-bg)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, color: 'var(--danger)', fontSize: 13 }}>⚠ {pageErr}</div>}
 
+      <PrintPageHeader title={`Batch: ${batch.batch_no}`} />
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Button variant="ghost" size="sm" icon={<I.chevronRight w={15} style={{ transform: 'rotate(180deg)' }} />} onClick={() => navigate('/batches')}>Back</Button>
+          <Button variant="ghost" size="sm" icon={<I.chevronRight w={15} style={{ transform: 'rotate(180deg)' }} />} onClick={() => navigate('/batches')} className="no-print">Back</Button>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>{batch.batch_no}</h2>
@@ -581,6 +584,7 @@ export default function BatchDetailPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
+          <PrintButton title={`Batch: ${batch.batch_no}`} />
           <Button variant="secondary" size="md" icon={<I.plus w={16} />} onClick={() => { setLogForm({ ...BLANK_LOG, current_count: String(batch.current_count || '') }); setLogErr(''); setEditLogId(null); setLogModal(true); }}>Log Today</Button>
           <Button variant="secondary" size="md" icon={<I.syringe w={16} />} onClick={() => { setRecForm(BLANK_EVENT); setRecErr(''); setRecordModal(true); }}>Add Record</Button>
           {batch.status !== 'harvested' && (

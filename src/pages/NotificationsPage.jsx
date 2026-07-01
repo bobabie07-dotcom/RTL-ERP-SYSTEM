@@ -5,6 +5,7 @@ import { Badge } from '../components/core/Badge';
 import { Button } from '../components/core/Button';
 import { alertsApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 
 function getAlertRoute(alertType) {
   switch (alertType) {
@@ -55,6 +56,7 @@ export default function NotificationsPage() {
 
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <PrintPageHeader title="Notifications" />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Notifications</h2>
@@ -62,11 +64,14 @@ export default function NotificationsPage() {
             {loading ? 'Loading…' : `${unreadCount} unread · ${alerts.length} total`}
           </p>
         </div>
-        {unreadCount > 0 && (
-          <Button variant="secondary" size="md" onClick={handleMarkAll} disabled={markingAll}>
-            {markingAll ? 'Marking…' : 'Mark all read'}
-          </Button>
-        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PrintButton title="Notifications" />
+          {unreadCount > 0 && (
+            <Button variant="secondary" size="md" onClick={handleMarkAll} disabled={markingAll}>
+              {markingAll ? 'Marking…' : 'Mark all read'}
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>

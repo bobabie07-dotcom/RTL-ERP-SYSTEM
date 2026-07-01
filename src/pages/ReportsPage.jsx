@@ -436,10 +436,13 @@ export default function ReportsPage() {
           {/* Printable area */}
           <div id="report-print-area" ref={printRef}>
             {/* Print header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 16, borderBottom: '2px solid var(--border)' }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: 'var(--text-strong)' }}>RTL Poultry Farming ERP</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>{farmName}</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 16, borderBottom: '2px solid #16a34a' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <img src="/logo-mark.png" alt="" style={{ height: 44, objectFit: 'contain' }} />
+                <div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: 'var(--text-strong)' }}>RTL Poultry Farming ERP</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>{farmName}</div>
+                </div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-strong)' }}>{report?.title}</div>

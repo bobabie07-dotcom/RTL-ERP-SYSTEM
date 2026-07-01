@@ -16,8 +16,10 @@ FALLBACK_FEED_PRICE = 25.0  # ₱/kg
 def farm_finances(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     """Financial health overview for a single farm."""
     year = db.execute(text("SELECT YEAR(CURDATE())")).scalar()
 
@@ -113,8 +115,10 @@ def mortality_impact(
     market_price: float = Query(120.0),
     pricing_mode: str   = Query("per_kg"),   # "per_kg" (broiler) or "per_bird" (layer/rtl)
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     """Per-batch mortality financial impact with profit projection."""
 
     rows = db.execute(text("""
@@ -224,8 +228,10 @@ def mortality_impact(
 def batch_pnl(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     rows = db.execute(text("""
         SELECT v.*
         FROM v_batch_pnl v
@@ -240,8 +246,10 @@ def batch_pnl(
 def feed_efficiency(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     rows = db.execute(text("""
         SELECT
             b.id                AS batch_id,
@@ -277,8 +285,10 @@ def monthly_summary(
     year:    int = Query(2025),
     month:   int = Query(6),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     params = {"farm_id": farm_id, "year": year, "month": month, "fallback": FALLBACK_FEED_PRICE}
 
     mortality = db.execute(text("""
@@ -350,8 +360,10 @@ def monthly_summary(
 def inventory_snapshot(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     rows = db.execute(text("""
         SELECT
             ic.name         AS category,
@@ -376,8 +388,10 @@ def inventory_snapshot(
 def batch_comparison(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     """Compare key KPIs across all batches for a farm."""
 
     rows = db.execute(text("""
@@ -481,8 +495,10 @@ def mortality_analysis(
     farm_id: int = Query(1),
     days: int = Query(30, le=365),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     rows = db.execute(text("""
         SELECT
             m.cause,

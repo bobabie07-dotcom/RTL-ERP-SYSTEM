@@ -10,6 +10,7 @@ import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Moda
 import { inventoryApi } from '../api/client';
 import { exportCsv } from '../utils/exportCsv';
 import { useFarm } from '../context/FarmContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 
 const I = Icons;
@@ -213,12 +214,16 @@ export default function InventoryPage() {
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {loadError && <ErrBanner message={loadError} />}
+      <PrintPageHeader title="Inventory" />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Inventory</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Manage feeds, medicines, and farm supplies.</p>
         </div>
-        <Button variant="primary" size="md" icon={<I.plus w={16} />} onClick={openAdd}>Add Item</Button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PrintButton title="Inventory" />
+          <Button variant="primary" size="md" icon={<I.plus w={16} />} onClick={openAdd}>Add Item</Button>
+        </div>
       </div>
 
       <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>

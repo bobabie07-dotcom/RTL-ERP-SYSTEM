@@ -11,6 +11,7 @@ import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Moda
 import { mortalityApi, batchesApi, reportsApi, batchFinanceApi } from '../api/client';
 import { exportCsv } from '../utils/exportCsv';
 import { useFarm } from '../context/FarmContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 import { calcFinancialLoss, calcTotalFinancialLoss, calcDetailedMortalityLoss, getAgeAtDeath } from '../utils/mortality';
 import { useMarketPrice } from '../utils/useMarketPrice';
@@ -307,6 +308,7 @@ export default function MortalityPage() {
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {loadError && <ErrBanner message={loadError} />}
+      <PrintPageHeader title="Mortality Tracker" />
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -314,7 +316,10 @@ export default function MortalityPage() {
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Mortality Tracker</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Monitor and analyze flock mortality across all batches.</p>
         </div>
-        <Button variant="primary" size="md" icon={<I.plus w={16} />} onClick={openModal}>Add Record</Button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PrintButton title="Mortality Tracker" />
+          <Button variant="primary" size="md" icon={<I.plus w={16} />} onClick={openModal}>Add Record</Button>
+        </div>
       </div>
 
       {/* Stats */}

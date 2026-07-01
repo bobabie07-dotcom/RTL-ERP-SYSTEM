@@ -6,6 +6,7 @@ import { Button } from '../components/core/Button';
 import { DataTable } from '../components/data/DataTable';
 import { healthApi, batchesApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 
 const I = Icons;
@@ -65,11 +66,15 @@ export default function HealthPage() {
 
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Animal Health</h2>
-        <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>
-          Vaccination schedules and health events across all batches.
-        </p>
+      <PrintPageHeader title="Animal Health" />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Animal Health</h2>
+          <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>
+            Vaccination schedules and health events across all batches.
+          </p>
+        </div>
+        <PrintButton title="Animal Health" />
       </div>
 
       {/* KPI strip */}

@@ -9,6 +9,7 @@ import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Moda
 import { feedApi, batchesApi, inventoryApi } from '../api/client';
 import { exportCsv } from '../utils/exportCsv';
 import { useFarm } from '../context/FarmContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 
 const LAYER_GUIDE = [
@@ -245,12 +246,14 @@ export default function FeedPage() {
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {loadError && <ErrBanner message={loadError} />}
+      <PrintPageHeader title="Feed Management" />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Feed Management</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Monitor feed consumption, FCR, and stock levels.</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <PrintButton title="Feed Management" />
           <Button variant="secondary" size="md" icon={<I.box w={16} />} onClick={openPurchaseModal}>Record Purchase</Button>
           <Button variant="primary"   size="md" icon={<I.plus w={16} />} onClick={openModal}>Issue Feed</Button>
         </div>

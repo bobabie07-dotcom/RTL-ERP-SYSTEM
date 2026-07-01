@@ -6,6 +6,7 @@ import { Button } from '../components/core/Button';
 import { Modal, FormRow, FieldInput } from '../components/core/Modal';
 import { farmsApi, reportsApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 
 const I = Icons;
@@ -124,12 +125,16 @@ export default function FarmsPage() {
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {loadError && <div style={{ padding: '12px 16px', background: 'var(--danger-bg)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, color: 'var(--danger)', fontSize: 13 }}>⚠ {loadError}</div>}
+      <PrintPageHeader title="Farm Management" />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Farm Management</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Manage all farms registered in the system.</p>
         </div>
-        <Button variant="primary" icon={<I.plus w={16} />} onClick={openAdd}>Add Farm</Button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PrintButton title="Farm Management" />
+          <Button variant="primary" icon={<I.plus w={16} />} onClick={openAdd}>Add Farm</Button>
+        </div>
       </div>
 
       <Card>

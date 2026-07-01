@@ -50,8 +50,10 @@ def list_items(
     status:      Optional[str] = Query(None),  # in_stock | low_stock | out_of_stock
     search:      Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     q = db.query(InventoryItem)
     if farm_id:
         q = q.filter(InventoryItem.farm_id == farm_id)
@@ -216,9 +218,12 @@ class CheckAlertsPayload(BaseModel):
 def check_inventory_alerts(
     body: CheckAlertsPayload,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    items = db.query(InventoryItem).filter(InventoryItem.farm_id == body.farm_id).all()
+    target_farm_id = body.farm_id
+    if current_user.role_id not in (1, 5):
+        target_farm_id = current_user.farm_id
+    items = db.query(InventoryItem).filter(InventoryItem.farm_id == target_farm_id).all()
     for item in items:
         check_and_create_inventory_alerts(item, db)
     db.commit()

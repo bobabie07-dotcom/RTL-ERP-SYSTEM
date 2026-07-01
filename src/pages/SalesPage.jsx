@@ -10,6 +10,7 @@ import { salesApi, procurementApi, batchesApi, inventoryApi } from '../api/clien
 import { exportCsv } from '../utils/exportCsv';
 import { useFarm } from '../context/FarmContext';
 import { useAuth } from '../context/AuthContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 
 const fmt = n => `₱${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -515,12 +516,14 @@ export default function SalesPage() {
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {loadError && <ErrBanner message={loadError} />}
+      <PrintPageHeader title="Sales & Procurement" />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Sales & Procurement</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Track poultry sales, purchase orders, and approval workflows.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PrintButton title="Sales & Procurement" />
           <Button variant="secondary" size="md" icon={<I.procurement w={16} />} onClick={openPoModal}>New Purchase</Button>
           <Button variant="primary"   size="md" icon={<I.plus w={16} />} onClick={openSaleModal}>New Sale</Button>
         </div>

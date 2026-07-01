@@ -4,6 +4,7 @@ import { Badge } from '../components/core/Badge';
 import { DataTable } from '../components/data/DataTable';
 import { maintenanceApi, farmsApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 
 const STATUS_TONE  = { pending: 'warning', in_progress: 'info', completed: 'success', cancelled: 'neutral' };
 const STATUS_LABEL = { pending: 'Pending', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled' };
@@ -48,11 +49,15 @@ export default function MaintenancePage() {
 
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Maintenance</h2>
-        <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>
-          Maintenance logs across all poultry houses.
-        </p>
+      <PrintPageHeader title="Maintenance" />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Maintenance</h2>
+          <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>
+            Maintenance logs across all poultry houses.
+          </p>
+        </div>
+        <PrintButton title="Maintenance" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>

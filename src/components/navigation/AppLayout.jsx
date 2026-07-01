@@ -182,13 +182,13 @@ export function AppLayout({ children }) {
   const displayName = user?.full_name || 'Admin User';
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'var(--font-body)', background: 'var(--surface-page)', overflow: 'hidden' }}>
+    <div className="app-shell" style={{ display: 'flex', height: '100vh', fontFamily: 'var(--font-body)', background: 'var(--surface-page)', overflow: 'hidden' }}>
 
       {sidebarOpen && (
         <div onClick={() => setSidebarOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 99, display: 'none' }} className="sidebar-overlay" />
       )}
 
-      <div style={{ position: 'relative', zIndex: 100, transition: 'transform 200ms var(--ease-std)' }} className={sidebarOpen ? 'sidebar-open' : ''}>
+      <div style={{ position: 'relative', zIndex: 100, transition: 'transform 200ms var(--ease-std)' }} className={`no-print${sidebarOpen ? ' sidebar-open' : ''}`}>
         <SidebarNav
           brand={<img src="/logo-lockup-dark.png" alt="RTL Poultry Farming ERP" style={{ height: 40 }} />}
           items={nav}
@@ -242,7 +242,7 @@ export function AppLayout({ children }) {
       </div>
 
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-        <Topbar
+        <div className="no-print"><Topbar
           title={pageTitle}
           subtitle={farmSubtitle}
           onMenu={() => setSidebarOpen((s) => !s)}
@@ -273,7 +273,7 @@ export function AppLayout({ children }) {
               </button>
             </React.Fragment>
           }
-        />
+        /></div>
         <div style={{ flex: 1, overflowY: 'auto' }} className="page-content">{children}</div>
       </div>
 

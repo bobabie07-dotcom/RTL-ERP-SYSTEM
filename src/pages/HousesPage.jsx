@@ -8,6 +8,7 @@ import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Moda
 import { farmsApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
 import { HouseMaintenanceCard } from '../components/HouseMaintenanceCard';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 
 const I = Icons;
@@ -155,6 +156,7 @@ export default function HousesPage() {
 
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <PrintPageHeader title="Poultry Houses" />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Poultry Houses</h2>
@@ -162,7 +164,10 @@ export default function HousesPage() {
             Houses for {currentFarm?.name || `Farm #${farmId}`} — switch farms from the sidebar.
           </p>
         </div>
-        <Button variant="primary" icon={<I.plus w={16} />} onClick={openAdd}>Add House</Button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PrintButton title="Poultry Houses" />
+          <Button variant="primary" icon={<I.plus w={16} />} onClick={openAdd}>Add House</Button>
+        </div>
       </div>
 
       {loadError && <ErrBanner message={loadError} />}

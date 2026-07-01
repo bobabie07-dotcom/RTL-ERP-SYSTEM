@@ -9,6 +9,7 @@ import { LineChart, DonutChart, BarChart } from '../charts';
 import { batchesApi, dashboardApi, feedApi, salesApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
 import { getBatchAgeStatus } from '../utils/mortality';
+import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 
 const I = Icons;
@@ -82,9 +83,13 @@ export default function DashboardPage() {
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {loadError && <ErrBanner message={loadError} />}
-      <div>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Welcome back!</h2>
-        <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Here's what's happening on your farms today.</p>
+      <PrintPageHeader title="Dashboard" />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Welcome back!</h2>
+          <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Here's what's happening on your farms today.</p>
+        </div>
+        <PrintButton title="Dashboard" />
       </div>
 
       <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>

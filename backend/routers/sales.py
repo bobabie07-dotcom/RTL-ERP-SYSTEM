@@ -47,8 +47,10 @@ def list_orders(
     status:   Optional[str] = Query(None),
     limit:    int = Query(100, le=500),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     sql = """
         SELECT
             so.id,
@@ -218,8 +220,10 @@ def list_expenses(
     farm_id:  Optional[int] = Query(None),
     batch_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     q = db.query(Expense)
     if farm_id:
         q = q.filter(Expense.farm_id == farm_id)
@@ -296,8 +300,10 @@ def record_payment(
 def accounts_receivable(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     rows = db.execute(text("""
         SELECT
             so.id,
@@ -341,8 +347,10 @@ def accounts_receivable(
 def sales_summary(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     row = db.execute(text("""
         SELECT
             COUNT(so.id)                                        AS total_orders,
