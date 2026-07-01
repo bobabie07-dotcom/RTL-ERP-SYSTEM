@@ -50,6 +50,8 @@ def list_purchase_orders(
 ):
     if current_user.role_id not in (1, 5):
         farm_id = current_user.farm_id
+        if not farm_id:
+            return []
     sql = """
         SELECT
             po.id,

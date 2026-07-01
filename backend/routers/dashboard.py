@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
@@ -14,8 +14,12 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 def get_dashboard(
     farm_id: int = 1,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
+        if not farm_id:
+            raise HTTPException(status_code=403, detail="No farm assigned to your account. Contact your administrator.")
     farm_batches = db.query(Batch).filter(Batch.farm_id == farm_id)
 
     total_batches  = farm_batches.count()

@@ -32,6 +32,8 @@ def list_logs(
 ):
     if current_user.role_id not in (1, 5):
         farm_id = current_user.farm_id
+        if not farm_id:
+            return []
     q = db.query(MaintenanceLog)
     if house_id:
         q = q.filter(MaintenanceLog.house_id == house_id)

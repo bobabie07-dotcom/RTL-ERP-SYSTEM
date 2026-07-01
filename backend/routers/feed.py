@@ -167,8 +167,12 @@ def list_feed_issues(
     farm_id:  Optional[int] = Query(None),
     limit: int = Query(100, le=500),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
+        if not farm_id:
+            return []
     sql = """
         SELECT
             fi.id,
@@ -298,8 +302,12 @@ def update_feed_issue(
 def weekly_consumption(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
+        if not farm_id:
+            return []
     rows = db.execute(text("""
         SELECT
             h.name          AS house,

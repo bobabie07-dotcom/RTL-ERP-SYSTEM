@@ -22,8 +22,13 @@ def list_batches(
     farm_id:  Optional[int] = Query(None),
     status:   Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
+        if not farm_id:
+            return []
+
     sql = "SELECT * FROM v_batch_summary WHERE 1=1"
     params: dict = {}
     if farm_id:
@@ -85,7 +90,7 @@ def create_batch(
 def get_batch(
     batch_id: int,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
     row = db.execute(
         text("SELECT * FROM v_batch_summary WHERE id = :id"),
@@ -93,6 +98,10 @@ def get_batch(
     ).mappings().first()
     if not row:
         raise HTTPException(status_code=404, detail="Batch not found")
+    
+    if current_user.role_id not in (1, 5) and row["farm_id"] != current_user.farm_id:
+        raise HTTPException(status_code=403, detail="Access denied to this batch")
+        
     return BatchSummaryRow(**dict(row))
 
 
@@ -219,17 +228,22 @@ def delete_log(
 # ── Reference data ────────────────────────────────────────────────────────────
 
 @router.get("/meta/farms", response_model=list[FarmOut])
-def list_farms(db: Session = Depends(get_db), _=Depends(get_current_user)):
+def list_farms(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     from models import Farm
-    return db.query(Farm).all()
+    if current_user.role_id in (1, 5):
+        return db.query(Farm).all()
+    else:
+        return db.query(Farm).filter(Farm.id == current_user.farm_id).all()
 
 
 @router.get("/meta/houses", response_model=list[HouseOut])
 def list_houses(
     farm_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     q = db.query(House).filter(House.is_active == True)
     if farm_id:
         q = q.filter(House.farm_id == farm_id)

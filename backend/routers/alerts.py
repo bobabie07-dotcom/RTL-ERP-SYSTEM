@@ -18,8 +18,12 @@ def list_alerts(
     unread:   bool = Query(False),
     limit:    int  = Query(50, le=200),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
+        if not farm_id:
+            return []
     # Generate any new alerts before returning the list
     generate_farm_alerts(farm_id, db)
 
@@ -33,11 +37,13 @@ def list_alerts(
 def mark_read(
     alert_id: int,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
     alert = db.get(Alert, alert_id)
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+    if current_user.role_id not in (1, 5) and alert.farm_id != current_user.farm_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     alert.is_read = True
     db.commit()
     db.refresh(alert)
@@ -48,8 +54,10 @@ def mark_read(
 def mark_all_read(
     farm_id: int = Query(1),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
+    if current_user.role_id not in (1, 5):
+        farm_id = current_user.farm_id
     updated = (
         db.query(Alert)
         .filter(Alert.farm_id == farm_id, Alert.is_read == False)  # noqa: E712

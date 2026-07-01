@@ -144,6 +144,8 @@ def upcoming_vaccinations(
 ):
     if current_user.role_id not in (1, 5):
         farm_id = current_user.farm_id
+        if not farm_id:
+            return []
     rows = db.execute(text("""
         SELECT v.*
         FROM v_upcoming_vaccinations v
@@ -244,6 +246,8 @@ def active_withdrawals(
 ):
     if current_user.role_id not in (1, 5):
         farm_id = current_user.farm_id
+        if not farm_id:
+            return []
     """Batches with an active withdrawal period — must not be sold yet."""
     rows = db.execute(text("""
         SELECT

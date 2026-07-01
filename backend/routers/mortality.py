@@ -26,6 +26,8 @@ def list_mortality(
 ):
     if current_user.role_id not in (1, 5):
         farm_id = current_user.farm_id
+        if not farm_id:
+            return []
     sql = """
         SELECT
             m.id,
@@ -168,6 +170,8 @@ def mortality_rates_7d(
 ):
     if current_user.role_id not in (1, 5):
         farm_id = current_user.farm_id
+        if not farm_id:
+            return []
     rows = db.execute(text("""
         SELECT
             m.batch_id,
