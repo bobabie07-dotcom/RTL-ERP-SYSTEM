@@ -116,12 +116,16 @@ export function AppLayout({ children }) {
   const [alerts,      setAlerts]      = useState([]);
   const notifRef = useRef(null);
 
-  // Load unread alerts
+  // Load unread alerts once on mount + every 5 minutes (not on every page nav)
   useEffect(() => {
-    alertsApi.list({ farm_id: farmId, unread: true, limit: 20 })
-      .then(setAlerts)
-      .catch(() => {});
-  }, [location.pathname, farmId]);
+    const fetchAlerts = () =>
+      alertsApi.list({ farm_id: farmId, unread: true, limit: 20 })
+        .then(setAlerts)
+        .catch(() => {});
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [farmId]);
 
   // Close notifications on outside click
   useEffect(() => {

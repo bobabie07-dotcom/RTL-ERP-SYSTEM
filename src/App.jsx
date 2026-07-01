@@ -1,5 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+
+// Keep Render.com backend awake — ping every 10 minutes to prevent cold starts
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+setInterval(() => fetch(`${BASE_URL}/api/health-check`).catch(() => {}), 10 * 60 * 1000);
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FarmProvider } from './context/FarmContext';
 import { AppLayout } from './components/navigation/AppLayout';

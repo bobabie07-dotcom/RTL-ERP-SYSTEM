@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,10 @@ from schemas.schemas import AlertOut
 from utils import generate_farm_alerts
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
+
+# Cache: only regenerate alerts at most once every 5 minutes per farm
+_alert_gen_cache: dict[int, float] = {}
+_ALERT_GEN_TTL = 300
 
 
 @router.get("", response_model=list[AlertOut])
@@ -24,8 +29,11 @@ def list_alerts(
         farm_id = current_user.farm_id
         if not farm_id:
             return []
-    # Generate any new alerts before returning the list
-    generate_farm_alerts(farm_id, db)
+    # Generate new alerts at most once per 5 minutes per farm
+    now = time.monotonic()
+    if now - _alert_gen_cache.get(farm_id, 0) > _ALERT_GEN_TTL:
+        generate_farm_alerts(farm_id, db)
+        _alert_gen_cache[farm_id] = now
 
     q = db.query(Alert).filter(Alert.farm_id == farm_id)
     if unread:
