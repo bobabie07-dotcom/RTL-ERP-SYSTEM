@@ -12,6 +12,7 @@ const ROLE_MAP = {
   3: { label: 'Farm Worker',   color: '#374151', bg: '#f3f4f6' },
   4: { label: 'Veterinarian',  color: '#16a34a', bg: '#dcfce7' },
   5: { label: 'Owner',         color: '#92400e', bg: '#fef3c7' },
+  6: { label: 'Super Admin',   color: '#7c3aed', bg: '#f5f3ff' },
 };
 
 const STATUS_MAP = {
@@ -421,7 +422,9 @@ export default function UserManagementPage() {
   }
 
   const roleOptions = [
-    ...Object.entries(ROLE_MAP).map(([id, r]) => ({ id: parseInt(id), label: r.label })),
+    ...Object.entries(ROLE_MAP)
+      .filter(([id]) => parseInt(id) !== 6 || me?.role_id === 6)
+      .map(([id, r]) => ({ id: parseInt(id), label: r.label })),
     ...roles.filter(r => !ROLE_MAP[r.id]).map(r => ({ id: r.id, label: r.name })),
   ];
 
