@@ -4,11 +4,16 @@ import { useAuth } from './AuthContext';
 
 const FarmContext = createContext(null);
 
+function canSwitchFarms(user) {
+  const ids = user?.all_role_ids?.length ? user.all_role_ids : [user?.role_id];
+  return ids.some(id => id === 1 || id === 5 || id === 6);
+}
+
 export function FarmProvider({ children }) {
   const { user } = useAuth();
   const [farms, setFarms] = useState([]);
   const [farmId, setFarmId] = useState(() => {
-    if (user && user.role_id !== 1 && user.role_id !== 5 && user.role_id !== 6) {
+    if (user && !canSwitchFarms(user)) {
       return user.farm_id;
     }
     const saved = localStorage.getItem('erp_farm_id');
@@ -16,7 +21,7 @@ export function FarmProvider({ children }) {
   });
 
   useEffect(() => {
-    if (user && user.role_id !== 1 && user.role_id !== 5 && user.role_id !== 6) {
+    if (user && !canSwitchFarms(user)) {
       setFarmId(user.farm_id);
     }
   }, [user]);
@@ -38,7 +43,7 @@ export function FarmProvider({ children }) {
   useEffect(() => { reloadFarms(); }, [user]);
 
   function selectFarm(id) {
-    if (user && (user.role_id === 1 || user.role_id === 5 || user.role_id === 6)) {
+    if (user && canSwitchFarms(user)) {
       setFarmId(id);
       localStorage.setItem('erp_farm_id', String(id));
     }

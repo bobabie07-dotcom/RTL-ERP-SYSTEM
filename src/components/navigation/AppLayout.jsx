@@ -173,12 +173,14 @@ export function AppLayout({ children }) {
 
   const filteredNavItems = navItems.filter(item => {
     if (roleId === 6) {
+      // Primary Super Admin: restricted view — only their portal, user mgmt, settings, notifications
       return item.key === 'superadmin' || item.key === 'usermgmt' || item.key === 'settings' || item.key === 'notifications';
     }
-    if (item.key === 'superadmin') return false;
-    if (item.key === 'usermgmt') return hasRole(1);
-    if (item.key === 'helpdesk') return hasRole(1, 2, 5);
-    if (item.key === 'support')  return hasRole(3, 4);
+    // Super Admin Portal is visible to anyone who has role 6 as an extra role
+    if (item.key === 'superadmin') return hasRole(6);
+    if (item.key === 'usermgmt')   return hasRole(1);
+    if (item.key === 'helpdesk')   return hasRole(1, 2, 5);
+    if (item.key === 'support')    return hasRole(3, 4);
     return true;
   });
 
@@ -203,7 +205,7 @@ export function AppLayout({ children }) {
           active={activeKey}
           onSelect={handleNavSelect}
           footer={
-            (user?.role_id === 1 || user?.role_id === 5) ? (
+            hasRole(1, 5) ? (
               farms.length > 0 ? (
                 <select
                   value={farmId}
