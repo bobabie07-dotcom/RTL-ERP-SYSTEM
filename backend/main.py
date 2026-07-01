@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 from config import settings
 from database import engine
-from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support, users, super_admin
+from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support, users, super_admin, eggs
 
 
 def _safe_add_column(conn, sql: str):
@@ -392,6 +392,7 @@ app.include_router(maintenance.router,  prefix=API)
 app.include_router(support.router,      prefix=API)
 app.include_router(users.router,        prefix=API)
 app.include_router(super_admin.router,  prefix=API)
+app.include_router(eggs.router,         prefix=API)
 
 
 run_startup_migrations()

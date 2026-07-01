@@ -11,7 +11,7 @@ import Icons from '../icons';
 
 const I = Icons;
 
-const BLANK = { name: '', name_ar: '', location: '' };
+const BLANK = { name: '', name_ar: '', location: '', farm_type: 'broiler' };
 
 const fmt = n =>
   n == null ? '—' : `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -57,7 +57,7 @@ export default function FarmsPage() {
 
   function openEdit(f) {
     setEditId(f.id);
-    setForm({ name: f.name, name_ar: f.name_ar || '', location: f.location || '' });
+    setForm({ name: f.name, name_ar: f.name_ar || '', location: f.location || '', farm_type: f.farm_type || 'broiler' });
     setErr(''); setModal(true);
   }
 
@@ -65,7 +65,7 @@ export default function FarmsPage() {
     if (!form.name) { setErr('Farm name is required.'); return; }
     setSaving(true); setErr('');
     try {
-      const payload = { name: form.name, name_ar: form.name_ar || null, location: form.location || null };
+      const payload = { name: form.name, name_ar: form.name_ar || null, location: form.location || null, farm_type: form.farm_type || 'broiler' };
       if (editId) {
         await farmsApi.update(editId, payload);
       } else {
@@ -100,6 +100,7 @@ export default function FarmsPage() {
     { key: 'id',       header: '#',           render: r => r.id },
     { key: 'name',     header: 'Farm Name',   render: r => <b style={{ color: 'var(--text-strong)' }}>{r.name}</b> },
     { key: 'name_ar',  header: 'Local Name',   render: r => r.name_ar || '—' },
+    { key: 'farm_type', header: 'Type',        render: r => <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{r.farm_type || 'broiler'}</span> },
     { key: 'location', header: 'Location',    render: r => r.location || '—' },
     {
       key: 'actions', header: '',
@@ -218,6 +219,25 @@ export default function FarmsPage() {
         </FormRow>
         <FormRow label="Location">
           <FieldInput value={form.location} onChange={f('location')} placeholder="City, Region" />
+        </FormRow>
+        <FormRow label="Farm Type" required>
+          <select
+            value={form.farm_type}
+            onChange={f('farm_type')}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'var(--surface-raised, rgba(0,0,0,0.03))',
+              color: 'var(--text-strong)',
+              fontSize: 14,
+              outline: 'none',
+            }}
+          >
+            <option value="broiler">Broiler (Meat Production)</option>
+            <option value="layer">Layer (Egg Production)</option>
+          </select>
         </FormRow>
       </Modal>
 

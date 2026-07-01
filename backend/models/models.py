@@ -59,6 +59,7 @@ class Farm(Base):
 
     id         = Column(SmallInteger, primary_key=True, autoincrement=True)
     company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
+    farm_type  = Column(String(50), nullable=False, server_default="broiler")
     name       = Column(String(100), nullable=False)
     name_ar    = Column(String(200))
     location   = Column(String(255))
@@ -856,3 +857,88 @@ class HarvestRecord(Base):
     @property
     def total_revenue(self) -> float:
         return float(self.total_weight_kg) * float(self.price_per_kg)
+
+
+# ── Egg Production & Sales ───────────────────────────────────────────────────
+
+class EggCollection(Base):
+    __tablename__ = "egg_collections"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    company_id      = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    farm_id         = Column(SmallInteger, ForeignKey("farms.id", ondelete="CASCADE"), nullable=False)
+    batch_id        = Column(Integer, ForeignKey("batches.id", ondelete="CASCADE"), nullable=False)
+    house_id        = Column(SmallInteger, ForeignKey("houses.id", ondelete="CASCADE"), nullable=False)
+    collect_date    = Column(Date, nullable=False)
+    total_collected = Column(Integer, nullable=False)
+    cracked_count   = Column(Integer, nullable=False, default=0)
+    notes           = Column(Text, nullable=True)
+    created_at      = Column(DateTime, default=func.now())
+
+    company = relationship("Company")
+    farm    = relationship("Farm")
+    batch   = relationship("Batch")
+    house   = relationship("House")
+
+
+class EggGrading(Base):
+    __tablename__ = "egg_gradings"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    company_id    = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    farm_id       = Column(SmallInteger, ForeignKey("farms.id", ondelete="CASCADE"), nullable=False)
+    collection_id = Column(Integer, ForeignKey("egg_collections.id", ondelete="CASCADE"), nullable=False)
+    size_s        = Column(Integer, nullable=False, default=0)
+    size_m        = Column(Integer, nullable=False, default=0)
+    size_l        = Column(Integer, nullable=False, default=0)
+    size_xl       = Column(Integer, nullable=False, default=0)
+    size_jumbo    = Column(Integer, nullable=False, default=0)
+    dirty_count   = Column(Integer, nullable=False, default=0)
+    graded_date   = Column(Date, nullable=False)
+    created_at    = Column(DateTime, default=func.now())
+
+    company    = relationship("Company")
+    farm       = relationship("Farm")
+    collection = relationship("EggCollection")
+
+
+class EggInventory(Base):
+    __tablename__ = "egg_inventories"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    farm_id    = Column(SmallInteger, ForeignKey("farms.id", ondelete="CASCADE"), nullable=False)
+    size       = Column(String(20), nullable=False) # "S", "M", "L", "XL", "Jumbo", "Cracked"
+    stock_qty  = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    company = relationship("Company")
+    farm    = relationship("Farm")
+
+
+class EggSalesOrder(Base):
+    __tablename__ = "egg_sales_orders"
+
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    company_id        = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    farm_id           = Column(SmallInteger, ForeignKey("farms.id", ondelete="CASCADE"), nullable=False)
+    order_no          = Column(String(30), nullable=False, unique=True)
+    buyer_id          = Column(Integer, ForeignKey("buyers.id", ondelete="SET NULL"), nullable=True)
+    order_date        = Column(Date, nullable=False)
+    size              = Column(String(20), nullable=False)
+    qty_packages      = Column(Integer, nullable=False)
+    package_type      = Column(String(20), nullable=False, default="tray") # tray, box
+    total_eggs        = Column(Integer, nullable=False)
+    price_per_package = Column(Numeric(10, 2), nullable=False)
+    total_amount      = Column(Numeric(12, 2), nullable=False)
+    status            = Column(String(50), nullable=False, default="pending") # pending, delivered, cancelled
+    payment_status    = Column(String(20), nullable=False, default="unpaid") # unpaid, paid
+    notes             = Column(Text, nullable=True)
+    created_by        = Column(Integer, ForeignKey("users.id"))
+    created_at        = Column(DateTime, default=func.now())
+
+    company = relationship("Company")
+    farm    = relationship("Farm")
+    buyer   = relationship("Buyer")
+    creator = relationship("User", foreign_keys=[created_by])
+

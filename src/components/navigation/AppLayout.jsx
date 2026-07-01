@@ -17,6 +17,9 @@ const navItems = [
   { key: 'houses',        label: 'Poultry Houses',       path: '/houses' },
   { key: 'maintenance',   label: 'Maintenance',          path: '/maintenance' },
   { key: 'batches',       label: 'Batch Management',     path: '/batches' },
+  { key: 'egg_collections', label: 'Egg Collections',     path: '/eggs/collections' },
+  { key: 'egg_gradings',    label: 'Egg Grading',         path: '/eggs/grading' },
+  { key: 'egg_sales',       label: 'Egg Sales',           path: '/eggs/sales' },
   { key: 'inventory',     label: 'Inventory',            path: '/inventory' },
   { key: 'feed',          label: 'Feed Management',      path: '/feed' },
   { key: 'mortality',     label: 'Mortality Tracker',    path: '/mortality' },
@@ -38,6 +41,9 @@ const iconMap = {
   sales: Icons.sales, reports: Icons.reports,
   notifications: Icons.bell, settings: Icons.settings,
   usermgmt: Icons.users, support: Icons.mail, helpdesk: Icons.wrench,
+  egg_collections: Icons.batch,
+  egg_gradings: Icons.inventory,
+  egg_sales: Icons.sales,
 };
 
 const ROLE_LABEL = { 1: 'Administrator', 2: 'Farm Manager', 3: 'Farm Worker', 4: 'Veterinarian', 5: 'Owner', 6: 'Super Admin' };
@@ -170,17 +176,22 @@ export function AppLayout({ children }) {
   const roleId     = user?.role_id;
   const allRoleIds = user?.all_role_ids?.length ? user.all_role_ids : [roleId];
   const hasRole    = (...ids) => ids.some(id => allRoleIds.includes(id));
+  const farmType     = selectedFarm?.farm_type || 'broiler';
 
   const filteredNavItems = navItems.filter(item => {
     if (roleId === 6) {
-      // Primary Super Admin: restricted view — only their portal, user mgmt, settings, notifications
       return item.key === 'superadmin' || item.key === 'usermgmt' || item.key === 'settings' || item.key === 'notifications';
     }
-    // Super Admin Portal is visible to anyone who has role 6 as an extra role
-    if (item.key === 'superadmin') return hasRole(6);
+    if (item.key === 'superadmin') return false;
     if (item.key === 'usermgmt')   return hasRole(1);
     if (item.key === 'helpdesk')   return hasRole(1, 2, 5);
     if (item.key === 'support')    return hasRole(3, 4);
+
+    if (farmType === 'broiler') {
+      if (item.key === 'egg_collections' || item.key === 'egg_gradings' || item.key === 'egg_sales') return false;
+    } else if (farmType === 'layer') {
+      if (item.key === 'batches') return false;
+    }
     return true;
   });
 

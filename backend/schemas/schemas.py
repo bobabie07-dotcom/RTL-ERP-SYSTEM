@@ -289,18 +289,21 @@ class FarmOut(OrmBase):
     name:     str
     name_ar:  Optional[str]
     location: Optional[str]
+    farm_type: str
 
 
 class FarmCreate(BaseModel):
     name:     str
     name_ar:  Optional[str] = None
     location: Optional[str] = None
+    farm_type: str = "broiler"
 
 
 class FarmUpdate(BaseModel):
     name:     Optional[str] = None
     name_ar:  Optional[str] = None
     location: Optional[str] = None
+    farm_type: Optional[str] = None
 
 
 class HouseOut(OrmBase):
@@ -1105,6 +1108,96 @@ class BatchRevenueRow(BaseModel):
     sales_order_id: Optional[int]
     is_voided:      bool
     created_at:     datetime
+
+
+# ── Egg Schemas ──────────────────────────────────────────────────────────────
+
+class EggCollectionCreate(BaseModel):
+    batch_id: int
+    house_id: int
+    collect_date: date
+    total_collected: int
+    cracked_count: int = 0
+    notes: Optional[str] = None
+
+
+class EggCollectionOut(OrmBase):
+    id: int
+    company_id: int
+    farm_id: int
+    batch_id: int
+    house_id: int
+    collect_date: date
+    total_collected: int
+    cracked_count: int
+    notes: Optional[str]
+    created_at: datetime
+
+
+class EggGradingCreate(BaseModel):
+    collection_id: int
+    size_s: int = 0
+    size_m: int = 0
+    size_l: int = 0
+    size_xl: int = 0
+    size_jumbo: int = 0
+    dirty_count: int = 0
+    graded_date: date
+
+
+class EggGradingOut(OrmBase):
+    id: int
+    company_id: int
+    farm_id: int
+    collection_id: int
+    size_s: int
+    size_m: int
+    size_l: int
+    size_xl: int
+    size_jumbo: int
+    dirty_count: int
+    graded_date: date
+    created_at: datetime
+
+
+class EggInventoryOut(OrmBase):
+    id: int
+    company_id: int
+    farm_id: int
+    size: str
+    stock_qty: int
+    updated_at: datetime
+
+
+class EggSalesOrderCreate(BaseModel):
+    buyer_id: Optional[int] = None
+    order_date: date
+    size: str
+    qty_packages: int
+    package_type: str = "tray"
+    price_per_package: float
+    notes: Optional[str] = None
+
+
+class EggSalesOrderOut(OrmBase):
+    id: int
+    company_id: int
+    farm_id: int
+    order_no: str
+    buyer_id: Optional[int]
+    order_date: date
+    size: str
+    qty_packages: int
+    package_type: str
+    total_eggs: int
+    price_per_package: float
+    total_amount: float
+    status: str
+    payment_status: str
+    notes: Optional[str]
+    created_by: Optional[int]
+    created_at: datetime
+
 
 
 class VoidRequest(BaseModel):

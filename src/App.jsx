@@ -29,6 +29,9 @@ import NotificationsPage from './pages/NotificationsPage';
 import HealthPage from './pages/HealthPage';
 import MaintenancePage from './pages/MaintenancePage';
 import SuperAdminPage from './pages/SuperAdminPage';
+import EggCollectionPage from './pages/EggCollectionPage';
+import EggGradingPage from './pages/EggGradingPage';
+import EggSalesPage from './pages/EggSalesPage';
 
 function PageWrapper({ children }) {
   return <div style={{ animation: 'pageFadeIn 150ms ease-out backwards' }}>{children}</div>;
@@ -96,6 +99,9 @@ export default function App() {
           <Route path="/feed"        element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
           <Route path="/mortality"   element={<ProtectedRoute><MortalityPage /></ProtectedRoute>} />
           <Route path="/sales"       element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
+          <Route path="/eggs/collections" element={<ProtectedRoute><EggCollectionPage /></ProtectedRoute>} />
+          <Route path="/eggs/grading"     element={<ProtectedRoute><EggGradingPage /></ProtectedRoute>} />
+          <Route path="/eggs/sales"       element={<ProtectedRoute><EggSalesPage /></ProtectedRoute>} />
           <Route path="/reports"     element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/settings"       element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/notifications"   element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />

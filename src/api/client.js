@@ -264,3 +264,18 @@ export const superAdminApi = {
   updateCompany: (id, data) => patch(`/api/super-admin/companies/${id}`, data),
   getSubscription: (companyId) => get(`/api/super-admin/companies/${companyId}/subscription`),
 };
+
+export const eggsApi = {
+  listCollections: (params) => get('/api/eggs/collections', params),
+  createCollection: (data) => post('/api/eggs/collections', data),
+  listGradings: (params) => get('/api/eggs/gradings', params),
+  createGrading: (data) => post('/api/eggs/gradings', data),
+  getInventory: (params) => get('/api/eggs/inventory', params),
+  listSales: (params) => get('/api/eggs/sales', params),
+  createSale: (farmId, data) => post(`/api/eggs/sales?farm_id=${farmId}`, data),
+  updateSaleStatus: (orderId, params) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return patch(`/api/eggs/sales/${orderId}/status` + qs);
+  },
+  getMetrics: (params) => get('/api/eggs/metrics', params),
+};
