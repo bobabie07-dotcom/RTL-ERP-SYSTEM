@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { usersApi } from '../api/client';
+import { usersApi, farmsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ const POSITIONS   = ['Manager','Supervisor','Staff','Coordinator','Analyst','Off
 
 const EMPTY_FORM = {
   full_name: '', email: '', username: '', employee_id: '',
-  role_id: '3', department: '', position: '', phone: '',
+  role_id: '3', farm_id: '', department: '', position: '', phone: '',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -123,6 +123,7 @@ export default function UserManagementPage() {
 
   const [users,  setUsers]  = useState([]);
   const [roles,  setRoles]  = useState([]);
+  const [farms,  setFarms]  = useState([]);
   const [stats,  setStats]  = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState('');
@@ -166,14 +167,16 @@ export default function UserManagementPage() {
     setLoading(true);
     setLoadErr('');
     try {
-      const [u, r, s] = await Promise.all([
+      const [u, r, s, f] = await Promise.all([
         usersApi.list({ include_archived: false }),
         usersApi.listRoles(),
         usersApi.stats(),
+        farmsApi.list(),
       ]);
       setUsers(u || []);
       setRoles(r || []);
       setStats(s);
+      setFarms(f || []);
     } catch (e) {
       setLoadErr(e?.detail || e?.message || 'Failed to load users');
     } finally {
@@ -215,6 +218,7 @@ export default function UserManagementPage() {
           username:    form.username || undefined,
           employee_id: form.employee_id || undefined,
           role_id:     parseInt(form.role_id),
+          farm_id:     form.farm_id ? parseInt(form.farm_id) : undefined,
           department:  form.department || undefined,
           position:    form.position   || undefined,
           phone:       form.phone      || undefined,
@@ -228,6 +232,7 @@ export default function UserManagementPage() {
           username:    form.username || undefined,
           employee_id: form.employee_id || undefined,
           role_id:     parseInt(form.role_id),
+          farm_id:     form.farm_id ? parseInt(form.farm_id) : undefined,
           department:  form.department || undefined,
           position:    form.position   || undefined,
           phone:       form.phone      || undefined,
@@ -304,6 +309,7 @@ export default function UserManagementPage() {
       username:    u.username    || '',
       employee_id: u.employee_id || '',
       role_id:     String(u.role_id || 3),
+      farm_id:     u.farm_id ? String(u.farm_id) : '',
       department:  u.department  || '',
       position:    u.position    || '',
       phone:       u.phone       || '',
@@ -378,6 +384,12 @@ export default function UserManagementPage() {
           <FieldRow label="Primary Role">
             <select style={SEL} value={form.role_id} onChange={e => setForm(p => ({ ...p, role_id: e.target.value }))}>
               {roleOptions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </FieldRow>
+          <FieldRow label="Assigned Farm" required>
+            <select style={SEL} value={form.farm_id} onChange={e => setForm(p => ({ ...p, farm_id: e.target.value }))}>
+              <option value="">— Select Farm —</option>
+              {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
           </FieldRow>
           <FieldRow label="Department">
@@ -482,7 +494,7 @@ export default function UserManagementPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ background: '#f9fafb' }}>
                 <tr>
-                  {['Employee ID', 'Name / Email', 'Department', 'Role(s)', 'Status', 'Last Login', 'Actions'].map(h => (
+                  {['Employee ID', 'Name / Email', 'Farm', 'Department', 'Role(s)', 'Status', 'Last Login', 'Actions'].map(h => (
                     <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#6b7280', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>
                       {h}
                     </th>
@@ -491,7 +503,7 @@ export default function UserManagementPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No users found.</td></tr>
+                  <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No users found.</td></tr>
                 ) : filtered.map(u => (
                   <tr key={u.id} style={{ borderBottom: '1px solid #f3f4f6' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
@@ -508,6 +520,9 @@ export default function UserManagementPage() {
                           Pending first login
                         </span>
                       )}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: '#374151', fontSize: 12 }}>
+                      {farms.find(f => f.id === u.farm_id)?.name || <span style={{ color: '#d1d5db' }}>—</span>}
                     </td>
                     <td style={{ padding: '10px 14px', color: '#374151' }}>
                       <div>{u.department || '—'}</div>
