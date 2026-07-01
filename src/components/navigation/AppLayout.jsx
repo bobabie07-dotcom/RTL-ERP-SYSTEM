@@ -282,7 +282,18 @@ export function AppLayout({ children }) {
             </React.Fragment>
           }
         /></div>
-        <div style={{ flex: 1, overflowY: 'auto' }} className="page-content">{children}</div>
+        <div style={{ flex: 1, overflowY: 'auto' }} className="page-content">
+          {user && user.role_id !== 6 && farms.length === 0 && location.pathname !== '/farms' && location.pathname !== '/settings' && location.pathname !== '/support' ? (
+            <div style={{ padding: 40, textAlign: 'center', maxWidth: 480, margin: '80px auto 0' }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>🏢</div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>Welcome to RTL Poultry ERP!</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>You need to register at least one farm to get started.</p>
+              <button onClick={() => navigate('/farms')} style={{ background: 'var(--green-500)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontWeight: 600, cursor: 'pointer' }}>
+                Go to Farm Management
+              </button>
+            </div>
+          ) : children}
+        </div>
       </div>
 
       <style>{`

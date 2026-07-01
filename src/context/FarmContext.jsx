@@ -8,15 +8,15 @@ export function FarmProvider({ children }) {
   const { user } = useAuth();
   const [farms, setFarms] = useState([]);
   const [farmId, setFarmId] = useState(() => {
-    if (user && user.role_id !== 1 && user.role_id !== 5) {
+    if (user && user.role_id !== 1 && user.role_id !== 5 && user.role_id !== 6) {
       return user.farm_id;
     }
     const saved = localStorage.getItem('erp_farm_id');
-    return saved ? parseInt(saved, 10) : 1;
+    return saved ? parseInt(saved, 10) : null;
   });
 
   useEffect(() => {
-    if (user && user.role_id !== 1 && user.role_id !== 5) {
+    if (user && user.role_id !== 1 && user.role_id !== 5 && user.role_id !== 6) {
       setFarmId(user.farm_id);
     }
   }, [user]);
@@ -24,16 +24,21 @@ export function FarmProvider({ children }) {
   function reloadFarms() {
     return farmsApi.list().then(list => {
       setFarms(list);
-      // If selected farm was deleted, switch to first available
       const stillExists = list.some(f => f.id === farmId);
-      if (!stillExists && list.length > 0) selectFarm(list[0].id);
+      if (list.length > 0) {
+        if (!stillExists || farmId === null) {
+          selectFarm(list[0].id);
+        }
+      } else {
+        setFarmId(null);
+      }
     }).catch(() => {});
   }
 
-  useEffect(() => { reloadFarms(); }, []);
+  useEffect(() => { reloadFarms(); }, [user]);
 
   function selectFarm(id) {
-    if (user && (user.role_id === 1 || user.role_id === 5)) {
+    if (user && (user.role_id === 1 || user.role_id === 5 || user.role_id === 6)) {
       setFarmId(id);
       localStorage.setItem('erp_farm_id', String(id));
     }
