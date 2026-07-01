@@ -121,11 +121,11 @@ export default function SuperAdminPage() {
         </div>
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 150 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Active Companies</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--color-success)' }}>{activeCount}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--success)' }}>{activeCount}</div>
         </div>
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 150 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Suspended Companies</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--color-danger)' }}>{suspendedCount}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--danger)' }}>{suspendedCount}</div>
         </div>
       </div>
 
@@ -135,7 +135,7 @@ export default function SuperAdminPage() {
         <button
           onClick={() => setShowAddModal(true)}
           style={{
-            background: 'var(--color-brand)',
+            background: 'var(--green-500)',
             color: '#fff',
             border: 'none',
             borderRadius: 8,
@@ -150,7 +150,7 @@ export default function SuperAdminPage() {
       </div>
 
       {error && (
-        <div style={{ padding: 12, background: 'var(--color-danger-subtle)', color: 'var(--color-danger)', borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
+        <div style={{ padding: 12, background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
           {error}
         </div>
       )}
@@ -206,8 +206,8 @@ export default function SuperAdminPage() {
                         borderRadius: 12,
                         fontSize: 11,
                         fontWeight: 700,
-                        background: c.status === 'active' ? 'var(--color-success-subtle)' : 'var(--color-danger-subtle)',
-                        color: c.status === 'active' ? 'var(--color-success)' : 'var(--color-danger)'
+                        background: c.status === 'active' ? 'var(--success-bg)' : 'var(--danger-bg)',
+                        color: c.status === 'active' ? 'var(--success)' : 'var(--danger)'
                       }}>
                         {c.status.toUpperCase()}
                       </span>
@@ -223,8 +223,8 @@ export default function SuperAdminPage() {
                           fontSize: 12,
                           fontWeight: 500,
                           cursor: 'pointer',
-                          color: c.status === 'active' ? 'var(--color-danger)' : 'var(--color-success)',
-                          borderColor: c.status === 'active' ? 'var(--color-danger-subtle)' : 'var(--color-success-subtle)'
+                          color: c.status === 'active' ? 'var(--danger)' : 'var(--success)',
+                          borderColor: c.status === 'active' ? 'var(--danger-bg)' : 'var(--success-bg)'
                         }}
                       >
                         {c.status === 'active' ? 'Suspend' : 'Activate'}
@@ -309,7 +309,7 @@ export default function SuperAdminPage() {
                 type="submit"
                 disabled={submitting}
                 style={{
-                  background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 8,
+                  background: 'var(--green-500)', color: '#fff', border: 'none', borderRadius: 8,
                   padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer'
                 }}
               >
