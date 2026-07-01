@@ -80,6 +80,30 @@ def require_permission(action: str, resource: str = None):
     return dep
 
 
+def require_business_model(*allowed_models: str):
+    """Dependency that enforces company business_model. Super admins (role 6) bypass."""
+    def dep(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> User:
+        if current_user.role_id == 6:
+            return current_user
+        company = db.get(Company, current_user.company_id)
+        if not company or company.business_model not in allowed_models:
+            allowed = " or ".join(allowed_models)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This feature is only available for {allowed} operations.",
+            )
+        return current_user
+    return dep
+
+
+def require_layer():
+    """Shorthand: only layer companies may access this endpoint."""
+    return require_business_model("layer")
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
     db: Session = Depends(get_db),

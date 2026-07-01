@@ -199,7 +199,16 @@ export const batchPlansApi = {
 };
 
 export const dashboardApi = {
-  kpis: (farm_id) => get('/api/dashboard/kpis', { farm_id }),
+  kpis:      (farm_id) => get('/api/dashboard/kpis', { farm_id }),
+  layerKpis: (farm_id) => get('/api/dashboard/layer-kpis', { farm_id }),
+};
+
+export const spentHensApi = {
+  list:    (farm_id, params) => get('/api/spent-hens', { farm_id, ...params }),
+  create:  (farm_id, data)   => post(`/api/spent-hens?farm_id=${farm_id}`, data),
+  update:  (id, data)        => patch(`/api/spent-hens/${id}`, data),
+  delete:  (id)              => del(`/api/spent-hens/${id}`),
+  summary: (farm_id)         => get('/api/spent-hens/summary', { farm_id }),
 };
 
 export const reportsApi = {

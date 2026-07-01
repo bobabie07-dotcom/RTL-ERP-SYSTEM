@@ -31,6 +31,14 @@ export default function EggCollectionPage() {
     collect_date: new Date().toISOString().split('T')[0],
     total_collected: '',
     cracked_count: '0',
+    soft_shell: '0',
+    double_yolk: '0',
+    dirty: '0',
+    misshaped: '0',
+    feed_kg: '',
+    water_liters: '',
+    temperature: '',
+    humidity: '',
     notes: '',
   });
 
@@ -81,6 +89,14 @@ export default function EggCollectionPage() {
       collect_date: new Date().toISOString().split('T')[0],
       total_collected: '',
       cracked_count: '0',
+      soft_shell: '0',
+      double_yolk: '0',
+      dirty: '0',
+      misshaped: '0',
+      feed_kg: '',
+      water_liters: '',
+      temperature: '',
+      humidity: '',
       notes: '',
     });
     setErr('');
@@ -97,12 +113,28 @@ export default function EggCollectionPage() {
     setSaving(true);
     setErr('');
     try {
+      const cracked = parseInt(form.cracked_count) || 0;
+      const defect_summary = {
+        cracked,
+        soft_shell:  parseInt(form.soft_shell)  || 0,
+        double_yolk: parseInt(form.double_yolk) || 0,
+        dirty:       parseInt(form.dirty)       || 0,
+        misshaped:   parseInt(form.misshaped)   || 0,
+      };
+      const feed_water_log = (form.feed_kg || form.water_liters || form.temperature || form.humidity) ? {
+        feed_kg:      parseFloat(form.feed_kg)      || null,
+        water_liters: parseFloat(form.water_liters) || null,
+        temperature:  parseFloat(form.temperature)  || null,
+        humidity:     parseFloat(form.humidity)      || null,
+      } : null;
       await eggsApi.createCollection({
-        batch_id: parseInt(form.batch_id),
-        house_id: parseInt(form.house_id),
-        collect_date: form.collect_date,
+        batch_id:       parseInt(form.batch_id),
+        house_id:       parseInt(form.house_id),
+        collect_date:   form.collect_date,
         total_collected: parseInt(form.total_collected),
-        cracked_count: parseInt(form.cracked_count) || 0,
+        cracked_count:  cracked,
+        defect_summary,
+        feed_water_log,
         notes: form.notes || null,
       });
       await loadData();
@@ -207,6 +239,40 @@ export default function EggCollectionPage() {
         <FormRow label="Cracked / Damaged Count">
           <FieldInput type="number" value={form.cracked_count} onChange={f('cracked_count')} placeholder="0" />
         </FormRow>
+        <div style={{ margin: '12px 0 4px', fontWeight: 600, fontSize: 13, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 6 }}>
+          Defect Breakdown (optional)
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <FormRow label="Soft Shell">
+            <FieldInput type="number" value={form.soft_shell} onChange={f('soft_shell')} placeholder="0" />
+          </FormRow>
+          <FormRow label="Double Yolk">
+            <FieldInput type="number" value={form.double_yolk} onChange={f('double_yolk')} placeholder="0" />
+          </FormRow>
+          <FormRow label="Dirty Eggs">
+            <FieldInput type="number" value={form.dirty} onChange={f('dirty')} placeholder="0" />
+          </FormRow>
+          <FormRow label="Misshaped">
+            <FieldInput type="number" value={form.misshaped} onChange={f('misshaped')} placeholder="0" />
+          </FormRow>
+        </div>
+        <div style={{ margin: '12px 0 4px', fontWeight: 600, fontSize: 13, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 6 }}>
+          Feed & Water Log (optional)
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <FormRow label="Feed Consumed (kg)">
+            <FieldInput type="number" step="0.1" value={form.feed_kg} onChange={f('feed_kg')} placeholder="e.g. 1085.5" />
+          </FormRow>
+          <FormRow label="Water Used (liters)">
+            <FieldInput type="number" step="1" value={form.water_liters} onChange={f('water_liters')} placeholder="e.g. 3850" />
+          </FormRow>
+          <FormRow label="Temperature (°C)">
+            <FieldInput type="number" step="0.1" value={form.temperature} onChange={f('temperature')} placeholder="e.g. 29.4" />
+          </FormRow>
+          <FormRow label="Humidity (%)">
+            <FieldInput type="number" step="1" value={form.humidity} onChange={f('humidity')} placeholder="e.g. 71" />
+          </FormRow>
+        </div>
         <FormRow label="Notes">
           <textarea value={form.notes} onChange={f('notes')} placeholder="Optional comments..." style={TXT_STYLE} />
         </FormRow>

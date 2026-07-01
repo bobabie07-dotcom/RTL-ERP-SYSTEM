@@ -101,6 +101,8 @@ def create_collection(
         collect_date=body.collect_date,
         total_collected=body.total_collected,
         cracked_count=body.cracked_count,
+        defect_summary=body.defect_summary,
+        feed_water_log=body.feed_water_log,
         notes=body.notes,
     )
     db.add(db_collection)
@@ -156,7 +158,8 @@ def create_grading(
 
     # Sum graded eggs
     graded_sum = (
-        body.size_s
+        body.size_peewee
+        + body.size_s
         + body.size_m
         + body.size_l
         + body.size_xl
@@ -173,6 +176,7 @@ def create_grading(
         company_id=current_user.company_id,
         farm_id=collection.farm_id,
         collection_id=body.collection_id,
+        size_peewee=body.size_peewee,
         size_s=body.size_s,
         size_m=body.size_m,
         size_l=body.size_l,
@@ -207,6 +211,7 @@ def create_grading(
             )
             db.add(new_inv)
 
+    add_inventory("Peewee", body.size_peewee)
     add_inventory("S", body.size_s)
     add_inventory("M", body.size_m)
     add_inventory("L", body.size_l)

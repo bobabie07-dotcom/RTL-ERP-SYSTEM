@@ -20,6 +20,7 @@ const navItems = [
   { key: 'egg_collections', label: 'Egg Collections',     path: '/eggs/collections' },
   { key: 'egg_gradings',    label: 'Egg Grading',         path: '/eggs/grading' },
   { key: 'egg_sales',       label: 'Egg Sales',           path: '/eggs/sales' },
+  { key: 'spent_hens',      label: 'Spent Hen Sales',     path: '/eggs/spent-hens' },
   { key: 'inventory',     label: 'Inventory',            path: '/inventory' },
   { key: 'feed',          label: 'Feed Management',      path: '/feed' },
   { key: 'mortality',     label: 'Mortality Tracker',    path: '/mortality' },
@@ -44,6 +45,7 @@ const iconMap = {
   egg_collections: Icons.batch,
   egg_gradings: Icons.inventory,
   egg_sales: Icons.sales,
+  spent_hens: Icons.harvest,
 };
 
 const ROLE_LABEL = { 1: 'Administrator', 2: 'Farm Manager', 3: 'Farm Worker', 4: 'Veterinarian', 5: 'Owner', 6: 'Super Admin' };
@@ -188,9 +190,12 @@ export function AppLayout({ children }) {
     if (item.key === 'support')    return hasRole(3, 4);
 
     if (farmType === 'broiler') {
-      if (item.key === 'egg_collections' || item.key === 'egg_gradings' || item.key === 'egg_sales') return false;
+      if (['egg_collections', 'egg_gradings', 'egg_sales', 'spent_hens'].includes(item.key)) return false;
     } else if (farmType === 'layer') {
       if (item.key === 'batches') return false;
+    } else {
+      // rtl or others: hide spent hens
+      if (item.key === 'spent_hens') return false;
     }
     return true;
   });

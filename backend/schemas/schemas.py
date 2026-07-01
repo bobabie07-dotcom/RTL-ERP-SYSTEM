@@ -1117,6 +1117,8 @@ class EggCollectionCreate(BaseModel):
     collect_date: date
     total_collected: int
     cracked_count: int = 0
+    defect_summary: Optional[dict] = None  # {good,cracked,soft_shell,double_yolk,dirty,misshaped}
+    feed_water_log: Optional[dict] = None  # {feed_kg,water_liters,temperature,humidity}
     notes: Optional[str] = None
 
 
@@ -1129,12 +1131,15 @@ class EggCollectionOut(OrmBase):
     collect_date: date
     total_collected: int
     cracked_count: int
+    defect_summary: Optional[dict] = None
+    feed_water_log: Optional[dict] = None
     notes: Optional[str]
     created_at: datetime
 
 
 class EggGradingCreate(BaseModel):
     collection_id: int
+    size_peewee: int = 0
     size_s: int = 0
     size_m: int = 0
     size_l: int = 0
@@ -1149,6 +1154,7 @@ class EggGradingOut(OrmBase):
     company_id: int
     farm_id: int
     collection_id: int
+    size_peewee: int = 0
     size_s: int
     size_m: int
     size_l: int
@@ -1201,3 +1207,70 @@ class EggSalesOrderOut(OrmBase):
 
 class VoidRequest(BaseModel):
     void_reason: Optional[str] = None
+
+
+# ── Spent Hen Schemas ─────────────────────────────────────────────────────────
+
+class SpentHenSaleCreate(BaseModel):
+    sale_date:      date
+    buyer_id:       Optional[int] = None
+    batch_id:       Optional[int] = None
+    birds_sold:     int
+    avg_weight_kg:  Optional[float] = None
+    price_per_kg:   float
+    transport_cost: float = 0.0
+    payment_status: str = "unpaid"
+    notes:          Optional[str] = None
+
+
+class SpentHenSaleUpdate(BaseModel):
+    sale_date:      Optional[date] = None
+    buyer_id:       Optional[int] = None
+    birds_sold:     Optional[int] = None
+    avg_weight_kg:  Optional[float] = None
+    price_per_kg:   Optional[float] = None
+    transport_cost: Optional[float] = None
+    payment_status: Optional[str] = None
+    notes:          Optional[str] = None
+
+
+class SpentHenSaleOut(OrmBase):
+    id:              int
+    company_id:      int
+    farm_id:         int
+    batch_id:        Optional[int]
+    sale_date:       date
+    buyer_id:        Optional[int]
+    birds_sold:      int
+    avg_weight_kg:   Optional[float]
+    total_weight_kg: Optional[float]
+    price_per_kg:    float
+    transport_cost:  Optional[float]
+    total_amount:    float
+    payment_status:  str
+    notes:           Optional[str]
+    created_by:      Optional[int]
+    created_at:      datetime
+
+
+# ── Layer Dashboard KPI ───────────────────────────────────────────────────────
+
+class LayerDashboardKPI(BaseModel):
+    # Birds
+    total_flocks:        int
+    active_flocks:       int
+    total_live_birds:    int
+    mortality_rate_7d:   float
+    # Today's production
+    today_eggs:          int
+    hen_day_pct:         float
+    defect_rate:         float
+    # Inventory
+    total_egg_inventory: int
+    # Sales
+    month_sales_amount:  float
+    # Feed
+    feed_stock_days:     Optional[float]
+    # Vaccinations
+    pending_vaccinations: int
+    unread_alerts:       int

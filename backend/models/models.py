@@ -19,10 +19,11 @@ from database import Base
 class Company(Base):
     __tablename__ = "companies"
 
-    id         = Column(Integer, primary_key=True, autoincrement=True)
-    name       = Column(String(150), nullable=False)
-    status     = Column(String(50), nullable=False, default="active")  # active, suspended
-    created_at = Column(DateTime, default=func.now())
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    name           = Column(String(150), nullable=False)
+    business_model = Column(String(20), nullable=False, default="broiler")  # broiler, rtl, layer
+    status         = Column(String(50), nullable=False, default="active")   # active, suspended
+    created_at     = Column(DateTime, default=func.now())
 
     farms: list[Farm] = relationship("Farm", back_populates="company")
     users: list[User] = relationship("User", back_populates="company")
@@ -874,6 +875,10 @@ class EggCollection(Base):
     collect_date    = Column(Date, nullable=False)
     total_collected = Column(Integer, nullable=False)
     cracked_count   = Column(Integer, nullable=False, default=0)
+    # JSON: {"good":12000,"cracked":150,"soft_shell":60,"double_yolk":30,"dirty":45,"misshaped":12}
+    defect_summary  = Column(JSON, nullable=True)
+    # JSON: {"feed_kg":1085.5,"water_liters":3850,"temperature":29.4,"humidity":71}
+    feed_water_log  = Column(JSON, nullable=True)
     notes           = Column(Text, nullable=True)
     created_at      = Column(DateTime, default=func.now())
 
@@ -890,6 +895,7 @@ class EggGrading(Base):
     company_id    = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
     farm_id       = Column(SmallInteger, ForeignKey("farms.id", ondelete="CASCADE"), nullable=False)
     collection_id = Column(Integer, ForeignKey("egg_collections.id", ondelete="CASCADE"), nullable=False)
+    size_peewee   = Column(Integer, nullable=False, default=0)
     size_s        = Column(Integer, nullable=False, default=0)
     size_m        = Column(Integer, nullable=False, default=0)
     size_l        = Column(Integer, nullable=False, default=0)
@@ -944,3 +950,29 @@ class EggSalesOrder(Base):
     buyer   = relationship("Buyer")
     creator = relationship("User", foreign_keys=[created_by])
 
+
+class SpentHenSale(Base):
+    __tablename__ = "spent_hen_sales"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    company_id     = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    farm_id        = Column(SmallInteger, ForeignKey("farms.id", ondelete="CASCADE"), nullable=False)
+    batch_id       = Column(Integer, ForeignKey("batches.id", ondelete="SET NULL"), nullable=True)
+    sale_date      = Column(Date, nullable=False)
+    buyer_id       = Column(Integer, ForeignKey("buyers.id", ondelete="SET NULL"), nullable=True)
+    birds_sold     = Column(Integer, nullable=False)
+    avg_weight_kg  = Column(Numeric(6, 3), nullable=True)
+    total_weight_kg= Column(Numeric(10, 3), nullable=True)
+    price_per_kg   = Column(Numeric(10, 2), nullable=False)
+    transport_cost = Column(Numeric(10, 2), nullable=True, default=0)
+    total_amount   = Column(Numeric(12, 2), nullable=False)
+    payment_status = Column(String(20), nullable=False, default="unpaid")  # unpaid, paid
+    notes          = Column(Text, nullable=True)
+    created_by     = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at     = Column(DateTime, default=func.now())
+
+    company = relationship("Company")
+    farm    = relationship("Farm")
+    batch   = relationship("Batch")
+    buyer   = relationship("Buyer")
+    creator = relationship("User", foreign_keys=[created_by])

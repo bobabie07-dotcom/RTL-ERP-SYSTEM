@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from config import settings
 from database import engine
-from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support, users, super_admin, eggs
+from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, spent_hens, support, users, super_admin, eggs
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,35 @@ def run_startup_migrations():
             conn.execute(text("ALTER TABLE batches ADD UNIQUE KEY uq_batch_no_company (company_id, batch_no)"))
         except Exception:
             pass
+        # ── Layer Module additions ─────────────────────────────────────────────
+        _safe_add_column(conn, "ALTER TABLE companies ADD COLUMN business_model VARCHAR(20) NOT NULL DEFAULT 'broiler'")
+        _safe_add_column(conn, "ALTER TABLE egg_collections ADD COLUMN defect_summary JSON DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE egg_collections ADD COLUMN feed_water_log JSON DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE egg_gradings ADD COLUMN size_peewee INT NOT NULL DEFAULT 0")
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS spent_hen_sales (
+                id              INT AUTO_INCREMENT PRIMARY KEY,
+                company_id      INT NOT NULL,
+                farm_id         SMALLINT NOT NULL,
+                batch_id        INT DEFAULT NULL,
+                sale_date       DATE NOT NULL,
+                buyer_id        INT DEFAULT NULL,
+                birds_sold      INT NOT NULL,
+                avg_weight_kg   DECIMAL(6,3) DEFAULT NULL,
+                total_weight_kg DECIMAL(10,3) DEFAULT NULL,
+                price_per_kg    DECIMAL(10,2) NOT NULL,
+                transport_cost  DECIMAL(10,2) DEFAULT 0,
+                total_amount    DECIMAL(12,2) NOT NULL,
+                payment_status  VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+                notes           TEXT DEFAULT NULL,
+                created_by      INT DEFAULT NULL,
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_shs_company (company_id),
+                INDEX idx_shs_farm    (farm_id),
+                INDEX idx_shs_batch   (batch_id),
+                INDEX idx_shs_date    (sale_date)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN failed_login_count INT NOT NULL DEFAULT 0")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN locked_until DATETIME DEFAULT NULL")
@@ -426,6 +455,7 @@ app.include_router(support.router,      prefix=API)
 app.include_router(users.router,        prefix=API)
 app.include_router(super_admin.router,  prefix=API)
 app.include_router(eggs.router,         prefix=API)
+app.include_router(spent_hens.router,   prefix=API)
 
 
 run_startup_migrations()

@@ -32,6 +32,7 @@ import SuperAdminPage from './pages/SuperAdminPage';
 import EggCollectionPage from './pages/EggCollectionPage';
 import EggGradingPage from './pages/EggGradingPage';
 import EggSalesPage from './pages/EggSalesPage';
+import SpentHenSalesPage from './pages/SpentHenSalesPage';
 
 function PageWrapper({ children }) {
   return <div style={{ animation: 'pageFadeIn 150ms ease-out backwards' }}>{children}</div>;
@@ -102,6 +103,7 @@ export default function App() {
           <Route path="/eggs/collections" element={<ProtectedRoute><EggCollectionPage /></ProtectedRoute>} />
           <Route path="/eggs/grading"     element={<ProtectedRoute><EggGradingPage /></ProtectedRoute>} />
           <Route path="/eggs/sales"       element={<ProtectedRoute><EggSalesPage /></ProtectedRoute>} />
+          <Route path="/eggs/spent-hens"  element={<ProtectedRoute><SpentHenSalesPage /></ProtectedRoute>} />
           <Route path="/reports"     element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/settings"       element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/notifications"   element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
