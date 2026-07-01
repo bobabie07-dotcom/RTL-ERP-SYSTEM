@@ -73,4 +73,8 @@
 
   /* ---- Focus ---- */
   --ring: rgba(31, 154, 85, 0.35);
+
+  /* ---- Legacy brand aliases ---- */
+  --brand:         var(--green-500);
+  --brand-subtle:  var(--green-50);
 }
