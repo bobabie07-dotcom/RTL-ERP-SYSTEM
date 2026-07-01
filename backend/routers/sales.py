@@ -1,6 +1,9 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -153,7 +156,7 @@ def approve_order(
             created_by=current_user.id,
         )
     except Exception:
-        pass  # never block approval due to finance hook failure
+        logger.warning("post_batch_revenue failed for order %s", order.id, exc_info=True)
 
     db.commit()
     db.refresh(order)
@@ -189,11 +192,13 @@ def update_order(
     order_id: int,
     body: SalesOrderUpdate,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(require_permission("write", "sales")),
 ):
     order = db.get(SalesOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if current_user.role_id != 6 and order.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(order, field, value)
     db.commit()
@@ -255,11 +260,13 @@ def update_expense(
     expense_id: int,
     body: ExpenseCreate,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(require_permission("write", "sales")),
 ):
     expense = db.get(Expense, expense_id)
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
+    if current_user.role_id != 6 and expense.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(expense, field, value)
     db.commit()
@@ -271,11 +278,13 @@ def update_expense(
 def delete_expense(
     expense_id: int,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(require_permission("write", "sales")),
 ):
     expense = db.get(Expense, expense_id)
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
+    if current_user.role_id != 6 and expense.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     db.delete(expense)
     db.commit()
 
@@ -287,11 +296,13 @@ def record_payment(
     order_id: int,
     body: SalesOrderUpdate,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(require_permission("write", "sales")),
 ):
     order = db.get(SalesOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if current_user.role_id != 6 and order.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     if body.payment_status:
         order.payment_status = body.payment_status
     db.commit()

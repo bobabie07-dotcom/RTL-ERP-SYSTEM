@@ -1,8 +1,11 @@
+import logging
 from datetime import datetime
 from typing import Optional
 
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -90,8 +93,16 @@ def create_purchase_order(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "procurement")),
 ):
-    count = db.query(PurchaseOrder).count()
-    po_no = f"PO-{(count + 1):06d}"
+    latest_no = (
+        db.query(func.max(PurchaseOrder.po_no))
+        .filter(PurchaseOrder.company_id == current_user.company_id)
+        .scalar()
+    )
+    try:
+        seq = int(latest_no.split("-")[-1]) + 1 if latest_no else 1
+    except (ValueError, IndexError):
+        seq = 1
+    po_no = f"PO-{seq:06d}"
 
     items_data = body.items
     total = sum(float(it.qty_ordered) * float(it.unit_price) for it in items_data) if items_data else (float(body.total_amount or 0))
@@ -305,7 +316,7 @@ def receive_purchase_order(
                         created_by=current_user.id,
                     )
             except Exception:
-                pass  # never block receiving due to finance hook failure
+                logger.warning("post_batch_expense failed for PO %s", po.po_no, exc_info=True)
 
         db.commit()
 

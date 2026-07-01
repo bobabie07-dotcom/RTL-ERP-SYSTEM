@@ -1,4 +1,7 @@
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
@@ -89,7 +92,7 @@ def create_batch(
                 created_by=current_user.id,
             )
         except Exception:
-            pass  # never block batch creation
+            logger.warning("post_batch_expense failed for chick cost on batch %s", batch.id, exc_info=True)
 
     db.commit()
     db.refresh(batch)
@@ -123,11 +126,13 @@ def update_batch(
     batch_id: int,
     body: BatchUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "batches")),
+    current_user=Depends(require_permission("write", "batches")),
 ):
     batch = db.get(Batch, batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+    if current_user.role_id != 6 and batch.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(batch, field, value)
     db.commit()

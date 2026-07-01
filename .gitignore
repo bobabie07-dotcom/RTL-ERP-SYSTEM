@@ -19,3 +19,9 @@ uvicorn_err.log
 # Sensitive / local only
 .env
 *.pem
+*.sql
+backend/ca.pem
+backend/correct_attendance.py
+backend/fix_columns.py
+backend/reset_passwords.py
+backend/sync_data.py

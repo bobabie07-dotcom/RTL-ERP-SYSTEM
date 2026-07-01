@@ -163,6 +163,62 @@ def user_stats(
     }
 
 
+@router.get("/audit-logs/all")
+def get_all_audit_logs(
+    limit: int = Query(100, le=500),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin(current_user)
+    rows = (db.query(UserAuditLog)
+              .order_by(UserAuditLog.created_at.desc())
+              .limit(limit)
+              .all())
+    return [
+        {
+            "id":             r.id,
+            "target_user_id": r.target_user_id,
+            "target_name":    r.target.full_name if r.target else None,
+            "action_type":    r.action_type,
+            "old_value":      r.old_value,
+            "new_value":      r.new_value,
+            "performed_by":   r.performed_by,
+            "actor_name":     r.actor.full_name if r.actor else None,
+            "ip_address":     r.ip_address,
+            "notes":          r.notes,
+            "created_at":     r.created_at,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/roles/all")
+def list_roles(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    roles = db.query(Role).order_by(Role.id).all()
+    user_counts: dict[int, int] = dict(
+        db.query(User.role_id, func.count(User.id))
+          .filter(User.deleted_at == None)  # noqa: E711
+          .group_by(User.role_id)
+          .all()
+    )
+    return [
+        {
+            "id":          r.id,
+            "name":        r.name,
+            "name_ar":     r.name_ar,
+            "description": getattr(r, "description", None),
+            "permissions": r.permissions or {},
+            "is_active":   getattr(r, "is_active", True),
+            "user_count":  user_counts.get(r.id, 0),
+            "created_at":  getattr(r, "created_at", None),
+        }
+        for r in roles
+    ]
+
+
 @router.get("/{user_id}")
 def get_user(
     user_id: int,
@@ -174,6 +230,8 @@ def get_user(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    if current_user.role_id != 6 and current_user.id != user_id and user.company_id != current_user.company_id:
+        raise HTTPException(403, "Access denied")
     return _build_detail(user)
 
 
@@ -277,6 +335,8 @@ def change_status(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    if current_user.role_id != 6 and user.company_id != current_user.company_id:
+        raise HTTPException(403, "Access denied")
     if user.id == current_user.id and body.status in ("inactive", "suspended", "archived", "locked"):
         raise HTTPException(400, "Cannot change your own account to that status")
 
@@ -454,64 +514,7 @@ def get_user_audit_logs(
     ]
 
 
-@router.get("/audit-logs/all")
-def get_all_audit_logs(
-    limit: int = Query(100, le=500),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    _require_admin(current_user)
-    rows = (db.query(UserAuditLog)
-              .order_by(UserAuditLog.created_at.desc())
-              .limit(limit)
-              .all())
-    return [
-        {
-            "id":             r.id,
-            "target_user_id": r.target_user_id,
-            "target_name":    r.target.full_name if r.target else None,
-            "action_type":    r.action_type,
-            "old_value":      r.old_value,
-            "new_value":      r.new_value,
-            "performed_by":   r.performed_by,
-            "actor_name":     r.actor.full_name if r.actor else None,
-            "ip_address":     r.ip_address,
-            "notes":          r.notes,
-            "created_at":     r.created_at,
-        }
-        for r in rows
-    ]
-
-
 # ── Role Management ───────────────────────────────────────────────────────────
-
-@router.get("/roles/all")
-def list_roles(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    roles = db.query(Role).order_by(Role.id).all()
-    # Count active users per role in one query to avoid N+1 lazy loads
-    user_counts: dict[int, int] = dict(
-        db.query(User.role_id, func.count(User.id))
-          .filter(User.deleted_at == None)  # noqa: E711
-          .group_by(User.role_id)
-          .all()
-    )
-    return [
-        {
-            "id":          r.id,
-            "name":        r.name,
-            "name_ar":     r.name_ar,
-            "description": getattr(r, "description", None),
-            "permissions": r.permissions or {},
-            "is_active":   getattr(r, "is_active", True),
-            "user_count":  user_counts.get(r.id, 0),
-            "created_at":  getattr(r, "created_at", None),
-        }
-        for r in roles
-    ]
-
 
 @router.post("/roles/all", status_code=201)
 def create_role(

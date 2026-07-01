@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -7,12 +9,25 @@ from config import settings
 from database import engine
 from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support, users, super_admin, eggs
 
+logger = logging.getLogger(__name__)
+
+_SAFE_MIGRATION_MSGS = (
+    "duplicate column",
+    "already exists",
+    "duplicate key",
+    "key already",
+    "can't drop",
+    "check that column",
+)
+
 
 def _safe_add_column(conn, sql: str):
     try:
         conn.execute(text(sql))
-    except Exception:
-        pass  # column already exists
+    except Exception as exc:
+        msg = str(exc).lower()
+        if not any(pat in msg for pat in _SAFE_MIGRATION_MSGS):
+            logger.warning("Migration step failed (sql=%s...): %s", sql[:80], exc)
 
 
 def run_startup_migrations():

@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -5,12 +6,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Batch, Expense, MaintenanceLog
-from routers.auth import get_current_user
+from models import Batch, Expense, Farm, MaintenanceLog
+from routers.auth import get_current_user, require_permission
 from schemas.schemas import MaintenanceLogCreate, MaintenanceLogOut, MaintenanceLogUpdate
 from utils import post_batch_expense
 
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
+logger = logging.getLogger(__name__)
 
 CATEGORY_LABELS = {
     "roofing":      "Roofing Installations",
@@ -46,8 +48,15 @@ def list_logs(
 def create_log(
     body: MaintenanceLogCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("write", "maintenance")),
 ):
+    if current_user.role_id not in (1, 5, 6):
+        if body.farm_id != current_user.farm_id:
+            raise HTTPException(status_code=403, detail="Access denied to this farm")
+    elif current_user.role_id != 6:
+        farm = db.get(Farm, body.farm_id)
+        if farm and farm.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Access denied to this farm")
     log = MaintenanceLog(**body.model_dump(), recorded_by=current_user.id)
     db.add(log)
     db.flush()  # get log.id before posting to batch_expenses
@@ -65,11 +74,15 @@ def update_log(
     log_id: int,
     body: MaintenanceLogUpdate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("write", "maintenance")),
 ):
     log = db.get(MaintenanceLog, log_id)
     if not log:
         raise HTTPException(status_code=404, detail="Maintenance log not found")
+    if current_user.role_id != 6:
+        farm = db.get(Farm, log.farm_id)
+        if farm and farm.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Access denied")
 
     data = body.model_dump(exclude_unset=True)
     was_completed = log.status == "completed"
@@ -93,11 +106,15 @@ def update_log(
 def delete_log(
     log_id: int,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(require_permission("write", "maintenance")),
 ):
     log = db.get(MaintenanceLog, log_id)
     if not log:
         raise HTTPException(status_code=404, detail="Maintenance log not found")
+    if current_user.role_id != 6:
+        farm = db.get(Farm, log.farm_id)
+        if farm and farm.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Access denied")
     # Remove linked legacy expense record (old system)
     if log.expense_id:
         exp = db.get(Expense, log.expense_id)
@@ -171,4 +188,4 @@ def _attach_expense(log: MaintenanceLog, body, db: Session, user_id: int):
             created_by=user_id,
         )
     except Exception:
-        pass
+        logger.warning("post_batch_expense failed for maintenance log %s", log.id, exc_info=True)

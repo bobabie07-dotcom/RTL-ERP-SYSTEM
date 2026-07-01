@@ -1,4 +1,7 @@
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
@@ -37,7 +40,7 @@ def list_medications(
 def create_medication(
     body: MedicationCreate,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    _=Depends(require_permission("write", "medications")),
 ):
     med = Medication(**body.model_dump())
     db.add(med)
@@ -114,7 +117,7 @@ def update_vaccination(
                     created_by=current_user.id,
                 )
         except Exception:
-            pass  # never block vaccination update
+            logger.warning("post_batch_expense failed for vaccination %s", vacc.id, exc_info=True)
 
     db.commit()
     db.refresh(vacc)
@@ -199,7 +202,7 @@ def create_health_event(
                 created_by=current_user.id,
             )
         except Exception:
-            pass  # never block health event creation
+            logger.warning("post_batch_expense failed for health event %s", event.id, exc_info=True)
 
     db.commit()
     db.refresh(event)

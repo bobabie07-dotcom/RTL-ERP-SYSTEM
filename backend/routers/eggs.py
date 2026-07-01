@@ -26,7 +26,7 @@ from schemas.schemas import (
     EggSalesOrderCreate,
     EggSalesOrderOut,
 )
-from utils import get_current_user, require_permission
+from routers.auth import get_current_user, require_permission
 
 router = APIRouter(prefix="/eggs", tags=["Eggs"])
 
@@ -306,15 +306,22 @@ def create_sale(
         body.price_per_package
     )
 
-    # Auto generate order number
+    # Auto generate order number — MAX-based to avoid race conditions
     today_str = datetime.today().strftime("%Y%m%d")
-    count = (
-        db.query(EggSalesOrder)
-        .filter(EggSalesOrder.company_id == current_user.company_id)
-        .count()
-        + 1
+    prefix = f"EGG-{today_str}-"
+    latest = (
+        db.query(func.max(EggSalesOrder.order_no))
+        .filter(
+            EggSalesOrder.company_id == current_user.company_id,
+            EggSalesOrder.order_no.like(f"{prefix}%"),
+        )
+        .scalar()
     )
-    order_no = f"EGG-{today_str}-{count:03d}"
+    try:
+        seq = int(latest.split("-")[-1]) + 1 if latest else 1
+    except (ValueError, IndexError):
+        seq = 1
+    order_no = f"{prefix}{seq:03d}"
 
     db_sale = EggSalesOrder(
         company_id=current_user.company_id,
@@ -469,7 +476,7 @@ def get_egg_metrics(
             .first()
         )
 
-        live_count = log.current_count if log else col.batch.initial_count
+        live_count = log.current_count if log else (col.batch.initial_count if col.batch else 0)
 
         hen_day_pct = (
             (col.total_collected / live_count * 100) if live_count > 0 else 0.0

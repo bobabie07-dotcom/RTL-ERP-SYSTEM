@@ -1,4 +1,7 @@
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
@@ -120,7 +123,7 @@ def create_mortality_record(
             created_by=current_user.id,
         )
     except Exception:
-        pass  # never block mortality recording due to finance hook failure
+        logger.warning("post_batch_expense failed for mortality record %s", record.id, exc_info=True)
 
     db.commit()
     db.refresh(record)
