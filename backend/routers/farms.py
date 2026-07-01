@@ -9,23 +9,36 @@ from schemas.schemas import FarmCreate, FarmOut, FarmUpdate, HouseCreate, HouseO
 router = APIRouter(prefix="/farms", tags=["farms"])
 
 
+def _get_farm_or_404(farm_id: int, db: Session, current_user) -> Farm:
+    farm = db.get(Farm, farm_id)
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    if current_user.role_id not in (6,) and farm.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied to this farm")
+    return farm
+
+
 # ── Farms ─────────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=list[FarmOut])
 def list_farms(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    if current_user.role_id in (1, 5):
-        return db.query(Farm).order_by(Farm.id).all()
+    q = db.query(Farm)
+    if current_user.role_id not in (6,):
+        q = q.filter(Farm.company_id == current_user.company_id)
+
+    if current_user.role_id in (1, 5, 6):
+        return q.order_by(Farm.id).all()
     else:
-        return db.query(Farm).filter(Farm.id == current_user.farm_id).all()
+        return q.filter(Farm.id == current_user.farm_id).all()
 
 
 @router.post("", response_model=FarmOut, status_code=status.HTTP_201_CREATED)
 def create_farm(
     body: FarmCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "farms")),
+    current_user = Depends(require_permission("write", "farms")),
 ):
-    farm = Farm(**body.model_dump())
+    farm = Farm(**body.model_dump(), company_id=current_user.company_id)
     db.add(farm)
     db.commit()
     db.refresh(farm)
@@ -36,11 +49,9 @@ def create_farm(
 def delete_farm(
     farm_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("delete")),
+    current_user = Depends(require_permission("delete")),
 ):
-    farm = db.get(Farm, farm_id)
-    if not farm:
-        raise HTTPException(status_code=404, detail="Farm not found")
+    farm = _get_farm_or_404(farm_id, db, current_user)
 
     active_users = db.query(User).filter(User.farm_id == farm_id).count()
     if active_users:
@@ -67,11 +78,9 @@ def update_farm(
     farm_id: int,
     body: FarmUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "farms")),
+    current_user = Depends(require_permission("write", "farms")),
 ):
-    farm = db.get(Farm, farm_id)
-    if not farm:
-        raise HTTPException(status_code=404, detail="Farm not found")
+    farm = _get_farm_or_404(farm_id, db, current_user)
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(farm, field, value)
     db.commit()
@@ -87,7 +96,8 @@ def list_houses(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5) and farm_id != current_user.farm_id:
+    _get_farm_or_404(farm_id, db, current_user)
+    if current_user.role_id not in (1, 5, 6) and farm_id != current_user.farm_id:
         raise HTTPException(status_code=403, detail="Access denied")
     return db.query(House).filter(House.farm_id == farm_id).order_by(House.name).all()
 
@@ -97,10 +107,9 @@ def create_house(
     farm_id: int,
     body: HouseCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "farms")),
+    current_user=Depends(require_permission("write", "farms")),
 ):
-    if not db.get(Farm, farm_id):
-        raise HTTPException(status_code=404, detail="Farm not found")
+    _get_farm_or_404(farm_id, db, current_user)
     house = House(**{**body.model_dump(), "farm_id": farm_id})
     db.add(house)
     db.commit()
@@ -114,8 +123,9 @@ def update_house(
     house_id: int,
     body: HouseUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "farms")),
+    current_user=Depends(require_permission("write", "farms")),
 ):
+    _get_farm_or_404(farm_id, db, current_user)
     house = db.get(House, house_id)
     if not house or house.farm_id != farm_id:
         raise HTTPException(status_code=404, detail="House not found")
@@ -131,8 +141,9 @@ def delete_house(
     farm_id: int,
     house_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("delete")),
+    current_user=Depends(require_permission("delete")),
 ):
+    _get_farm_or_404(farm_id, db, current_user)
     house = db.get(House, house_id)
     if not house or house.farm_id != farm_id:
         raise HTTPException(status_code=404, detail="House not found")

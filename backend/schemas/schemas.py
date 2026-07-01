@@ -27,6 +27,7 @@ class TokenResponse(BaseModel):
 
 class UserOut(OrmBase):
     id:             int
+    company_id:     Optional[int] = None
     full_name:      str
     email:          str
     username:       Optional[str]
@@ -46,6 +47,7 @@ class UserCreate(BaseModel):
     username:     Optional[str] = None
     employee_id:  Optional[str] = None
     role_id:      int = 3
+    company_id:   Optional[int] = 1
     farm_id:      Optional[int] = 1
     department:   Optional[str] = None
     position:     Optional[str] = None
@@ -59,6 +61,7 @@ class UserUpdate(BaseModel):
     username:    Optional[str] = None
     employee_id: Optional[str] = None
     role_id:     Optional[int] = None
+    company_id:  Optional[int] = None
     department:  Optional[str] = None
     position:    Optional[str] = None
     phone:       Optional[str] = None

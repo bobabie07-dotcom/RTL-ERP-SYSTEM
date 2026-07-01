@@ -52,9 +52,12 @@ def list_items(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
-        farm_id = current_user.farm_id
     q = db.query(InventoryItem)
+    if current_user.role_id not in (6,):
+        q = q.filter(InventoryItem.company_id == current_user.company_id)
+
+    if current_user.role_id not in (1, 5, 6):
+        farm_id = current_user.farm_id
     if farm_id:
         q = q.filter(InventoryItem.farm_id == farm_id)
     if category_id:
@@ -75,9 +78,9 @@ def list_items(
 def create_item(
     body: InventoryItemCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "inventory")),
+    current_user=Depends(require_permission("write", "inventory")),
 ):
-    item = InventoryItem(**body.model_dump())
+    item = InventoryItem(**body.model_dump(), company_id=current_user.company_id)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -89,7 +92,7 @@ def update_item(
     item_id: int,
     body: InventoryItemUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "inventory")),
+    current_user=Depends(require_permission("write", "inventory")),
 ):
     item = db.get(InventoryItem, item_id)
     if not item:

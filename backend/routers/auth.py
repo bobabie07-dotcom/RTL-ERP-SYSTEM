@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
-from models import LoginHistory, User
+from models import LoginHistory, User, Company
 from schemas.schemas import (
     ChangePasswordRequest, FirstPasswordRequest, LoginRequest, TokenResponse,
     UserCreate, UserOut, UserUpdate,
@@ -97,6 +97,11 @@ def get_current_user(
     user = db.get(User, user_id)
     if not user or user.deleted_at:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if user.company_id:
+        company = db.get(Company, user.company_id)
+        if company and company.status == "suspended":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Company subscription is suspended. Contact system administrator.")
 
     st = getattr(user, "status", "active")
     if st == "inactive":
@@ -221,6 +226,8 @@ def list_users(
     db: Session = Depends(get_db),
 ):
     q = db.query(User).filter(User.deleted_at == None)  # noqa: E711
+    if current_user.role_id not in (6,):  # Non-super admins only see their own company's users
+        q = q.filter(User.company_id == current_user.company_id)
     if farm_id:
         q = q.filter(User.farm_id == farm_id)
     return q.order_by(User.full_name).all()
@@ -242,6 +249,7 @@ def create_user(
         username=body.username or None,
         password_hash=_hash(DEFAULT_PASSWORD),
         role_id=body.role_id,
+        company_id=current_user.company_id,
         farm_id=body.farm_id,
         department=body.department or None,
         phone=body.phone or None,

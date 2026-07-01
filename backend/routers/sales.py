@@ -49,7 +49,7 @@ def list_orders(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
+    if current_user.role_id not in (1, 5, 6):
         farm_id = current_user.farm_id
     sql = """
         SELECT
@@ -72,6 +72,9 @@ def list_orders(
         WHERE 1=1
     """
     params: dict = {"limit": limit}
+    if current_user.role_id not in (6,):
+        sql += " AND so.company_id = :company_id"
+        params["company_id"] = current_user.company_id
     if batch_id:
         sql += " AND so.batch_id = :batch_id"
         params["batch_id"] = batch_id
@@ -222,9 +225,11 @@ def list_expenses(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
+    if current_user.role_id not in (1, 5, 6):
         farm_id = current_user.farm_id
     q = db.query(Expense)
+    if current_user.role_id not in (6,):
+        q = q.filter(Expense.company_id == current_user.company_id)
     if farm_id:
         q = q.filter(Expense.farm_id == farm_id)
     if batch_id:
@@ -302,9 +307,11 @@ def accounts_receivable(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
+    if current_user.role_id not in (1, 5, 6):
         farm_id = current_user.farm_id
-    rows = db.execute(text("""
+    
+    params = {"farm_id": farm_id}
+    sql = """
         SELECT
             so.id,
             so.batch_id,
@@ -324,8 +331,13 @@ def accounts_receivable(
         WHERE b.farm_id = :farm_id
           AND so.status NOT IN ('cancelled','pending_approval')
           AND so.payment_status IN ('unpaid','partial')
-        ORDER BY so.order_date ASC
-    """), {"farm_id": farm_id}).mappings().all()
+    """
+    if current_user.role_id not in (6,):
+        sql += " AND so.company_id = :company_id"
+        params["company_id"] = current_user.company_id
+        
+    sql += " ORDER BY so.order_date ASC"
+    rows = db.execute(text(sql), params).mappings().all()
 
     total_outstanding = sum(float(r["total_amount"] or 0) for r in rows)
 
@@ -349,9 +361,11 @@ def sales_summary(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
+    if current_user.role_id not in (1, 5, 6):
         farm_id = current_user.farm_id
-    row = db.execute(text("""
+    
+    params = {"farm_id": farm_id}
+    sql = """
         SELECT
             COUNT(so.id)                                        AS total_orders,
             COALESCE(SUM(so.qty_kg * so.price_per_kg), 0)      AS total_revenue,
@@ -362,5 +376,10 @@ def sales_summary(
         JOIN batches b ON so.batch_id = b.id
         WHERE b.farm_id = :farm_id
           AND so.status != 'cancelled'
-    """), {"farm_id": farm_id}).mappings().one()
+    """
+    if current_user.role_id not in (6,):
+        sql += " AND so.company_id = :company_id"
+        params["company_id"] = current_user.company_id
+        
+    row = db.execute(text(sql), params).mappings().one()
     return dict(row)

@@ -28,6 +28,7 @@ import SettingsPage from './pages/SettingsPage';
 import NotificationsPage from './pages/NotificationsPage';
 import HealthPage from './pages/HealthPage';
 import MaintenancePage from './pages/MaintenancePage';
+import SuperAdminPage from './pages/SuperAdminPage';
 
 function PageWrapper({ children }) {
   return <div style={{ animation: 'pageFadeIn 150ms ease-out backwards' }}>{children}</div>;
@@ -99,6 +100,7 @@ export default function App() {
           <Route path="/settings"       element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/notifications"   element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
           <Route path="/user-management" element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>} />
+          <Route path="/super-admin"     element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />
           <Route path="/health"          element={<ProtectedRoute><HealthPage /></ProtectedRoute>} />
           <Route path="/maintenance"     element={<ProtectedRoute><MaintenancePage /></ProtectedRoute>} />
           <Route path="/support"                   element={<ProtectedRoute><SupportPage /></ProtectedRoute>} />

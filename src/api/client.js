@@ -257,3 +257,10 @@ export const usersApi = {
   createRole:      (data)            => post('/api/users/roles/all', data),
   updateRole:      (id, data)        => patch(`/api/users/roles/all/${id}`, data),
 };
+
+export const superAdminApi = {
+  listCompanies: () => get('/api/super-admin/companies'),
+  createCompany: (data) => post('/api/super-admin/companies', data),
+  updateCompany: (id, data) => patch(`/api/super-admin/companies/${id}`, data),
+  getSubscription: (companyId) => get(`/api/super-admin/companies/${companyId}/subscription`),
+};

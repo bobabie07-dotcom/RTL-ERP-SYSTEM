@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 from config import settings
 from database import engine
-from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support, users
+from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, support, users, super_admin
 
 
 def _safe_add_column(conn, sql: str):
@@ -258,6 +258,7 @@ def run_startup_migrations():
             CREATE OR REPLACE VIEW v_batch_summary AS
             SELECT
               b.id,
+              b.company_id,
               b.batch_no,
               b.farm_id,
               b.house_id,
@@ -390,6 +391,7 @@ app.include_router(alerts.router,       prefix=API)
 app.include_router(maintenance.router,  prefix=API)
 app.include_router(support.router,      prefix=API)
 app.include_router(users.router,        prefix=API)
+app.include_router(super_admin.router,  prefix=API)
 
 
 run_startup_migrations()

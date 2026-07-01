@@ -1,12 +1,27 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
+from models import Farm
 from routers.auth import get_current_user
 from schemas.schemas import BatchPnL
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+def _verify_farm_access(farm_id: int, db: Session, current_user):
+    if current_user.role_id not in (1, 5, 6):
+        farm_id = current_user.farm_id
+    if not farm_id:
+        raise HTTPException(status_code=400, detail="No farm assigned")
+    farm = db.get(Farm, farm_id)
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    if current_user.role_id not in (6,) and farm.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied to this farm's reports")
+    return farm_id
+
 
 # Fallback price used when a feed type has no purchase records in the DB.
 FALLBACK_FEED_PRICE = 25.0  # ₱/kg
@@ -18,8 +33,7 @@ def farm_finances(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
-        farm_id = current_user.farm_id
+    farm_id = _verify_farm_access(farm_id, db, current_user)
     """Financial health overview for a single farm."""
     year = db.execute(text("SELECT YEAR(CURDATE())")).scalar()
 
@@ -117,8 +131,7 @@ def mortality_impact(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
-        farm_id = current_user.farm_id
+    farm_id = _verify_farm_access(farm_id, db, current_user)
     """Per-batch mortality financial impact with profit projection."""
 
     rows = db.execute(text("""
@@ -230,8 +243,7 @@ def batch_pnl(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
-        farm_id = current_user.farm_id
+    farm_id = _verify_farm_access(farm_id, db, current_user)
     rows = db.execute(text("""
         SELECT v.*
         FROM v_batch_pnl v
@@ -248,8 +260,7 @@ def feed_efficiency(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
-        farm_id = current_user.farm_id
+    farm_id = _verify_farm_access(farm_id, db, current_user)
     rows = db.execute(text("""
         SELECT
             b.id                AS batch_id,
@@ -287,8 +298,7 @@ def monthly_summary(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
-        farm_id = current_user.farm_id
+    farm_id = _verify_farm_access(farm_id, db, current_user)
     params = {"farm_id": farm_id, "year": year, "month": month, "fallback": FALLBACK_FEED_PRICE}
 
     mortality = db.execute(text("""
@@ -362,8 +372,7 @@ def inventory_snapshot(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
-        farm_id = current_user.farm_id
+    farm_id = _verify_farm_access(farm_id, db, current_user)
     rows = db.execute(text("""
         SELECT
             ic.name         AS category,
@@ -390,8 +399,7 @@ def batch_comparison(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
-        farm_id = current_user.farm_id
+    farm_id = _verify_farm_access(farm_id, db, current_user)
     """Compare key KPIs across all batches for a farm."""
 
     rows = db.execute(text("""
@@ -497,8 +505,7 @@ def mortality_analysis(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
-        farm_id = current_user.farm_id
+    farm_id = _verify_farm_access(farm_id, db, current_user)
     rows = db.execute(text("""
         SELECT
             m.cause,

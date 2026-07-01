@@ -12,6 +12,7 @@ import Icons from '../../icons';
 
 const navItems = [
   { key: 'dashboard',     label: 'Dashboard',           path: '/dashboard' },
+  { key: 'superadmin',    label: 'Super Admin Portal',  path: '/super-admin' },
   { key: 'farms',         label: 'Farm Management',      path: '/farms' },
   { key: 'houses',        label: 'Poultry Houses',       path: '/houses' },
   { key: 'maintenance',   label: 'Maintenance',          path: '/maintenance' },
@@ -30,7 +31,7 @@ const navItems = [
 ];
 
 const iconMap = {
-  dashboard: Icons.dashboard, farms: Icons.farm, houses: Icons.house,
+  dashboard: Icons.dashboard, superadmin: Icons.users, farms: Icons.farm, houses: Icons.house,
   maintenance: Icons.wrench,
   batches: Icons.batch, inventory: Icons.inventory, feed: Icons.feed,
   mortality: Icons.mortality, health: Icons.syringe,
@@ -39,7 +40,7 @@ const iconMap = {
   usermgmt: Icons.users, support: Icons.mail, helpdesk: Icons.wrench,
 };
 
-const ROLE_LABEL = { 1: 'Administrator', 2: 'Farm Manager', 3: 'Farm Worker', 4: 'Veterinarian', 5: 'Owner' };
+const ROLE_LABEL = { 1: 'Administrator', 2: 'Farm Manager', 3: 'Farm Worker', 4: 'Veterinarian', 5: 'Owner', 6: 'Super Admin' };
 
 function getAlertRoute(alertType) {
   switch (alertType) {
@@ -168,6 +169,10 @@ export function AppLayout({ children }) {
 
   const roleId = user?.role_id;
   const filteredNavItems = navItems.filter(item => {
+    if (roleId === 6) {
+      return item.key === 'superadmin' || item.key === 'settings' || item.key === 'notifications';
+    }
+    if (item.key === 'superadmin') return false;
     if (item.key === 'usermgmt') return roleId === 1;
     if (item.key === 'helpdesk') return roleId === 1 || roleId === 2 || roleId === 5;
     if (item.key === 'support')  return roleId === 3 || roleId === 4;

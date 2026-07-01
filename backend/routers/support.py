@@ -74,7 +74,9 @@ def list_tickets(
     db: Session = Depends(get_db),
 ):
     q = db.query(SupportTicket)
-    if current_user.role_id not in ADMIN_ROLES:
+    if current_user.role_id not in (6,):  # Non-super admins only see their company's tickets
+        q = q.filter(SupportTicket.company_id == current_user.company_id)
+    if current_user.role_id not in ADMIN_ROLES and current_user.role_id not in (6,):
         q = q.filter(SupportTicket.user_id == current_user.id)
     if farm_id:
         q = q.filter(SupportTicket.farm_id == farm_id)
@@ -108,6 +110,7 @@ def create_ticket(
     ticket = SupportTicket(
         ticket_no=_gen_ticket_no(db),
         user_id=current_user.id,
+        company_id=current_user.company_id,
         farm_id=current_user.farm_id,
         subject=body.subject,
         category=body.category,

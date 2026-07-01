@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Batch, FeedIssue, FeedPurchase, FeedStock, FeedType, House, InventoryItem, InventoryMovement
+from models import Batch, FeedIssue, FeedPurchase, FeedStock, FeedType, House, InventoryItem, InventoryMovement, Farm
 from routers.auth import get_current_user, require_permission
 from utils import check_and_create_inventory_alerts
 from schemas.schemas import (
@@ -169,10 +169,15 @@ def list_feed_issues(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
+    if current_user.role_id not in (1, 5, 6):
         farm_id = current_user.farm_id
         if not farm_id:
             return []
+
+    if farm_id:
+        farm = db.get(Farm, farm_id)
+        if not farm or (current_user.role_id not in (6,) and farm.company_id != current_user.company_id):
+            raise HTTPException(status_code=403, detail="Access denied")
     sql = """
         SELECT
             fi.id,
@@ -304,10 +309,15 @@ def weekly_consumption(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
+    if current_user.role_id not in (1, 5, 6):
         farm_id = current_user.farm_id
         if not farm_id:
             return []
+
+    if farm_id:
+        farm = db.get(Farm, farm_id)
+        if not farm or (current_user.role_id not in (6,) and farm.company_id != current_user.company_id):
+            raise HTTPException(status_code=403, detail="Access denied")
     rows = db.execute(text("""
         SELECT
             h.name          AS house,

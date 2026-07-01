@@ -24,13 +24,18 @@ def list_batches(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
+    sql = "SELECT * FROM v_batch_summary WHERE 1=1"
+    params: dict = {}
+
+    if current_user.role_id not in (6,):
+        sql += " AND company_id = :company_id"
+        params["company_id"] = current_user.company_id
+
+    if current_user.role_id not in (1, 5, 6):
         farm_id = current_user.farm_id
         if not farm_id:
             return []
 
-    sql = "SELECT * FROM v_batch_summary WHERE 1=1"
-    params: dict = {}
     if farm_id:
         sql += " AND farm_id = :farm_id"
         params["farm_id"] = farm_id
@@ -56,7 +61,12 @@ def create_batch(
     if not house:
         raise HTTPException(status_code=404, detail="House not found")
 
-    batch = Batch(**body.model_dump(), created_by=current_user.id)
+    from models import Farm
+    farm = db.get(Farm, house.farm_id)
+    if current_user.role_id not in (6,) and farm.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied to this house")
+
+    batch = Batch(**body.model_dump(), company_id=current_user.company_id, created_by=current_user.id)
     db.add(batch)
     db.flush()
 
@@ -99,8 +109,11 @@ def get_batch(
     if not row:
         raise HTTPException(status_code=404, detail="Batch not found")
     
-    if current_user.role_id not in (1, 5) and row["farm_id"] != current_user.farm_id:
-        raise HTTPException(status_code=403, detail="Access denied to this batch")
+    if current_user.role_id not in (6,):
+        if row["company_id"] != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Access denied to this batch")
+        if current_user.role_id not in (1, 5) and row["farm_id"] != current_user.farm_id:
+            raise HTTPException(status_code=403, detail="Access denied to this batch")
         
     return BatchSummaryRow(**dict(row))
 

@@ -16,6 +16,29 @@ from database import Base
 
 # ── Auth & Organisation ──────────────────────────────────────────────────────
 
+class Company(Base):
+    __tablename__ = "companies"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    name       = Column(String(150), nullable=False)
+    status     = Column(String(50), nullable=False, default="active")  # active, suspended
+    created_at = Column(DateTime, default=func.now())
+
+    farms: list[Farm] = relationship("Farm", back_populates="company")
+    users: list[User] = relationship("User", back_populates="company")
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    plan_name  = Column(String(50), nullable=False, default="standard")
+    status     = Column(String(50), nullable=False, default="active")  # active, expired
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+
+
 class Role(Base):
     __tablename__ = "roles"
 
@@ -35,11 +58,13 @@ class Farm(Base):
     __tablename__ = "farms"
 
     id         = Column(SmallInteger, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     name       = Column(String(100), nullable=False)
     name_ar    = Column(String(200))
     location   = Column(String(255))
     created_at = Column(DateTime, default=func.now())
 
+    company = relationship("Company", back_populates="farms")
     users:   list[User]   = relationship("User",  back_populates="farm")
     houses:  list[House]  = relationship("House", back_populates="farm")
     batches: list[Batch]  = relationship("Batch", back_populates="farm")
@@ -50,6 +75,7 @@ class User(Base):
 
     id                      = Column(Integer, primary_key=True, autoincrement=True)
     employee_id             = Column(String(50), unique=True, nullable=True)
+    company_id              = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     farm_id                 = Column(SmallInteger, ForeignKey("farms.id"), nullable=True)
     role_id                 = Column(SmallInteger, ForeignKey("roles.id"), nullable=False, default=3)
     full_name               = Column(String(150), nullable=False)
@@ -72,6 +98,7 @@ class User(Base):
     updated_at              = Column(DateTime, default=func.now(), onupdate=func.now())
     deleted_at              = Column(DateTime, nullable=True)
 
+    company = relationship("Company", back_populates="users")
     farm = relationship("Farm", back_populates="users", foreign_keys=[farm_id])
     role = relationship("Role", back_populates="users", foreign_keys=[role_id])
 
@@ -135,6 +162,7 @@ class SupportTicket(Base):
     __tablename__ = "support_tickets"
 
     id               = Column(Integer, primary_key=True, autoincrement=True)
+    company_id       = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     ticket_no        = Column(String(20), unique=True, nullable=False)
     user_id          = Column(Integer, ForeignKey("users.id"), nullable=False)
     farm_id          = Column(Integer, nullable=True)
@@ -225,6 +253,7 @@ class Batch(Base):
     __tablename__ = "batches"
 
     id                  = Column(Integer, primary_key=True, autoincrement=True)
+    company_id          = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     batch_no            = Column(String(30), nullable=False, unique=True)
     house_id            = Column(SmallInteger, ForeignKey("houses.id"), nullable=False)
     farm_id             = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
@@ -297,6 +326,7 @@ class Supplier(Base):
     __tablename__ = "suppliers"
 
     id           = Column(SmallInteger, primary_key=True, autoincrement=True)
+    company_id   = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     name         = Column(String(150), nullable=False)
     name_ar      = Column(String(300))
     contact_name = Column(String(100))
@@ -485,6 +515,7 @@ class InventoryItem(Base):
     __tablename__ = "inventory_items"
 
     id            = Column(Integer, primary_key=True, autoincrement=True)
+    company_id    = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     farm_id       = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
     category_id   = Column(SmallInteger, ForeignKey("inventory_categories.id"), nullable=False)
     name          = Column(String(150), nullable=False)
@@ -579,6 +610,7 @@ class Buyer(Base):
     __tablename__ = "buyers"
 
     id           = Column(Integer, primary_key=True, autoincrement=True)
+    company_id   = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     name         = Column(String(150), nullable=False)
     name_ar      = Column(String(300))
     contact_name = Column(String(100))
@@ -595,6 +627,7 @@ class SalesOrder(Base):
     __tablename__ = "sales_orders"
 
     id             = Column(Integer, primary_key=True, autoincrement=True)
+    company_id     = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     order_no       = Column(String(30), nullable=False, unique=True)
     batch_id       = Column(Integer, ForeignKey("batches.id"), nullable=False)
     buyer_id       = Column(Integer, ForeignKey("buyers.id"))
@@ -623,6 +656,7 @@ class Expense(Base):
     __tablename__ = "expenses"
 
     id           = Column(Integer, primary_key=True, autoincrement=True)
+    company_id   = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     batch_id     = Column(Integer, ForeignKey("batches.id"))
     farm_id      = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
     category     = Column(

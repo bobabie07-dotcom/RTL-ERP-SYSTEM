@@ -91,6 +91,8 @@ def list_users(
 ):
     _require_admin(current_user)
     q = db.query(User)
+    if current_user.role_id not in (6,):
+        q = q.filter(User.company_id == current_user.company_id)
     if not include_archived:
         q = q.filter(User.deleted_at == None)  # noqa: E711
     if farm_id:
@@ -180,6 +182,7 @@ def create_user(
         username=body.username or None,
         password_hash=_hash(DEFAULT_PASSWORD),
         role_id=body.role_id,
+        company_id=current_user.company_id,
         farm_id=body.farm_id,
         department=body.department or None,
         position=getattr(body, "position", None),

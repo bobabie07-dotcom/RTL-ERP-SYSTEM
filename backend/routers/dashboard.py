@@ -16,10 +16,18 @@ def get_dashboard(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    if current_user.role_id not in (1, 5):
+    if current_user.role_id not in (1, 5, 6):
         farm_id = current_user.farm_id
         if not farm_id:
             raise HTTPException(status_code=403, detail="No farm assigned to your account. Contact your administrator.")
+
+    from models import Farm
+    farm = db.get(Farm, farm_id)
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    if current_user.role_id not in (6,) and farm.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied to this farm's dashboard")
+
     farm_batches = db.query(Batch).filter(Batch.farm_id == farm_id)
 
     total_batches  = farm_batches.count()
