@@ -116,6 +116,75 @@ function Toast({ msg, ok }) {
   );
 }
 
+// ── User Form (standalone to prevent remount/focus loss on parent re-render) ──
+
+function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions, onSubmit, onCancel }) {
+  return (
+    <form onSubmit={onSubmit}>
+      {formErr && (
+        <div style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 14 }}>
+          {formErr}
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <FieldRow label="Full Name" required>
+            <input style={INP} value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} placeholder="e.g. Juan Dela Cruz" />
+          </FieldRow>
+        </div>
+        <FieldRow label="Email Address" required>
+          <input style={INP} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@example.com" />
+        </FieldRow>
+        <FieldRow label="Username">
+          <input style={INP} value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} placeholder="Optional" />
+        </FieldRow>
+        <FieldRow label="Employee ID">
+          <input style={INP} value={form.employee_id} onChange={e => setForm(p => ({ ...p, employee_id: e.target.value }))} placeholder="EMP-0001" />
+        </FieldRow>
+        <FieldRow label="Phone">
+          <input style={INP} value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
+        </FieldRow>
+        <FieldRow label="Primary Role">
+          <select style={SEL} value={form.role_id} onChange={e => setForm(p => ({ ...p, role_id: e.target.value }))}>
+            {roleOptions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
+        </FieldRow>
+        <FieldRow label="Assigned Farm" required>
+          <select style={SEL} value={form.farm_id} onChange={e => setForm(p => ({ ...p, farm_id: e.target.value }))}>
+            <option value="">— Select Farm —</option>
+            {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+        </FieldRow>
+        <FieldRow label="Department">
+          <select style={SEL} value={form.department} onChange={e => setForm(p => ({ ...p, department: e.target.value }))}>
+            <option value="">— Select —</option>
+            {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+          </select>
+        </FieldRow>
+        <FieldRow label="Position">
+          <select style={SEL} value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))}>
+            <option value="">— Select —</option>
+            {POSITIONS.map(p => <option key={p}>{p}</option>)}
+          </select>
+        </FieldRow>
+      </div>
+      {!editUser && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#1e40af', marginTop: 4, marginBottom: 14 }}>
+          Default password: <strong>Welcome@123</strong> — user must change on first login.
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+        <button type="submit" disabled={saving} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+          {saving ? 'Saving…' : editUser ? 'Save Changes' : 'Create User'}
+        </button>
+        <button type="button" onClick={onCancel} style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 14, cursor: 'pointer' }}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function UserManagementPage() {
@@ -354,74 +423,6 @@ export default function UserManagementPage() {
     ...roles.filter(r => !ROLE_MAP[r.id]).map(r => ({ id: r.id, label: r.name })),
   ];
 
-  // ── User form JSX ──────────────────────────────────────────────────────────
-  function UserForm({ onCancel }) {
-    return (
-      <form onSubmit={handleSaveUser}>
-        {formErr && (
-          <div style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 14 }}>
-            {formErr}
-          </div>
-        )}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <FieldRow label="Full Name" required>
-              <input style={INP} value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} placeholder="e.g. Juan Dela Cruz" />
-            </FieldRow>
-          </div>
-          <FieldRow label="Email Address" required>
-            <input style={INP} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@example.com" />
-          </FieldRow>
-          <FieldRow label="Username">
-            <input style={INP} value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} placeholder="Optional" />
-          </FieldRow>
-          <FieldRow label="Employee ID">
-            <input style={INP} value={form.employee_id} onChange={e => setForm(p => ({ ...p, employee_id: e.target.value }))} placeholder="EMP-0001" />
-          </FieldRow>
-          <FieldRow label="Phone">
-            <input style={INP} value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
-          </FieldRow>
-          <FieldRow label="Primary Role">
-            <select style={SEL} value={form.role_id} onChange={e => setForm(p => ({ ...p, role_id: e.target.value }))}>
-              {roleOptions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </select>
-          </FieldRow>
-          <FieldRow label="Assigned Farm" required>
-            <select style={SEL} value={form.farm_id} onChange={e => setForm(p => ({ ...p, farm_id: e.target.value }))}>
-              <option value="">— Select Farm —</option>
-              {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-          </FieldRow>
-          <FieldRow label="Department">
-            <select style={SEL} value={form.department} onChange={e => setForm(p => ({ ...p, department: e.target.value }))}>
-              <option value="">— Select —</option>
-              {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
-            </select>
-          </FieldRow>
-          <FieldRow label="Position">
-            <select style={SEL} value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))}>
-              <option value="">— Select —</option>
-              {POSITIONS.map(p => <option key={p}>{p}</option>)}
-            </select>
-          </FieldRow>
-        </div>
-        {!editUser && (
-          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#1e40af', marginTop: 4, marginBottom: 14 }}>
-            Default password: <strong>Welcome@123</strong> — user must change on first login.
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-          <button type="submit" disabled={saving} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
-            {saving ? 'Saving…' : editUser ? 'Save Changes' : 'Create User'}
-          </button>
-          <button type="button" onClick={onCancel} style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 14, cursor: 'pointer' }}>
-            Cancel
-          </button>
-        </div>
-      </form>
-    );
-  }
-
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: 24, fontFamily: 'system-ui, sans-serif', maxWidth: 1400, margin: '0 auto' }}>
@@ -563,14 +564,22 @@ export default function UserManagementPage() {
       {/* ── Add User Modal ──────────────────────────────────────────────────── */}
       {addModal && (
         <Modal title="Add New User" onClose={() => setAddModal(false)} width={600}>
-          <UserForm onCancel={() => setAddModal(false)} />
+          <UserForm
+            form={form} setForm={setForm} formErr={formErr} saving={saving}
+            editUser={null} farms={farms} roleOptions={roleOptions}
+            onSubmit={handleSaveUser} onCancel={() => setAddModal(false)}
+          />
         </Modal>
       )}
 
       {/* ── Edit User Modal ─────────────────────────────────────────────────── */}
       {editUser && (
         <Modal title={`Edit User — ${editUser.full_name}`} onClose={() => setEditUser(null)} width={600}>
-          <UserForm onCancel={() => setEditUser(null)} />
+          <UserForm
+            form={form} setForm={setForm} formErr={formErr} saving={saving}
+            editUser={editUser} farms={farms} roleOptions={roleOptions}
+            onSubmit={handleSaveUser} onCancel={() => setEditUser(null)}
+          />
         </Modal>
       )}
 
