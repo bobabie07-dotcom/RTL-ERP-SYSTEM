@@ -23,7 +23,7 @@ def _now():
 
 
 def _require_admin(user: User):
-    if user.role_id not in ADMIN_ROLES:
+    if user.role_id not in ADMIN_ROLES and user.role_id != 6:
         raise HTTPException(403, "Admin access required")
 
 
@@ -175,6 +175,7 @@ def create_user(
     if body.employee_id and db.query(User).filter(User.employee_id == body.employee_id).first():
         raise HTTPException(400, "Employee ID already exists")
 
+    company_id = body.company_id if (current_user.role_id == 6 and body.company_id) else current_user.company_id
     user = User(
         employee_id=body.employee_id or None,
         full_name=body.full_name,
@@ -182,7 +183,7 @@ def create_user(
         username=body.username or None,
         password_hash=_hash(DEFAULT_PASSWORD),
         role_id=body.role_id,
-        company_id=current_user.company_id,
+        company_id=company_id,
         farm_id=body.farm_id,
         department=body.department or None,
         position=getattr(body, "position", None),

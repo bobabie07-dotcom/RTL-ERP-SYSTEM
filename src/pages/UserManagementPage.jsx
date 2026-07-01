@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { usersApi, farmsApi } from '../api/client';
+import { usersApi, farmsApi, superAdminApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useFarm } from '../context/FarmContext';
 import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
@@ -29,6 +29,7 @@ const POSITIONS   = ['Manager','Supervisor','Staff','Coordinator','Analyst','Off
 const EMPTY_FORM = {
   full_name: '', email: '', username: '', employee_id: '',
   role_id: '3', farm_id: '', department: '', position: '', phone: '',
+  company_id: '',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -121,7 +122,11 @@ function Toast({ msg, ok }) {
 
 // ── User Form (standalone to prevent remount/focus loss on parent re-render) ──
 
-function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions, onSubmit, onCancel }) {
+function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions, companies, me, onSubmit, onCancel }) {
+  const filteredFarms = form.company_id
+    ? farms.filter(f => f.company_id === parseInt(form.company_id))
+    : farms;
+
   return (
     <form onSubmit={onSubmit}>
       {formErr && (
@@ -130,6 +135,16 @@ function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {me?.role_id === 6 && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <FieldRow label="Company" required>
+              <select style={SEL} value={form.company_id} onChange={e => setForm(p => ({ ...p, company_id: e.target.value, farm_id: '' }))}>
+                <option value="">— Select Company —</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </FieldRow>
+          </div>
+        )}
         <div style={{ gridColumn: '1 / -1' }}>
           <FieldRow label="Full Name" required>
             <input style={INP} value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} placeholder="e.g. Juan Dela Cruz" />
@@ -155,7 +170,7 @@ function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions
         <FieldRow label="Assigned Farm" required>
           <select style={SEL} value={form.farm_id} onChange={e => setForm(p => ({ ...p, farm_id: e.target.value }))}>
             <option value="">— Select Farm —</option>
-            {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            {filteredFarms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
           </select>
         </FieldRow>
         <FieldRow label="Department">
@@ -196,6 +211,7 @@ export default function UserManagementPage() {
   const [users,  setUsers]  = useState([]);
   const [roles,  setRoles]  = useState([]);
   const [farms,  setFarms]  = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [stats,  setStats]  = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState('');
@@ -249,6 +265,11 @@ export default function UserManagementPage() {
       setRoles(r || []);
       setStats(s);
       setFarms(f || []);
+
+      if (me?.role_id === 6) {
+        const comps = await superAdminApi.listCompanies();
+        setCompanies(comps || []);
+      }
     } catch (e) {
       setLoadErr(e?.detail || e?.message || 'Failed to load users');
     } finally {
@@ -294,6 +315,7 @@ export default function UserManagementPage() {
           department:  form.department || undefined,
           position:    form.position   || undefined,
           phone:       form.phone      || undefined,
+          company_id:  (me?.role_id === 6 && form.company_id) ? parseInt(form.company_id) : undefined,
         });
         showToast(`${form.full_name} updated`);
         setEditUser(null);
@@ -308,6 +330,7 @@ export default function UserManagementPage() {
           department:  form.department || undefined,
           position:    form.position   || undefined,
           phone:       form.phone      || undefined,
+          company_id:  (me?.role_id === 6 && form.company_id) ? parseInt(form.company_id) : undefined,
         });
         setTempPwd(res.temp_password || 'Welcome@123');
         showToast(`${form.full_name} created`);
@@ -385,6 +408,7 @@ export default function UserManagementPage() {
       department:  u.department  || '',
       position:    u.position    || '',
       phone:       u.phone       || '',
+      company_id:  u.company_id ? String(u.company_id) : '',
     });
     setFormErr('');
     setEditUser(u);
@@ -577,6 +601,7 @@ export default function UserManagementPage() {
           <UserForm
             form={form} setForm={setForm} formErr={formErr} saving={saving}
             editUser={null} farms={farms} roleOptions={roleOptions}
+            companies={companies} me={me}
             onSubmit={handleSaveUser} onCancel={() => setAddModal(false)}
           />
         </Modal>
@@ -588,6 +613,7 @@ export default function UserManagementPage() {
           <UserForm
             form={form} setForm={setForm} formErr={formErr} saving={saving}
             editUser={editUser} farms={farms} roleOptions={roleOptions}
+            companies={companies} me={me}
             onSubmit={handleSaveUser} onCancel={() => setEditUser(null)}
           />
         </Modal>

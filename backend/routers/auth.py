@@ -243,13 +243,14 @@ def create_user(
         raise HTTPException(status_code=400, detail="Email already registered")
     if body.username and db.query(User).filter(User.username == body.username).first():
         raise HTTPException(status_code=400, detail="Username already taken")
+    company_id = body.company_id if (current_user.role_id == 6 and body.company_id) else current_user.company_id
     user = User(
         full_name=body.full_name,
         email=body.email,
         username=body.username or None,
         password_hash=_hash(DEFAULT_PASSWORD),
         role_id=body.role_id,
-        company_id=current_user.company_id,
+        company_id=company_id,
         farm_id=body.farm_id,
         department=body.department or None,
         phone=body.phone or None,
