@@ -53,6 +53,15 @@ def run_startup_migrations():
             conn.execute(text("ALTER TABLE users ADD UNIQUE KEY uq_user_emp_company (company_id, employee_id)"))
         except Exception:
             pass
+        # Convert global unique on batch_no → per-company composite unique (idempotent)
+        try:
+            conn.execute(text("ALTER TABLE batches DROP INDEX batch_no"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE batches ADD UNIQUE KEY uq_batch_no_company (company_id, batch_no)"))
+        except Exception:
+            pass
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN failed_login_count INT NOT NULL DEFAULT 0")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN locked_until DATETIME DEFAULT NULL")

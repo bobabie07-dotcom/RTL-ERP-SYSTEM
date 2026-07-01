@@ -253,10 +253,11 @@ class Breed(Base):
 
 class Batch(Base):
     __tablename__ = "batches"
+    __table_args__ = (UniqueConstraint('company_id', 'batch_no', name='uq_batch_no_company'),)
 
     id                  = Column(Integer, primary_key=True, autoincrement=True)
     company_id          = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
-    batch_no            = Column(String(30), nullable=False, unique=True)
+    batch_no            = Column(String(30), nullable=False)
     house_id            = Column(SmallInteger, ForeignKey("houses.id"), nullable=False)
     farm_id             = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
     breed_id            = Column(SmallInteger, ForeignKey("breeds.id"))

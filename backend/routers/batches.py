@@ -57,7 +57,10 @@ def create_batch(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "batches")),
 ):
-    if db.query(Batch).filter(Batch.batch_no == body.batch_no).first():
+    if db.query(Batch).filter(
+        Batch.batch_no == body.batch_no,
+        Batch.company_id == current_user.company_id,
+    ).first():
         raise HTTPException(status_code=400, detail="Batch number already exists")
 
     house = db.get(House, body.house_id)
