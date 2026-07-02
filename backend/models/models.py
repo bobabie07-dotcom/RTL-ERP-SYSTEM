@@ -123,7 +123,7 @@ class UserRole(Base):
 
 class UserFarm(Base):
     __tablename__ = "user_farms"
-    __table_args__ = (UniqueConstraint("user_id", "farm_id", name="uq_user_farm"),)
+    __table_args__ = (UniqueConstraint("user_id", "farm_id"),)
 
     id      = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
