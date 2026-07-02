@@ -96,6 +96,9 @@ def list_purchase_orders(
         WHERE 1=1
     """
     params: dict = {"limit": limit}
+    if current_user.role_id != 6:
+        sql += " AND po.company_id = :company_id"
+        params["company_id"] = current_user.company_id
     if farm_id:
         sql += " AND po.farm_id = :farm_id"
         params["farm_id"] = farm_id
@@ -129,6 +132,7 @@ def create_purchase_order(
     total = sum(float(it.qty_ordered) * float(it.unit_price) for it in items_data) if items_data else (float(body.total_amount or 0))
 
     po = PurchaseOrder(
+        company_id=current_user.company_id,
         farm_id=body.farm_id,
         supplier_id=body.supplier_id,
         batch_id=body.batch_id,
@@ -161,10 +165,10 @@ def update_purchase_order(
     po_id: int,
     body: PurchaseOrderUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "procurement")),
+    current_user=Depends(require_permission("write", "procurement")),
 ):
     po = db.get(PurchaseOrder, po_id)
-    if not po:
+    if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(po, field, value)
@@ -182,7 +186,7 @@ def approve_purchase_order(
         if current_user.role_id not in (1, 2):
             raise HTTPException(status_code=403, detail="Only managers and admins can approve purchase orders")
         po = db.get(PurchaseOrder, po_id)
-        if not po:
+        if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
             raise HTTPException(status_code=404, detail="Purchase order not found")
         if po.status != "pending_approval":
             raise HTTPException(status_code=400, detail=f"Purchase order is already {po.status}")
@@ -208,7 +212,7 @@ def reject_purchase_order(
     if current_user.role_id not in (1, 2):
         raise HTTPException(status_code=403, detail="Only managers and admins can reject purchase orders")
     po = db.get(PurchaseOrder, po_id)
-    if not po:
+    if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
     if po.status != "pending_approval":
         raise HTTPException(status_code=400, detail=f"Purchase order is already {po.status}")
@@ -229,7 +233,7 @@ def delete_purchase_order(
     if current_user.role_id not in (1, 2):
         raise HTTPException(status_code=403, detail="Only managers and admins can delete purchase orders")
     po = db.get(PurchaseOrder, po_id)
-    if not po:
+    if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
     for item in db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all():
         db.delete(item)
@@ -245,7 +249,7 @@ def receive_purchase_order(
 ):
     try:
         po = db.get(PurchaseOrder, po_id)
-        if not po:
+        if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
             raise HTTPException(status_code=404, detail="Purchase order not found")
         if po.status not in ("ordered", "partial"):
             raise HTTPException(status_code=400, detail="Only ordered POs can be marked received")
@@ -323,7 +327,7 @@ def sync_inventory_from_po(
     current_user=Depends(require_permission("write", "procurement")),
 ):
     po = db.get(PurchaseOrder, po_id)
-    if not po:
+    if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
     if po.status != "received":
         raise HTTPException(status_code=400, detail="Only received POs can be synced to inventory")

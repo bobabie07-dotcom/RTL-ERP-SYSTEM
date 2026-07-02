@@ -588,7 +588,8 @@ class PurchaseOrder(Base):
     __tablename__ = "purchase_orders"
 
     id            = Column(Integer, primary_key=True, autoincrement=True)
-    po_no         = Column(String(30), unique=True)
+    company_id    = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
+    po_no         = Column(String(30))
     farm_id       = Column(SmallInteger, ForeignKey("farms.id"), nullable=False)
     supplier_id   = Column(SmallInteger, ForeignKey("suppliers.id"))
     batch_id      = Column(Integer, ForeignKey("batches.id"), nullable=True)

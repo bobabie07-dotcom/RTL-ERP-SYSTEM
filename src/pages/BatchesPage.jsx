@@ -32,6 +32,7 @@ export default function BatchesPage() {
   const navigate = useNavigate();
   const { farmId } = useFarm();
   const [batches,      setBatches]      = useState([]);
+  const [allCompanyBatches, setAllCompanyBatches] = useState([]);
   const [search,       setSearch]       = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [loading,      setLoading]      = useState(true);
@@ -57,6 +58,9 @@ export default function BatchesPage() {
       .then(setBatches)
       .catch(e => setLoadError(e.message || 'Failed to load batches.'))
       .finally(() => setLoading(false));
+    batchesApi.list()
+      .then(setAllCompanyBatches)
+      .catch(() => {});
     batchesApi.houses({ farm_id: farmId }).then(setHouses).catch(() => {});
     batchesApi.breeds().then(setBreeds).catch(() => {});
     procurementApi.suppliers().then(setSuppliers).catch(() => {});
@@ -65,7 +69,7 @@ export default function BatchesPage() {
   function nextBatchNo() {
     const year = new Date().getFullYear();
     const prefix = `BATCH-${year}-`;
-    const used = batches
+    const used = allCompanyBatches
       .map(b => b.batch_no)
       .filter(n => n.startsWith(prefix))
       .map(n => parseInt(n.slice(prefix.length), 10))
@@ -127,6 +131,7 @@ export default function BatchesPage() {
       }
       const updated = await batchesApi.list({ farm_id: farmId });
       setBatches(updated);
+      batchesApi.list().then(setAllCompanyBatches).catch(() => {});
       setModal(false);
     } catch (err) { setFormError(err.message || 'Failed to save batch.'); }
     finally { setSaving(false); }
