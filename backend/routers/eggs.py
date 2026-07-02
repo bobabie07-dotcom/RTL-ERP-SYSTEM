@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from database import get_db
 from models.models import (
@@ -470,7 +470,8 @@ def get_egg_metrics(
 
     trend = []
     for col in reversed(collections):
-        # Find latest batch count log before or on collect_date
+        # Live count: use BatchDailyLog.current_count (most accurate historical value)
+        # If no log exists, fall back to initial_count minus total mortality on that batch
         log = (
             db.query(BatchDailyLog)
             .filter(
@@ -481,29 +482,81 @@ def get_egg_metrics(
             .first()
         )
 
-        live_count = log.current_count if log else (col.batch.initial_count if col.batch else 0)
+        if log:
+            live_count = log.current_count
+        elif col.batch:
+            # Fallback: initial − all mortality_records (includes cullings)
+            from models.models import MortalityRecord
+            total_deaths = (
+                db.query(func.coalesce(func.sum(MortalityRecord.count), 0))
+                .filter(MortalityRecord.batch_id == col.batch_id)
+                .scalar()
+            ) or 0
+            live_count = max(0, col.batch.initial_count - total_deaths)
+        else:
+            live_count = 0
 
-        hen_day_pct = (
-            (col.total_collected / live_count * 100) if live_count > 0 else 0.0
-        )
+        initial_count = col.batch.initial_count if col.batch else 0
+        defect_s = col.defect_summary or {}
 
-        trend.append(
-            {
-                "date": col.collect_date.strftime("%Y-%m-%d"),
-                "total": col.total_collected,
-                "cracked": col.cracked_count,
-                "hen_day_pct": round(hen_day_pct, 1),
-            }
-        )
+        reject    = int(defect_s.get("reject", 0) or 0)
+        waste     = int(defect_s.get("waste",  0) or 0)
+        saleable  = max(0, col.total_collected - (col.cracked_count or 0) - reject - waste)
+        trays     = round(col.total_collected / 30, 2)
+
+        hen_day_pct    = round(col.total_collected / live_count    * 100, 1) if live_count    > 0 else 0.0
+        hen_housed_pct = round(col.total_collected / initial_count * 100, 1) if initial_count > 0 else 0.0
+
+        trend.append({
+            "date":          col.collect_date.strftime("%Y-%m-%d"),
+            "total":         col.total_collected,
+            "saleable":      saleable,
+            "trays":         trays,
+            "cracked":       col.cracked_count or 0,
+            "hen_day_pct":   hen_day_pct,
+            "hen_housed_pct": hen_housed_pct,
+        })
+
+    # All-time defect breakdown from defect_summary JSON + cracked_count column
+    defect_totals = db.execute(text("""
+            SELECT
+                COALESCE(SUM(cracked_count), 0)                                    AS cracked,
+                COALESCE(SUM(JSON_EXTRACT(defect_summary, '$.soft_shell')),  0)    AS soft_shell,
+                COALESCE(SUM(JSON_EXTRACT(defect_summary, '$.double_yolk')), 0)    AS double_yolk,
+                COALESCE(SUM(JSON_EXTRACT(defect_summary, '$.dirty')),       0)    AS dirty,
+                COALESCE(SUM(JSON_EXTRACT(defect_summary, '$.misshaped')),   0)    AS misshaped,
+                COALESCE(SUM(JSON_EXTRACT(defect_summary, '$.reject')),      0)    AS reject,
+                COALESCE(SUM(JSON_EXTRACT(defect_summary, '$.waste')),       0)    AS waste
+            FROM egg_collections
+            WHERE company_id = :cid AND farm_id = :fid
+        """),
+        {"cid": current_user.company_id, "fid": farm_id}
+    ).mappings().one()
+
+    total_defects = sum(int(v or 0) for v in defect_totals.values())
+    total_safe    = total_col or 1
+
+    def _dpct(n):
+        return round(int(n or 0) / total_safe * 100, 2)
+
+    total_saleable = max(0, int(total_col) - int(defect_totals["cracked"] or 0)
+                         - int(defect_totals["reject"] or 0) - int(defect_totals["waste"] or 0))
 
     return {
         "total_collected": total_col,
-        "total_cracked": total_cracked,
-        "defect_rate": (
-            round((total_cracked / total_col * 100), 2)
-            if total_col > 0
-            else 0.0
-        ),
+        "total_saleable":  total_saleable,
+        "total_trays":     round(total_col / 30, 2),
+        "total_cracked":   total_cracked,
+        "defect_rate": round(total_defects / total_safe * 100, 2) if total_col > 0 else 0.0,
+        "defect_breakdown": {
+            "cracked":     {"count": int(defect_totals["cracked"] or 0),     "pct": _dpct(defect_totals["cracked"])},
+            "soft_shell":  {"count": int(defect_totals["soft_shell"] or 0),  "pct": _dpct(defect_totals["soft_shell"])},
+            "double_yolk": {"count": int(defect_totals["double_yolk"] or 0), "pct": _dpct(defect_totals["double_yolk"])},
+            "dirty":       {"count": int(defect_totals["dirty"] or 0),       "pct": _dpct(defect_totals["dirty"])},
+            "misshaped":   {"count": int(defect_totals["misshaped"] or 0),   "pct": _dpct(defect_totals["misshaped"])},
+            "reject":      {"count": int(defect_totals["reject"] or 0),      "pct": _dpct(defect_totals["reject"])},
+            "waste":       {"count": int(defect_totals["waste"] or 0),       "pct": _dpct(defect_totals["waste"])},
+        },
         "total_sales": float(total_sales),
         "trend": trend,
     }

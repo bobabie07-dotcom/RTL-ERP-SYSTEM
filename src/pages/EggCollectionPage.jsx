@@ -35,6 +35,8 @@ export default function EggCollectionPage() {
     double_yolk: '0',
     dirty: '0',
     misshaped: '0',
+    reject: '0',
+    waste: '0',
     feed_kg: '',
     water_liters: '',
     temperature: '',
@@ -93,6 +95,8 @@ export default function EggCollectionPage() {
       double_yolk: '0',
       dirty: '0',
       misshaped: '0',
+      reject: '0',
+      waste: '0',
       feed_kg: '',
       water_liters: '',
       temperature: '',
@@ -120,6 +124,8 @@ export default function EggCollectionPage() {
         double_yolk: parseInt(form.double_yolk) || 0,
         dirty:       parseInt(form.dirty)       || 0,
         misshaped:   parseInt(form.misshaped)   || 0,
+        reject:      parseInt(form.reject)      || 0,
+        waste:       parseInt(form.waste)       || 0,
       };
       const feed_water_log = (form.feed_kg || form.water_liters || form.temperature || form.humidity) ? {
         feed_kg:      parseFloat(form.feed_kg)      || null,
@@ -254,6 +260,12 @@ export default function EggCollectionPage() {
           </FormRow>
           <FormRow label="Misshaped">
             <FieldInput type="number" value={form.misshaped} onChange={f('misshaped')} placeholder="0" />
+          </FormRow>
+          <FormRow label="Reject">
+            <FieldInput type="number" value={form.reject} onChange={f('reject')} placeholder="0" />
+          </FormRow>
+          <FormRow label="Waste">
+            <FieldInput type="number" value={form.waste} onChange={f('waste')} placeholder="0" />
           </FormRow>
         </div>
         <div style={{ margin: '12px 0 4px', fontWeight: 600, fontSize: 13, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 6 }}>

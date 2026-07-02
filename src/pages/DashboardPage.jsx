@@ -21,7 +21,10 @@ const EXPENSE_COLORS = ['var(--viz-feed)', 'var(--viz-labor)', 'var(--info)', 'v
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { farmId } = useFarm();
+  const { farmId, farms } = useFarm();
+
+  const selectedFarm = farms.find(f => f.id === farmId);
+  const isLayer      = selectedFarm?.farm_type === 'layer';
 
   const [kpi,      setKpi]      = useState(null);
   const [batches,  setBatches]  = useState([]);
@@ -33,8 +36,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLoading(true);
+    const kpiCall = isLayer ? dashboardApi.layerKpis(farmId) : dashboardApi.kpis(farmId);
     Promise.all([
-      dashboardApi.kpis(farmId),
+      kpiCall,
       batchesApi.list({ farm_id: farmId, status: 'active' }),
       feedApi.weekly(farmId),
       salesApi.expenses({ farm_id: farmId }),
@@ -92,75 +96,151 @@ export default function DashboardPage() {
         <PrintButton title="Dashboard" />
       </div>
 
-      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
-        <StatCard label="Total Birds"              value={loading ? '—' : (kpi?.total_birds || 0).toLocaleString()} icon={<I.birds w={22} />} />
-        <StatCard label="Mortality Rate (7d)"      value={loading ? '—' : `${(kpi?.mortality_rate_7d || 0).toFixed(2)}%`} tone="red" icon={<I.mortality w={22} />} />
-        <StatCard label="Cumulative Mortality"     value={loading ? '—' : `${(kpi?.cumulative_mortality_rate || 0).toFixed(2)}%`} tone="red" icon={<I.percent w={22} />} caption="active batches" />
-        <StatCard label="Feed Days Remaining"      value={loading ? '—' : (kpi?.feed_stock_days != null ? `${kpi.feed_stock_days}d` : 'N/A')} tone="amber" icon={<I.feed w={22} />} caption="lowest stock type" />
-        <StatCard label="Revenue"                  value={loading ? '—' : `₱${((summary?.total_revenue || 0)).toLocaleString()}`} tone="blue" icon={<I.trendUp w={22} />} />
-      </div>
-
-      <div className="chart-split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, alignItems: 'start' }}>
-        <Card title="Active Batches — Mortality % (current snapshot)">
-          <LineChart
-            data={batches.map((b) => parseFloat((b.mortality_pct || 0).toFixed(2)))}
-            color="var(--viz-mortality)"
-            labels={batches.map((b) => b.batch_no)}
-          />
-        </Card>
-        <Card title="Expense Breakdown">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-            <div style={{ position: 'relative', flex: '0 0 auto' }}>
-              <DonutChart segments={expenses} />
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--text-strong)' }}>₱{(summary?.total_revenue || 0).toLocaleString()}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>total rev.</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, flex: 1 }}>
-              {expenses.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No expense data yet.</span>}
-              {expenses.map((e) => (
-                <div key={e.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 3, background: e.color, flex: '0 0 auto' }} />
-                  <span style={{ color: 'var(--text-body)', flex: 1 }}>{e.label}</span>
-                  <span style={{ color: 'var(--text-strong)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{e.value}%</span>
-                </div>
-              ))}
-            </div>
+      {isLayer ? (
+        <>
+          {/* ── Layer: Row 1 — Birds ── */}
+          <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+            <StatCard label="Active Birds"       value={loading ? '—' : (kpi?.total_live_birds || 0).toLocaleString()} icon={<I.birds w={22} />} />
+            <StatCard label="Initial Birds"      value={loading ? '—' : (kpi?.initial_birds || 0).toLocaleString()} icon={<I.population w={22} />} caption="placed" />
+            <StatCard label="Livability %"       value={loading ? '—' : `${(kpi?.livability_pct || 0).toFixed(2)}%`} tone="green" icon={<I.percent w={22} />} />
+            <StatCard label="Mortality %"        value={loading ? '—' : `${(kpi?.mortality_pct || 0).toFixed(2)}%`} tone="red" icon={<I.mortality w={22} />} caption={`${(kpi?.mortality_count || 0).toLocaleString()} birds`} />
+            <StatCard label="Culling %"          value={loading ? '—' : `${(kpi?.culling_pct || 0).toFixed(2)}%`} tone="amber" icon={<I.harvest w={22} />} caption={`${(kpi?.culling_count || 0).toLocaleString()} birds`} />
           </div>
-        </Card>
-      </div>
 
-      <Card title="Feed Consumption by House — last 7 days (kg)">
-        <BarChart data={barData} labels={barLabels} />
-      </Card>
+          {/* ── Layer: Row 2 — Today's Production ── */}
+          <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+            <StatCard label="Today's Eggs"       value={loading ? '—' : (kpi?.today_eggs || 0).toLocaleString()} icon={<I.percent w={22} />} />
+            <StatCard label="Saleable Eggs"      value={loading ? '—' : (kpi?.today_saleable || 0).toLocaleString()} tone="green" icon={<I.box w={22} />} />
+            <StatCard label="Today's Trays"      value={loading ? '—' : (kpi?.today_trays || 0).toLocaleString()} icon={<I.inventory w={22} />} caption="÷ 30 eggs" />
+            <StatCard label="Hen-Day %"          value={loading ? '—' : `${(kpi?.hen_day_pct || 0).toFixed(2)}%`} tone="blue" icon={<I.trendUp w={22} />} caption="today" />
+            <StatCard label="Hen-Housed %"       value={loading ? '—' : `${(kpi?.hen_housed_pct || 0).toFixed(2)}%`} tone="blue" icon={<I.trendUp w={22} />} caption="vs initial" />
+          </div>
 
-      <Card
-        title="Active Batches"
-        action={
-          <Button variant="secondary" size="sm" icon={<I.chevronRight w={15} />} onClick={() => navigate('/batches')}>
-            View All
-          </Button>
-        }
-      >
-        <DataTable
-          columns={[
-            { key: 'batch', header: 'Batch No.', strong: true, render: (r) => (
-              <a href="#" onClick={(e) => { e.preventDefault(); navigate('/batches/' + r.id); }} style={{ fontWeight: 600, color: 'var(--text-brand)' }}>{r.batch}</a>
-            )},
-            { key: 'house',  header: 'House' },
-            { key: 'birds',  header: 'Birds',  align: 'right', numeric: true },
-            { key: 'age',    header: 'Age',    align: 'right' },
-            { key: 'mort',   header: 'Mortality %', align: 'right', numeric: true },
-            { key: 'fcr',    header: 'FCR',    align: 'right', numeric: true },
-            { key: 'status', header: 'Status', render: (r) => (
-              <Badge tone={STATUS_TONE[batches.find(b => b.id === r.id)?.status] || 'success'} dot>{r.status}</Badge>
-            )},
-          ]}
-          rows={tableRows}
-          rowKey="id"
-        />
-      </Card>
+          {/* ── Layer: Row 3 — Feed / Water / Quality ── */}
+          <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+            <StatCard label="Feed Consumed"      value={loading ? '—' : kpi?.feed_consumed_kg != null ? `${kpi.feed_consumed_kg.toFixed(1)} kg` : 'N/A'} icon={<I.feed w={22} />} caption="today" />
+            <StatCard label="Feed / Bird"        value={loading ? '—' : kpi?.feed_per_bird != null ? `${kpi.feed_per_bird.toFixed(3)} kg` : 'N/A'} icon={<I.feed w={22} />} />
+            <StatCard label="Water Consumed"     value={loading ? '—' : kpi?.water_consumed_l != null ? `${kpi.water_consumed_l.toFixed(0)} L` : 'N/A'} icon={<I.scale w={22} />} caption="today" />
+            <StatCard label="Water / Bird"       value={loading ? '—' : kpi?.water_per_bird != null ? `${kpi.water_per_bird.toFixed(3)} L` : 'N/A'} icon={<I.scale w={22} />} />
+            <StatCard label="Defect Rate (7d)"   value={loading ? '—' : `${(kpi?.defect_rate || 0).toFixed(2)}%`} tone={kpi?.defect_rate > 3 ? 'red' : 'green'} icon={<I.alertTri w={22} />} />
+          </div>
+
+          {/* ── Layer: Row 4 — Inventory / Sales / Trends ── */}
+          <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+            <StatCard label="Egg Inventory"      value={loading ? '—' : (kpi?.total_egg_inventory || 0).toLocaleString()} icon={<I.inventory w={22} />} caption="eggs in stock" />
+            <StatCard label="Month Revenue"      value={loading ? '—' : `₱${(kpi?.month_sales_amount || 0).toLocaleString()}`} tone="blue" icon={<I.trendUp w={22} />} />
+            <StatCard label="Today's Sales"      value={loading ? '—' : `₱${(kpi?.today_sales_revenue || 0).toLocaleString()}`} tone="blue" icon={<I.sales w={22} />} />
+            <StatCard label="7d Avg Production"  value={loading ? '—' : `${(kpi?.avg_7d_eggs || 0).toLocaleString()} eggs`} icon={<I.reports w={22} />} caption="daily avg" />
+            <StatCard label="30d Avg Production" value={loading ? '—' : `${(kpi?.avg_30d_eggs || 0).toLocaleString()} eggs`} icon={<I.reports w={22} />} caption="daily avg" />
+          </div>
+
+          {/* ── Layer: Grade & Defect Distribution ── */}
+          {kpi?.grade_distribution && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <Card title="Grade Distribution (all-time)">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {Object.entries(kpi.grade_distribution).map(([k, v]) => (
+                    <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                      <span style={{ width: 60, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{k}</span>
+                      <div style={{ flex: 1, background: 'var(--border-subtle)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                        <div style={{ width: `${v.pct}%`, background: 'var(--success)', height: '100%', borderRadius: 4, transition: 'width 0.3s' }} />
+                      </div>
+                      <span style={{ width: 80, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{v.count.toLocaleString()}</span>
+                      <span style={{ width: 46, textAlign: 'right', color: 'var(--text-muted)' }}>{v.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+              <Card title="Defect Breakdown (last 7 days)">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {Object.entries(kpi.defect_distribution || {}).map(([k, v]) => (
+                    <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                      <span style={{ width: 80, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{k.replace('_', ' ')}</span>
+                      <div style={{ flex: 1, background: 'var(--border-subtle)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                        <div style={{ width: `${Math.min(v.pct * 10, 100)}%`, background: 'var(--danger)', height: '100%', borderRadius: 4, transition: 'width 0.3s' }} />
+                      </div>
+                      <span style={{ width: 80, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{v.count.toLocaleString()}</span>
+                      <span style={{ width: 46, textAlign: 'right', color: 'var(--text-muted)' }}>{v.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+            <StatCard label="Total Birds"              value={loading ? '—' : (kpi?.total_birds || 0).toLocaleString()} icon={<I.birds w={22} />} />
+            <StatCard label="Mortality Rate (7d)"      value={loading ? '—' : `${(kpi?.mortality_rate_7d || 0).toFixed(2)}%`} tone="red" icon={<I.mortality w={22} />} />
+            <StatCard label="Cumulative Mortality"     value={loading ? '—' : `${(kpi?.cumulative_mortality_rate || 0).toFixed(2)}%`} tone="red" icon={<I.percent w={22} />} caption="active batches" />
+            <StatCard label="Feed Days Remaining"      value={loading ? '—' : (kpi?.feed_stock_days != null ? `${kpi.feed_stock_days}d` : 'N/A')} tone="amber" icon={<I.feed w={22} />} caption="lowest stock type" />
+            <StatCard label="Revenue"                  value={loading ? '—' : `₱${((summary?.total_revenue || 0)).toLocaleString()}`} tone="blue" icon={<I.trendUp w={22} />} />
+          </div>
+
+          <div className="chart-split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, alignItems: 'start' }}>
+            <Card title="Active Batches — Mortality % (current snapshot)">
+              <LineChart
+                data={batches.map((b) => parseFloat((b.mortality_pct || 0).toFixed(2)))}
+                color="var(--viz-mortality)"
+                labels={batches.map((b) => b.batch_no)}
+              />
+            </Card>
+            <Card title="Expense Breakdown">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                <div style={{ position: 'relative', flex: '0 0 auto' }}>
+                  <DonutChart segments={expenses} />
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--text-strong)' }}>₱{(summary?.total_revenue || 0).toLocaleString()}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>total rev.</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 9, flex: 1 }}>
+                  {expenses.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No expense data yet.</span>}
+                  {expenses.map((e) => (
+                    <div key={e.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 3, background: e.color, flex: '0 0 auto' }} />
+                      <span style={{ color: 'var(--text-body)', flex: 1 }}>{e.label}</span>
+                      <span style={{ color: 'var(--text-strong)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{e.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          <Card title="Feed Consumption by House — last 7 days (kg)">
+            <BarChart data={barData} labels={barLabels} />
+          </Card>
+
+          <Card
+            title="Active Batches"
+            action={
+              <Button variant="secondary" size="sm" icon={<I.chevronRight w={15} />} onClick={() => navigate('/batches')}>
+                View All
+              </Button>
+            }
+          >
+            <DataTable
+              columns={[
+                { key: 'batch', header: 'Batch No.', strong: true, render: (r) => (
+                  <a href="#" onClick={(e) => { e.preventDefault(); navigate('/batches/' + r.id); }} style={{ fontWeight: 600, color: 'var(--text-brand)' }}>{r.batch}</a>
+                )},
+                { key: 'house',  header: 'House' },
+                { key: 'birds',  header: 'Birds',  align: 'right', numeric: true },
+                { key: 'age',    header: 'Age',    align: 'right' },
+                { key: 'mort',   header: 'Mortality %', align: 'right', numeric: true },
+                { key: 'fcr',    header: 'FCR',    align: 'right', numeric: true },
+                { key: 'status', header: 'Status', render: (r) => (
+                  <Badge tone={STATUS_TONE[batches.find(b => b.id === r.id)?.status] || 'success'} dot>{r.status}</Badge>
+                )},
+              ]}
+              rows={tableRows}
+              rowKey="id"
+            />
+          </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -1256,21 +1256,57 @@ class SpentHenSaleOut(OrmBase):
 # ── Layer Dashboard KPI ───────────────────────────────────────────────────────
 
 class LayerDashboardKPI(BaseModel):
-    # Birds
-    total_flocks:        int
-    active_flocks:       int
-    total_live_birds:    int
-    mortality_rate_7d:   float
-    # Today's production
-    today_eggs:          int
-    hen_day_pct:         float
-    defect_rate:         float
+    # Flock summary
+    total_flocks:         int
+    active_flocks:        int
+    initial_birds:        int
+    total_live_birds:     int
+    spent_hen_count:      int
+
+    # Mortality & livability
+    mortality_count:      int
+    mortality_pct:        float
+    culling_count:        int
+    culling_pct:          float
+    livability_pct:       float
+    mortality_rate_7d:    float
+
+    # Today's egg production
+    today_eggs:           int
+    today_saleable:       int
+    today_trays:          float
+    hen_day_pct:          float
+    hen_housed_pct:       float
+    avg_eggs_per_hen:     float
+
+    # Feed & Water (today)
+    feed_consumed_kg:     Optional[float]
+    water_consumed_l:     Optional[float]
+    feed_per_bird:        Optional[float]
+    water_per_bird:       Optional[float]
+
+    # Production trends
+    avg_7d_eggs:          float
+    avg_30d_eggs:         float
+
+    # Defect metrics (7-day window)
+    defect_rate:          float
+
+    # Grade & defect distributions (7-day, percentages)
+    grade_distribution:   dict
+    defect_distribution:  dict
+
     # Inventory
-    total_egg_inventory: int
+    total_egg_inventory:  int
+
     # Sales
-    month_sales_amount:  float
-    # Feed
-    feed_stock_days:     Optional[float]
-    # Vaccinations
+    month_sales_amount:   float
+    today_sales_revenue:  float
+    spent_hen_revenue:    float
+
+    # Feed stock
+    feed_stock_days:      Optional[float]
+
+    # Alerts
     pending_vaccinations: int
-    unread_alerts:       int
+    unread_alerts:        int
