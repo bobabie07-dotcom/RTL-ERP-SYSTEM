@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
 from models import Farm, LoginHistory, Role, User, UserAuditLog, UserFarm, UserRole
@@ -49,7 +49,13 @@ def _build_detail(user: User) -> dict:
     all_names = [primary_role_name] + [n   for n   in extra_role_names if n     != primary_role_name]
     all_ids   = [x for x in all_ids   if x is not None]
     all_names = [x for x in all_names if x is not None]
-    junction_farm_ids = [uf.farm_id for uf in (user.assigned_farms or [])]
+    af = user.assigned_farms
+    if isinstance(af, list):
+        junction_farm_ids = [uf.farm_id for uf in af]
+    elif af is not None:
+        junction_farm_ids = [af.farm_id]
+    else:
+        junction_farm_ids = []
     if user.farm_id and user.farm_id not in junction_farm_ids:
         junction_farm_ids.insert(0, user.farm_id)
     return {
@@ -114,7 +120,7 @@ def list_users(
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
-    q = db.query(User)
+    q = db.query(User).options(joinedload(User.assigned_farms))
     if current_user.role_id not in (6,):
         q = q.filter(User.company_id == current_user.company_id)
     if not include_archived:
@@ -232,7 +238,7 @@ def get_user(
 ):
     if current_user.role_id not in ADMIN_ROLES and current_user.id != user_id:
         raise HTTPException(403, "Access denied")
-    user = db.get(User, user_id)
+    user = db.query(User).options(joinedload(User.assigned_farms)).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
     if current_user.role_id != 6 and current_user.id != user_id and user.company_id != current_user.company_id:
@@ -335,7 +341,9 @@ def update_user(
             if not f or f.company_id != target_company:
                 raise HTTPException(400, f"Farm {fid} does not belong to this company")
 
-        for uf in list(user.assigned_farms or []):
+        af = user.assigned_farms
+        existing = af if isinstance(af, list) else ([af] if af is not None else [])
+        for uf in list(existing):
             db.delete(uf)
         db.flush()
         for fid in new_farm_ids:
