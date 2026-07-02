@@ -1042,7 +1042,14 @@ export default function BatchDetailPage() {
                     { key: 'category_name', header: 'Category' },
                     { key: 'amount',        header: 'Amount',   render: r => <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{fmt(r.amount)}</span> },
                     { key: 'description',   header: 'Description', render: r => r.description || '—' },
-                    { key: 'source_module', header: 'Source',  render: r => <Badge tone={r.source_module === 'MANUAL' ? 'neutral' : 'info'}>{r.source_module || '—'}</Badge> },
+                    { key: 'source_module', header: 'Source',  render: r => (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Badge tone={r.source_module === 'MANUAL' ? 'neutral' : 'info'}>{r.source_module || '—'}</Badge>
+                        {r.source_ref && r.source_module !== 'MANUAL' && (
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{r.source_ref}</span>
+                        )}
+                      </div>
+                    )},
                     { key: 'actions',       header: '',         render: r => (
                       <div style={{ display: 'flex', gap: 6 }}>
                         {r.source_module === 'MANUAL' && !r.is_voided && (

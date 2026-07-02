@@ -43,6 +43,27 @@ def create_supplier(
 
 # ── Purchase Orders ───────────────────────────────────────────────────────────
 
+_PO_ROW_SQL = """
+    SELECT po.id, po.po_no, po.order_date, po.expected_date,
+           s.name       AS supplier,
+           po.batch_id,
+           b.batch_no   AS batch,
+           po.total_amount, po.status,
+           au.full_name AS approved_by_name,
+           po.notes
+    FROM purchase_orders po
+    LEFT JOIN suppliers s  ON po.supplier_id = s.id
+    LEFT JOIN batches   b  ON po.batch_id    = b.id
+    LEFT JOIN users    au  ON po.approved_by  = au.id
+    WHERE po.id = :id
+"""
+
+
+def _fetch_po_row(db: Session, po_id: int) -> PurchaseOrderRow:
+    row = db.execute(text(_PO_ROW_SQL), {"id": po_id}).mappings().one()
+    return PurchaseOrderRow(**dict(row))
+
+
 @router.get("/orders", response_model=list[PurchaseOrderRow])
 def list_purchase_orders(
     farm_id: Optional[int] = Query(None),
@@ -132,17 +153,7 @@ def create_purchase_order(
 
     db.commit()
     db.refresh(po)
-
-    row = db.execute(text("""
-        SELECT po.id, po.po_no, po.order_date, po.expected_date,
-               s.name AS supplier, po.total_amount, po.status,
-               au.full_name AS approved_by_name, po.notes
-        FROM purchase_orders po
-        LEFT JOIN suppliers s ON po.supplier_id = s.id
-        LEFT JOIN users    au ON po.approved_by = au.id
-        WHERE po.id = :id
-    """), {"id": po.id}).mappings().one()
-    return PurchaseOrderRow(**dict(row))
+    return _fetch_po_row(db, po.id)
 
 
 @router.patch("/orders/{po_id}", response_model=PurchaseOrderRow)
@@ -158,17 +169,7 @@ def update_purchase_order(
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(po, field, value)
     db.commit()
-
-    row = db.execute(text("""
-        SELECT po.id, po.po_no, po.order_date, po.expected_date,
-               s.name AS supplier, po.total_amount, po.status,
-               au.full_name AS approved_by_name, po.notes
-        FROM purchase_orders po
-        LEFT JOIN suppliers s ON po.supplier_id = s.id
-        LEFT JOIN users    au ON po.approved_by = au.id
-        WHERE po.id = :id
-    """), {"id": po_id}).mappings().one()
-    return PurchaseOrderRow(**dict(row))
+    return _fetch_po_row(db, po_id)
 
 
 @router.post("/orders/{po_id}/approve", response_model=PurchaseOrderRow)
@@ -189,17 +190,7 @@ def approve_purchase_order(
         po.approved_by = current_user.id
         po.approved_at = datetime.utcnow()
         db.commit()
-
-        row = db.execute(text("""
-            SELECT po.id, po.po_no, po.order_date, po.expected_date,
-                   s.name AS supplier, po.total_amount, po.status,
-                   au.full_name AS approved_by_name, po.notes
-            FROM purchase_orders po
-            LEFT JOIN suppliers s ON po.supplier_id = s.id
-            LEFT JOIN users    au ON po.approved_by = au.id
-            WHERE po.id = :id
-        """), {"id": po_id}).mappings().one()
-        return PurchaseOrderRow(**dict(row))
+        return _fetch_po_row(db, po_id)
     except HTTPException:
         raise
     except Exception as exc:
@@ -226,17 +217,7 @@ def reject_purchase_order(
     po.approved_by      = current_user.id
     po.approved_at      = datetime.utcnow()
     db.commit()
-
-    row = db.execute(text("""
-        SELECT po.id, po.po_no, po.order_date, po.expected_date,
-               s.name AS supplier, po.total_amount, po.status,
-               au.full_name AS approved_by_name, po.notes
-        FROM purchase_orders po
-        LEFT JOIN suppliers s ON po.supplier_id = s.id
-        LEFT JOIN users    au ON po.approved_by = au.id
-        WHERE po.id = :id
-    """), {"id": po_id}).mappings().one()
-    return PurchaseOrderRow(**dict(row))
+    return _fetch_po_row(db, po_id)
 
 
 @router.delete("/orders/{po_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -293,16 +274,17 @@ def receive_purchase_order(
 
         po.status = "received"
 
-        # Auto-post PURCHASE expense if PO is linked to a batch
+        # Auto-post PURCHASE expense to linked batch
         if po.batch_id:
             try:
+                posted = 0
                 for po_item in db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all():
                     item_amount = float(po_item.qty_ordered) * float(po_item.unit_price or 0)
                     if item_amount <= 0:
                         continue
                     inv_item = db.get(InventoryItem, po_item.item_id)
                     item_name = inv_item.name if inv_item else f"Item #{po_item.item_id}"
-                    post_batch_expense(
+                    result = post_batch_expense(
                         batch_id=po.batch_id,
                         category_code="PURCHASE",
                         amount=item_amount,
@@ -312,24 +294,20 @@ def receive_purchase_order(
                         unit_cost=float(po_item.unit_price or 0),
                         description=f"{item_name} via {po.po_no}",
                         source_module="PROCUREMENT",
-                        source_ref=str(po.id),
+                        source_ref=po.po_no,
                         created_by=current_user.id,
                     )
+                    if result is None:
+                        logger.warning("PURCHASE category missing — expense not posted for %s item %s", po.po_no, po_item.item_id)
+                    else:
+                        posted += 1
+                if posted > 0:
+                    logger.info("Posted %d PURCHASE expense(s) to batch %s from %s", posted, po.batch_id, po.po_no)
             except Exception:
                 logger.warning("post_batch_expense failed for PO %s", po.po_no, exc_info=True)
 
         db.commit()
-
-        row = db.execute(text("""
-            SELECT po.id, po.po_no, po.order_date, po.expected_date,
-                   s.name AS supplier, po.total_amount, po.status,
-                   au.full_name AS approved_by_name, po.notes
-            FROM purchase_orders po
-            LEFT JOIN suppliers s ON po.supplier_id = s.id
-            LEFT JOIN users    au ON po.approved_by = au.id
-            WHERE po.id = :id
-        """), {"id": po_id}).mappings().one()
-        return PurchaseOrderRow(**dict(row))
+        return _fetch_po_row(db, po_id)
     except HTTPException:
         raise
     except Exception as exc:
