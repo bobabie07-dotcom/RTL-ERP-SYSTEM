@@ -45,11 +45,12 @@ export default function SpentHenSalesPage() {
       const [s, b, by, sm] = await Promise.all([
         spentHensApi.list(farmId),
         batchesApi.list({ farm_id: farmId }),
-        salesApi.orders({ farm_id: farmId }).then(() => []).catch(() => []),
+        salesApi.buyers(farmId).catch(() => []),
         spentHensApi.summary(farmId),
       ]);
       setSales(s || []);
       setBatches(b || []);
+      setBuyers(by || []);
       setSummary(sm);
     } catch (e) {
       setLoadErr(e.message || 'Failed to load spent hen data.');
@@ -57,13 +58,6 @@ export default function SpentHenSalesPage() {
       setLoading(false);
     }
   };
-
-  // Load buyers separately from the buyers endpoint
-  useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/sales/buyers`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('erp_token')}` },
-    }).then(r => r.json()).then(setBuyers).catch(() => {});
-  }, []);
 
   useEffect(() => { if (farmId) loadData(); }, [farmId]);
 

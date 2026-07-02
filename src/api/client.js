@@ -131,6 +131,7 @@ export const inventoryApi = {
 
 export const salesApi = {
   orders:        (params)    => get('/api/sales/orders', params),
+  buyers:        (farm_id)   => get('/api/sales/buyers', { farm_id }),
   summary:       (farm_id)   => get('/api/sales/summary', { farm_id }),
   expenses:      (params)    => get('/api/sales/expenses', params),
   createExpense: (data)      => post('/api/sales/expenses', data),
@@ -204,7 +205,7 @@ export const dashboardApi = {
 };
 
 export const spentHensApi = {
-  list:    (farm_id, params) => get('/api/spent-hens', { farm_id, ...params }),
+  list:    (farm_id, params = {}) => get('/api/spent-hens', { farm_id, ...params }),
   create:  (farm_id, data)   => post(`/api/spent-hens?farm_id=${farm_id}`, data),
   update:  (id, data)        => patch(`/api/spent-hens/${id}`, data),
   delete:  (id)              => del(`/api/spent-hens/${id}`),
