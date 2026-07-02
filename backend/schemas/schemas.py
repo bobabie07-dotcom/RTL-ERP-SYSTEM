@@ -286,18 +286,21 @@ class DashboardKPI(BaseModel):
 # ── Farms & Houses ───────────────────────────────────────────────────────────
 
 class FarmOut(OrmBase):
-    id:       int
-    name:     str
-    name_ar:  Optional[str]
-    location: Optional[str]
-    farm_type: str
+    id:           int
+    company_id:   Optional[int] = None
+    company_name: Optional[str] = None
+    name:         str
+    name_ar:      Optional[str]
+    location:     Optional[str]
+    farm_type:    str
 
 
 class FarmCreate(BaseModel):
-    name:     str
-    name_ar:  Optional[str] = None
-    location: Optional[str] = None
-    farm_type: str = "broiler"
+    name:       str
+    name_ar:    Optional[str] = None
+    location:   Optional[str] = None
+    farm_type:  str = "broiler"
+    company_id: Optional[int] = None
 
 
 class FarmUpdate(BaseModel):

@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '../components/data/Card';
 import { DataTable } from '../components/data/DataTable';
-import { StatCard } from '../components/data/StatCard';
 import { Button } from '../components/core/Button';
 import { Modal, FormRow, FieldInput } from '../components/core/Modal';
-import { farmsApi, reportsApi } from '../api/client';
+import { farmsApi, reportsApi, superAdminApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
+import { useAuth } from '../context/AuthContext';
 import { PrintButton, PrintPageHeader } from '../components/core/PrintButton';
 import Icons from '../icons';
 
 const I = Icons;
 
-const BLANK = { name: '', name_ar: '', location: '', farm_type: 'broiler' };
+const BLANK = { name: '', name_ar: '', location: '', farm_type: 'broiler', company_id: '' };
 
 const fmt = n =>
   n == null ? '—' : `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -20,6 +20,9 @@ const pnlColor = n => n == null ? 'var(--text-body)' : n >= 0 ? 'var(--success)'
 
 export default function FarmsPage() {
   const { farms, farmId, selectFarm, reloadFarms } = useFarm();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role_id === 6;
+
   const [local,   setLocal]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal,   setModal]   = useState(false);
@@ -33,8 +36,11 @@ export default function FarmsPage() {
   const [delTarget, setDelTarget] = useState(null);
   const [deleting,  setDeleting]  = useState(false);
 
+  const [finFarmId,   setFinFarmId]   = useState(null);
   const [finances,    setFinances]    = useState(null);
   const [finLoading,  setFinLoading]  = useState(false);
+
+  const [companies, setCompanies] = useState([]);
 
   function load() {
     return farmsApi.list().then(list => { setLocal(list); reloadFarms(); }).finally(() => setLoading(false));
@@ -42,14 +48,26 @@ export default function FarmsPage() {
 
   useEffect(() => { load(); }, []);
 
+  // Seed the local finances selector from the global context on first load
   useEffect(() => {
-    if (!farmId) return;
+    if (farmId && !finFarmId) setFinFarmId(farmId);
+  }, [farmId]);
+
+  // Load companies list for super admin (used in Add Farm modal)
+  useEffect(() => {
+    if (isSuperAdmin) {
+      superAdminApi.listCompanies().then(setCompanies).catch(() => {});
+    }
+  }, [isSuperAdmin]);
+
+  useEffect(() => {
+    if (!finFarmId) return;
     setFinLoading(true);
-    reportsApi.farmFinances(farmId)
+    reportsApi.farmFinances(finFarmId)
       .then(setFinances)
       .catch(() => setFinances(null))
       .finally(() => setFinLoading(false));
-  }, [farmId]);
+  }, [finFarmId]);
 
   function openAdd() {
     setEditId(null); setForm(BLANK); setErr(''); setModal(true);
@@ -57,7 +75,7 @@ export default function FarmsPage() {
 
   function openEdit(f) {
     setEditId(f.id);
-    setForm({ name: f.name, name_ar: f.name_ar || '', location: f.location || '', farm_type: f.farm_type || 'broiler' });
+    setForm({ name: f.name, name_ar: f.name_ar || '', location: f.location || '', farm_type: f.farm_type || 'broiler', company_id: f.company_id || '' });
     setErr(''); setModal(true);
   }
 
@@ -65,12 +83,19 @@ export default function FarmsPage() {
     if (!form.name) { setErr('Farm name is required.'); return; }
     setSaving(true); setErr('');
     try {
-      const payload = { name: form.name, name_ar: form.name_ar || null, location: form.location || null, farm_type: form.farm_type || 'broiler' };
+      const payload = {
+        name:      form.name,
+        name_ar:   form.name_ar || null,
+        location:  form.location || null,
+        farm_type: form.farm_type || 'broiler',
+        ...(isSuperAdmin && form.company_id ? { company_id: Number(form.company_id) } : {}),
+      };
       if (editId) {
         await farmsApi.update(editId, payload);
       } else {
         const created = await farmsApi.create(payload);
         selectFarm(created.id);
+        setFinFarmId(created.id);
       }
       await load();
       setModal(false);
@@ -83,6 +108,7 @@ export default function FarmsPage() {
     setDeleting(true);
     try {
       await farmsApi.delete(delTarget.id);
+      if (finFarmId === delTarget.id) setFinFarmId(null);
       setDelModal(false);
       await load();
     } catch (e) { setLoadError(e.message || 'Failed to delete farm.'); }
@@ -91,21 +117,48 @@ export default function FarmsPage() {
 
   const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
 
-  const activeFarm = local.find(x => x.id === farmId);
+  const activeFarm = local.find(x => x.id === finFarmId);
   const finTitle   = activeFarm
     ? `Farm Finances — ${activeFarm.name} (${finances?.year ?? '…'})`
     : 'Farm Finances';
 
+  const companyCol = isSuperAdmin ? [{
+    key: 'company',
+    header: 'Company',
+    render: r => (
+      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+        {r.company_name || (r.company_id ? `#${r.company_id}` : <span style={{ color: 'var(--danger)' }}>Unassigned</span>)}
+      </span>
+    ),
+  }] : [];
+
   const cols = [
-    { key: 'id',       header: '#',           render: r => r.id },
-    { key: 'name',     header: 'Farm Name',   render: r => <b style={{ color: 'var(--text-strong)' }}>{r.name}</b> },
-    { key: 'name_ar',  header: 'Local Name',   render: r => r.name_ar || '—' },
-    { key: 'farm_type', header: 'Type',        render: r => <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{r.farm_type || 'broiler'}</span> },
-    { key: 'location', header: 'Location',    render: r => r.location || '—' },
+    { key: 'id',       header: '#',         render: r => r.id },
+    { key: 'name',     header: 'Farm Name', render: r => <b style={{ color: 'var(--text-strong)' }}>{r.name}</b> },
+    ...companyCol,
+    { key: 'name_ar',  header: 'Local Name', render: r => r.name_ar || '—' },
+    { key: 'farm_type', header: 'Type',      render: r => <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{r.farm_type || 'broiler'}</span> },
+    { key: 'location', header: 'Location',  render: r => r.location || '—' },
     {
       key: 'actions', header: '',
       render: r => (
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button
+            onClick={() => setFinFarmId(r.id)}
+            style={{
+              border: 'none',
+              background: r.id === finFarmId ? 'var(--surface-brand, rgba(0,120,80,0.1))' : 'none',
+              cursor: 'pointer',
+              color: r.id === finFarmId ? 'var(--text-brand)' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: 13,
+              borderRadius: 6,
+              padding: '2px 8px',
+            }}
+            title="View farm finances"
+          >
+            {r.id === finFarmId ? '✓ Finances' : 'Finances'}
+          </button>
           <button
             onClick={() => openEdit(r)}
             style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-brand)', fontWeight: 600, fontSize: 13 }}
@@ -123,6 +176,17 @@ export default function FarmsPage() {
     },
   ];
 
+  const selectStyle = {
+    width: '100%',
+    padding: '8px 12px',
+    borderRadius: 8,
+    border: '1px solid var(--border)',
+    background: 'var(--surface-raised, rgba(0,0,0,0.03))',
+    color: 'var(--text-strong)',
+    fontSize: 14,
+    outline: 'none',
+  };
+
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {loadError && <div style={{ padding: '12px 16px', background: 'var(--danger-bg)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, color: 'var(--danger)', fontSize: 13 }}>⚠ {loadError}</div>}
@@ -130,7 +194,9 @@ export default function FarmsPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Farm Management</h2>
-          <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Manage all farms registered in the system.</p>
+          <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>
+            {isSuperAdmin ? 'All farms across all companies.' : 'Farms registered under your company.'}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <PrintButton title="Farm Management" />
@@ -144,11 +210,15 @@ export default function FarmsPage() {
 
       {/* ── Farm Finances ─────────────────────────────────────────── */}
       <Card title={finTitle}>
-        {finLoading ? (
+        {!finFarmId ? (
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
+            Click <b>Finances</b> on a farm row above to view its financial summary.
+          </p>
+        ) : finLoading ? (
           <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>Loading finances…</p>
         ) : !finances ? (
           <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
-            {farmId ? 'No financial data available for this farm.' : 'Select a farm to view finances.'}
+            No financial data available for this farm.
           </p>
         ) : (
           <>
@@ -202,6 +272,7 @@ export default function FarmsPage() {
         )}
       </Card>
 
+      {/* ── Add / Edit Farm Modal ─────────────────────────────────── */}
       <Modal
         open={modal}
         title={editId ? 'Edit Farm' : 'Add Farm'}
@@ -211,6 +282,18 @@ export default function FarmsPage() {
         loading={saving}
       >
         {err && <div style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{err}</div>}
+
+        {isSuperAdmin && (
+          <FormRow label="Company" required>
+            <select value={form.company_id} onChange={f('company_id')} style={selectStyle}>
+              <option value="">— Select company —</option>
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </FormRow>
+        )}
+
         <FormRow label="Farm Name" required>
           <FieldInput value={form.name} onChange={f('name')} placeholder="e.g. RTL Main Farm" />
         </FormRow>
@@ -221,26 +304,14 @@ export default function FarmsPage() {
           <FieldInput value={form.location} onChange={f('location')} placeholder="City, Region" />
         </FormRow>
         <FormRow label="Farm Type" required>
-          <select
-            value={form.farm_type}
-            onChange={f('farm_type')}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--surface-raised, rgba(0,0,0,0.03))',
-              color: 'var(--text-strong)',
-              fontSize: 14,
-              outline: 'none',
-            }}
-          >
+          <select value={form.farm_type} onChange={f('farm_type')} style={selectStyle}>
             <option value="broiler">Broiler (Meat Production)</option>
             <option value="layer">Layer (Egg Production)</option>
           </select>
         </FormRow>
       </Modal>
 
+      {/* ── Delete Confirmation ───────────────────────────────────── */}
       <Modal
         open={delModal}
         title="Delete Farm"

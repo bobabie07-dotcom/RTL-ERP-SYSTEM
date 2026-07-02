@@ -71,6 +71,10 @@ class Farm(Base):
     houses:  list[House]  = relationship("House", back_populates="farm")
     batches: list[Batch]  = relationship("Batch", back_populates="farm")
 
+    @property
+    def company_name(self) -> Optional[str]:
+        return self.company.name if self.company else None
+
 
 class User(Base):
     __tablename__ = "users"

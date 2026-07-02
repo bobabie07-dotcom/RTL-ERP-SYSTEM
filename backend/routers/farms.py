@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
 from models import Batch, Farm, House, User
@@ -22,7 +22,7 @@ def _get_farm_or_404(farm_id: int, db: Session, current_user) -> Farm:
 
 @router.get("", response_model=list[FarmOut])
 def list_farms(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    q = db.query(Farm)
+    q = db.query(Farm).options(joinedload(Farm.company))
     if current_user.role_id not in (6,):
         q = q.filter(Farm.company_id == current_user.company_id)
 
@@ -38,7 +38,13 @@ def create_farm(
     db: Session = Depends(get_db),
     current_user = Depends(require_permission("write", "farms")),
 ):
-    farm = Farm(**body.model_dump(), company_id=current_user.company_id)
+    # Super admins may specify company_id explicitly; everyone else gets their own company
+    company_id = (
+        body.company_id
+        if body.company_id and current_user.role_id == 6
+        else current_user.company_id
+    )
+    farm = Farm(**body.model_dump(exclude={"company_id"}), company_id=company_id)
     db.add(farm)
     db.commit()
     db.refresh(farm)
