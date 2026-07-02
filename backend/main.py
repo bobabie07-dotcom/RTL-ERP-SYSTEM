@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from config import settings
-from database import engine
+from database import Base, engine
 from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, spent_hens, support, users, super_admin, eggs
 
 logger = logging.getLogger(__name__)
@@ -367,21 +367,16 @@ def run_startup_migrations():
         # Upgrade avg_weight_g to NUMERIC(10,2) to support decimal precision
         _safe_add_column(conn, "ALTER TABLE batch_daily_logs MODIFY COLUMN avg_weight_g NUMERIC(10,2) DEFAULT NULL")
 
-        try:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS user_farms (
-                    id      INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT NOT NULL,
-                    farm_id SMALLINT NOT NULL,
-                    UNIQUE KEY uq_user_farm (user_id, farm_id),
-                    CONSTRAINT fk_uf_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    CONSTRAINT fk_uf_farm FOREIGN KEY (farm_id) REFERENCES farms(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB CHARACTER SET utf8mb4
-            """))
-        except Exception as exc:
-            msg = str(exc).lower()
-            if not any(p in msg for p in _SAFE_MIGRATION_MSGS):
-                logger.warning("user_farms migration skipped: %s", exc)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_farms (
+                id      INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                farm_id SMALLINT NOT NULL,
+                UNIQUE KEY uq_user_farm (user_id, farm_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (farm_id) REFERENCES farms(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
 
         conn.execute(text("""
             CREATE OR REPLACE VIEW v_batch_pnl AS
@@ -478,6 +473,7 @@ app.include_router(eggs.router,         prefix=API)
 app.include_router(spent_hens.router,   prefix=API)
 
 
+Base.metadata.create_all(bind=engine)
 run_startup_migrations()
 
 
