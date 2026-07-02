@@ -15,6 +15,7 @@ class CompanyOut(BaseModel):
     id: int
     name: str
     status: str
+    business_model: str = "broiler"
     created_at: datetime
 
     class Config:
@@ -25,11 +26,18 @@ class CompanyCreate(BaseModel):
     name: str
     plan_name: str = "standard"
     expires_at: datetime
+    business_model: str = "broiler"
 
 
 class CompanyUpdate(BaseModel):
     name: str | None = None
     status: str | None = None
+    business_model: str | None = None
+
+
+class SubscriptionUpdate(BaseModel):
+    plan_name: str | None = None
+    expires_at: datetime | None = None
 
 
 class SubscriptionOut(BaseModel):
@@ -67,7 +75,7 @@ def create_company(
     current_user: User = Depends(get_current_user),
 ):
     _require_super_admin(current_user)
-    company = Company(name=body.name, status="active")
+    company = Company(name=body.name, status="active", business_model=body.business_model)
     db.add(company)
     db.flush()
 
@@ -99,10 +107,46 @@ def update_company(
         company.name = body.name
     if body.status is not None:
         company.status = body.status
-        
+    if body.business_model is not None:
+        company.business_model = body.business_model
+
     db.commit()
     db.refresh(company)
     return company
+
+
+@router.delete("/companies/{company_id}", status_code=204)
+def delete_company(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    company = db.get(Company, company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    db.delete(company)
+    db.commit()
+
+
+@router.patch("/companies/{company_id}/subscription", response_model=SubscriptionOut)
+def update_company_subscription(
+    company_id: int,
+    body: SubscriptionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    sub = db.query(Subscription).filter(Subscription.company_id == company_id).first()
+    if not sub:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    if body.plan_name is not None:
+        sub.plan_name = body.plan_name
+    if body.expires_at is not None:
+        sub.expires_at = body.expires_at
+    db.commit()
+    db.refresh(sub)
+    return sub
 
 
 @router.get("/companies/{company_id}/subscription", response_model=SubscriptionOut)

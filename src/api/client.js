@@ -268,10 +268,12 @@ export const usersApi = {
 };
 
 export const superAdminApi = {
-  listCompanies: () => get('/api/super-admin/companies'),
-  createCompany: (data) => post('/api/super-admin/companies', data),
-  updateCompany: (id, data) => patch(`/api/super-admin/companies/${id}`, data),
-  getSubscription: (companyId) => get(`/api/super-admin/companies/${companyId}/subscription`),
+  listCompanies:      ()           => get('/api/super-admin/companies'),
+  createCompany:      (data)       => post('/api/super-admin/companies', data),
+  updateCompany:      (id, data)   => patch(`/api/super-admin/companies/${id}`, data),
+  deleteCompany:      (id)         => del(`/api/super-admin/companies/${id}`),
+  getSubscription:    (companyId)  => get(`/api/super-admin/companies/${companyId}/subscription`),
+  updateSubscription: (companyId, data) => patch(`/api/super-admin/companies/${companyId}/subscription`, data),
 };
 
 export const eggsApi = {
