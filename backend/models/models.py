@@ -144,6 +144,7 @@ User.extra_roles = relationship(
     foreign_keys=[UserRole.user_id],
     back_populates="user",
     cascade="all, delete-orphan",
+    uselist=True,
 )
 
 
