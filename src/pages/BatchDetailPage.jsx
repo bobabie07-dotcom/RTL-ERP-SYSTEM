@@ -217,7 +217,7 @@ export default function BatchDetailPage() {
         log_date:        logForm.log_date,
         current_count:   parseInt(logForm.current_count),
         mortality_count: parseInt(logForm.mortality_count) || 0,
-        avg_weight_g:    logForm.avg_weight_g ? parseInt(logForm.avg_weight_g) : null,
+        avg_weight_g:    logForm.avg_weight_g ? parseFloat(logForm.avg_weight_g) : null,
         culls:           parseInt(logForm.culls) || 0,
         notes:           logForm.notes || null,
       };
@@ -524,7 +524,7 @@ export default function BatchDetailPage() {
 
   const progress    = Math.round((batch.age_days / batch.cycle_length_days) * 100);
   const avgWeightKg = batch.avg_weight_g ? (batch.avg_weight_g / 1000).toFixed(2) : 'N/A';
-  const survivalPct = batch.current_count && batch.initial_count ? `${((batch.current_count / batch.initial_count) * 100).toFixed(1)}%` : '—';
+  const survivalPct = batch.current_count && batch.initial_count ? `${((batch.current_count / batch.initial_count) * 100).toFixed(2)}%` : '—';
   const weightData   = logs.slice(-7).map(l => l.avg_weight_g ? l.avg_weight_g / 1000 : 0);
   const weightLabels = logs.slice(-7).map(l => String(l.log_date));
   const healthRows   = events.map(e => ({ ...e, type: EVENT_LABEL[e.event_type] || e.event_type, detail: e.description || '—', by: '—', statusLabel: e.status === 'done' ? 'Done' : e.status === 'upcoming' ? 'Upcoming' : 'Missed' }));
@@ -544,7 +544,7 @@ export default function BatchDetailPage() {
       const kg = heads * (parseInt(p.grams_per_day) || 0) * (parseInt(p.duration_days) || 0) / 1000;
       const cost = (kg / 50) * (parseFloat(p.cost_per_50kg) || 0);
       feedTotal += cost;
-      return { i, ...p, kg: kg.toFixed(1), cost: cost.toFixed(2) };
+      return { i, ...p, kg: kg.toFixed(2), cost: cost.toFixed(2) };
     });
     return { rows, feedTotal };
   }
@@ -635,7 +635,7 @@ export default function BatchDetailPage() {
             </div>
             <div style={kpiChip}>
               <span style={chipLabel}>Total Weight</span>
-              <span style={chipVal}>{parseFloat(harvest.total_weight_kg).toLocaleString()} kg</span>
+              <span style={chipVal}>{Number(harvest.total_weight_kg).toFixed(2)} kg</span>
               <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>@ ₱{parseFloat(harvest.price_per_kg).toFixed(2)}/kg</span>
             </div>
             <div style={{ ...kpiChip, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10 }}>
@@ -668,7 +668,7 @@ export default function BatchDetailPage() {
                   <PlanTotalRow label="Net Profit / Loss" value={fmt(netProfit)} valueColor={pColor(netProfit)} />
                 </tbody></PlanTable>
                 <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  Profit Margin: <b style={{ color: pColor(margin) }}>{margin.toFixed(1)}%</b>
+                  Profit Margin: <b style={{ color: pColor(margin) }}>{margin.toFixed(2)}%</b>
                   {harvestPnl.mortality_deaths > 0 && <span style={{ fontSize: 11, marginLeft: 8 }}>· Mortality loss at ₱{getStoredMarketPrice().toFixed(0)}/kg</span>}
                 </div>
               </div>
@@ -708,7 +708,7 @@ export default function BatchDetailPage() {
               { key: 'current_count',   header: 'Live Birds', align: 'right', numeric: true, render: r => (r.current_count ?? 0).toLocaleString() },
               { key: 'mortality_count', header: 'Deaths',     align: 'right', numeric: true, render: r => r.mortality_count > 0 ? <span style={{ color: 'var(--danger)' }}>{r.mortality_count}</span> : '0' },
               { key: 'culls',           header: 'Culls',      align: 'right', numeric: true },
-              { key: 'avg_weight_g',    header: 'Avg Weight', align: 'right', render: r => r.avg_weight_g ? `${(r.avg_weight_g / 1000).toFixed(3)} kg` : '—' },
+              { key: 'avg_weight_g',    header: 'Avg Weight', align: 'right', render: r => r.avg_weight_g ? `${(r.avg_weight_g / 1000).toFixed(2)} kg` : '—' },
               { key: 'notes',           header: 'Notes',      render: r => r.notes || '—' },
               { key: '_actions', header: '', render: r => (
                 <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
@@ -966,8 +966,8 @@ export default function BatchDetailPage() {
                 { label: 'Total Revenue',    value: fmt(finPnl.total_revenue),    color: 'var(--success)' },
                 { label: 'Total Expenses',   value: fmt(finPnl.total_expenses),   color: 'var(--danger)' },
                 { label: 'Gross Profit',     value: fmt(finPnl.gross_profit),     color: pColor(finPnl.gross_profit) },
-                { label: 'Profit Margin',    value: finPnl.profit_margin_pct != null ? `${finPnl.profit_margin_pct.toFixed(1)}%` : '—', color: pColor(finPnl.profit_margin_pct) },
-                { label: 'ROI',              value: finPnl.roi_pct != null ? `${finPnl.roi_pct.toFixed(1)}%` : '—',                    color: pColor(finPnl.roi_pct) },
+                { label: 'Profit Margin',    value: finPnl.profit_margin_pct != null ? `${finPnl.profit_margin_pct.toFixed(2)}%` : '—', color: pColor(finPnl.profit_margin_pct) },
+                { label: 'ROI',              value: finPnl.roi_pct != null ? `${finPnl.roi_pct.toFixed(2)}%` : '—',                    color: pColor(finPnl.roi_pct) },
               ].map(c => (
                 <div key={c.label} style={{ background: 'var(--surface-raised,rgba(0,0,0,.03))', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border-subtle,rgba(0,0,0,.06))' }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{c.label}</div>
@@ -988,7 +988,7 @@ export default function BatchDetailPage() {
                         <td style={{ padding: '5px 0', color: 'var(--text-primary)' }}>{c.name}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right', fontWeight: 600, color: 'var(--danger)' }}>{fmt(c.amount)}</td>
                         <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', color: 'var(--text-muted)', fontSize: 11 }}>
-                          {finPnl.total_expenses > 0 ? `${((c.amount / finPnl.total_expenses) * 100).toFixed(0)}%` : ''}
+                          {finPnl.total_expenses > 0 ? `${((c.amount / finPnl.total_expenses) * 100).toFixed(2)}%` : ''}
                         </td>
                       </tr>
                     ))}
@@ -1010,7 +1010,7 @@ export default function BatchDetailPage() {
                       ['Birds Placed',      `${finPnl.initial_count.toLocaleString()} heads`],
                       ['Mortality',         `${finPnl.mortality_count.toLocaleString()} birds`],
                       ['Surviving',         `${finPnl.surviving_count.toLocaleString()} birds`],
-                      ['Feed Consumed',     `${finPnl.total_feed_kg.toLocaleString()} kg`],
+                      ['Feed Consumed',     `${Number(finPnl.total_feed_kg).toFixed(2)} kg`],
                       ['FCR',               finPnl.fcr != null ? finPnl.fcr.toFixed(2) : '—'],
                       ['Cost / Bird',       fmt(finPnl.cost_per_bird)],
                       ['Cost / Surviving',  fmt(finPnl.cost_per_surviving)],
@@ -1079,7 +1079,7 @@ export default function BatchDetailPage() {
                     { key: 'revenue_date', header: 'Date',     strong: true },
                     { key: 'category',     header: 'Category' },
                     { key: 'amount',       header: 'Amount',  render: r => <span style={{ color: 'var(--success)', fontWeight: 600 }}>{fmt(r.amount)}</span> },
-                    { key: 'qty_kg',       header: 'Qty (kg)', render: r => r.qty_kg != null ? `${Number(r.qty_kg).toLocaleString()} kg` : '—' },
+                    { key: 'qty_kg',       header: 'Qty (kg)', render: r => r.qty_kg != null ? `${Number(r.qty_kg).toFixed(2)} kg` : '—' },
                     { key: 'price_per_kg', header: 'Price/kg', render: r => r.price_per_kg != null ? `₱${Number(r.price_per_kg).toFixed(2)}` : '—' },
                     { key: 'description',  header: 'Description', render: r => r.description || '—' },
                   ]}
@@ -1104,7 +1104,7 @@ export default function BatchDetailPage() {
           <FormRow label="Current Bird Count" required><FieldInput type="number" value={logForm.current_count} onChange={lf('current_count')} min="0" /></FormRow>
           <FormRow label="Mortality Count"><FieldInput type="number" value={logForm.mortality_count} onChange={lf('mortality_count')} min="0" /></FormRow>
           <FormRow label="Culls"><FieldInput type="number" value={logForm.culls} onChange={lf('culls')} min="0" /></FormRow>
-          <FormRow label="Avg Weight (grams)"><FieldInput type="number" value={logForm.avg_weight_g} onChange={lf('avg_weight_g')} min="0" placeholder="e.g. 1200" /></FormRow>
+          <FormRow label="Avg Weight (grams)"><FieldInput type="number" value={logForm.avg_weight_g} onChange={lf('avg_weight_g')} min="0" step="0.01" placeholder="e.g. 1200.50" /></FormRow>
           <FormRow label="Notes"><FieldInput value={logForm.notes} onChange={lf('notes')} placeholder="Optional…" /></FormRow>
         </div>
       </Modal>

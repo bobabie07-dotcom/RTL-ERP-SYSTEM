@@ -118,10 +118,10 @@ export default function DashboardPage() {
 
           {/* ── Layer: Row 3 — Feed / Water / Quality ── */}
           <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
-            <StatCard label="Feed Consumed"      value={loading ? '—' : kpi?.feed_consumed_kg != null ? `${kpi.feed_consumed_kg.toFixed(1)} kg` : 'N/A'} icon={<I.feed w={22} />} caption="today" />
-            <StatCard label="Feed / Bird"        value={loading ? '—' : kpi?.feed_per_bird != null ? `${kpi.feed_per_bird.toFixed(3)} kg` : 'N/A'} icon={<I.feed w={22} />} />
-            <StatCard label="Water Consumed"     value={loading ? '—' : kpi?.water_consumed_l != null ? `${kpi.water_consumed_l.toFixed(0)} L` : 'N/A'} icon={<I.scale w={22} />} caption="today" />
-            <StatCard label="Water / Bird"       value={loading ? '—' : kpi?.water_per_bird != null ? `${kpi.water_per_bird.toFixed(3)} L` : 'N/A'} icon={<I.scale w={22} />} />
+            <StatCard label="Feed Consumed"      value={loading ? '—' : kpi?.feed_consumed_kg != null ? `${kpi.feed_consumed_kg.toFixed(2)} kg` : 'N/A'} icon={<I.feed w={22} />} caption="today" />
+            <StatCard label="Feed / Bird"        value={loading ? '—' : kpi?.feed_per_bird != null ? `${kpi.feed_per_bird.toFixed(2)} kg` : 'N/A'} icon={<I.feed w={22} />} />
+            <StatCard label="Water Consumed"     value={loading ? '—' : kpi?.water_consumed_l != null ? `${kpi.water_consumed_l.toFixed(2)} L` : 'N/A'} icon={<I.scale w={22} />} caption="today" />
+            <StatCard label="Water / Bird"       value={loading ? '—' : kpi?.water_per_bird != null ? `${kpi.water_per_bird.toFixed(2)} L` : 'N/A'} icon={<I.scale w={22} />} />
             <StatCard label="Defect Rate (7d)"   value={loading ? '—' : `${(kpi?.defect_rate || 0).toFixed(2)}%`} tone={kpi?.defect_rate > 3 ? 'red' : 'green'} icon={<I.alertTri w={22} />} />
           </div>
 

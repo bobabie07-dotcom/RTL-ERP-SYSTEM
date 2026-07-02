@@ -86,16 +86,21 @@ export default function FeedPage() {
   const [linkSaving,   setLinkSaving]   = useState(false);
 
   function loadFeed() {
-    return Promise.all([
+    return Promise.allSettled([
       feedApi.stock(),
       feedApi.issues({ limit: 50, farm_id: farmId }),
-      feedApi.weekly(farmId),
+      farmId ? feedApi.weekly(farmId) : Promise.resolve([]),
       feedApi.purchases({ limit: 50 }),
-    ]).then(([s, iss, w, p]) => { setStock(s || []); setIssues(iss || []); setWeekly(w || []); setPurchases(p || []); });
+    ]).then(([s, iss, w, p]) => {
+      if (s.status   === 'fulfilled') setStock(s.value     || []);
+      if (iss.status === 'fulfilled') setIssues(iss.value  || []);
+      if (w.status   === 'fulfilled') setWeekly(w.value    || []);
+      if (p.status   === 'fulfilled') setPurchases(p.value || []);
+    });
   }
 
   useEffect(() => {
-    loadFeed().catch(e => setLoadError(e.message || 'Failed to load feed data.')).finally(() => setLoading(false));
+    loadFeed().finally(() => setLoading(false));
     batchesApi.list({ farm_id: farmId }).then(setBatches).catch(() => {});
     batchesApi.houses({ farm_id: farmId }).then(setHouses).catch(() => {});
     inventoryApi.items({ farm_id: farmId }).then(setInvItems).catch(() => {});

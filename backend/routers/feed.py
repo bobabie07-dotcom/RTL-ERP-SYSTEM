@@ -110,7 +110,7 @@ def list_feed_purchases(
             fp.qty_kg * fp.cost_per_kg AS total_cost,
             fp.invoice_no
         FROM feed_purchases fp
-        JOIN feed_types ft ON fp.feed_type_id = ft.id
+        LEFT JOIN feed_types ft ON fp.feed_type_id = ft.id
         LEFT JOIN suppliers s ON fp.supplier_id = s.id
         ORDER BY fp.purchase_date DESC
         LIMIT :limit
@@ -305,14 +305,14 @@ def update_feed_issue(
 
 @router.get("/weekly")
 def weekly_consumption(
-    farm_id: int = Query(1),
+    farm_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     if current_user.role_id not in (1, 5, 6):
         farm_id = current_user.farm_id
-        if not farm_id:
-            return []
+    if not farm_id:
+        return []
 
     if farm_id:
         farm = db.get(Farm, farm_id)

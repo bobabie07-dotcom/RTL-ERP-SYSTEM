@@ -336,13 +336,13 @@ def run_startup_migrations():
               b.chick_supplier_id,
               b.status,
               COALESCE(dl.current_count, b.initial_count)      AS current_count,
-              COALESCE(
+              ROUND(COALESCE(
                 (b.initial_count - dl.current_count) / b.initial_count * 100, 0
-              )                                                AS mortality_pct,
-              COALESCE(fi.total_feed_kg, 0)                    AS total_feed_kg,
-              COALESCE(
+              ), 2)                                           AS mortality_pct,
+              ROUND(COALESCE(fi.total_feed_kg, 0), 2)         AS total_feed_kg,
+              ROUND(COALESCE(
                 fi.total_feed_kg / NULLIF((dl.current_count * dl.avg_weight_g / 1000), 0), 0
-              )                                                AS fcr,
+              ), 2)                                           AS fcr,
               dl.avg_weight_g
             FROM batches b
             JOIN houses h  ON b.house_id  = h.id
@@ -364,6 +364,9 @@ def run_startup_migrations():
         # ── Recreate v_batch_pnl with LEFT JOIN so feed issues without purchase records
         # use a fallback price (25/kg) instead of being silently dropped.
         # ── Multi-farm assignment junction table ──────────────────────────────
+        # Upgrade avg_weight_g to NUMERIC(10,2) to support decimal precision
+        _safe_add_column(conn, "ALTER TABLE batch_daily_logs MODIFY COLUMN avg_weight_g NUMERIC(10,2) DEFAULT NULL")
+
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS user_farms (
                 id      INT AUTO_INCREMENT PRIMARY KEY,

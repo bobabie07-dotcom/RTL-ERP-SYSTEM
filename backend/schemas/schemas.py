@@ -402,7 +402,7 @@ class BatchSummaryRow(BaseModel):
     mortality_pct:       float
     total_feed_kg:       float
     fcr:                 float
-    avg_weight_g:        Optional[int]
+    avg_weight_g:        Optional[float]
 
 
 # ── Daily Logs ───────────────────────────────────────────────────────────────
@@ -411,7 +411,7 @@ class DailyLogCreate(BaseModel):
     log_date:        date
     current_count:   int
     mortality_count: int = 0
-    avg_weight_g:    Optional[int] = None
+    avg_weight_g:    Optional[float] = None
     culls:           int = 0
     notes:           Optional[str] = None
 
@@ -422,7 +422,7 @@ class DailyLogOut(OrmBase):
     log_date:        date
     current_count:   int
     mortality_count: int
-    avg_weight_g:    Optional[int]
+    avg_weight_g:    Optional[float]
     culls:           int
     notes:           Optional[str]
     created_at:      datetime
@@ -433,7 +433,7 @@ class DailyLogUpdate(BaseModel):
     log_date:        Optional[date] = None
     current_count:   Optional[int] = None
     mortality_count: Optional[int] = None
-    avg_weight_g:    Optional[int] = None
+    avg_weight_g:    Optional[float] = None
     culls:           Optional[int] = None
     notes:           Optional[str] = None
 
@@ -499,7 +499,7 @@ class FeedPurchaseOut(OrmBase):
 class FeedPurchaseRow(BaseModel):
     id:            int
     purchase_date: date
-    feed_type:     str
+    feed_type:     Optional[str]
     supplier:      Optional[str]
     qty_kg:        float
     cost_per_kg:   float

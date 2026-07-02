@@ -311,7 +311,7 @@ class BatchDailyLog(Base):
     log_date        = Column(Date, nullable=False)
     current_count   = Column(Integer, nullable=False)
     mortality_count = Column(SmallInteger, nullable=False, default=0)
-    avg_weight_g    = Column(SmallInteger)
+    avg_weight_g    = Column(Numeric(10, 2))
     culls           = Column(SmallInteger, nullable=False, default=0)
     notes           = Column(Text)
     recorded_by     = Column(Integer, ForeignKey("users.id"))
