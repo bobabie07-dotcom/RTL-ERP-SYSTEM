@@ -335,7 +335,7 @@ def update_user(
             if not f or f.company_id != target_company:
                 raise HTTPException(400, f"Farm {fid} does not belong to this company")
 
-        for uf in list(user.assigned_farms):
+        for uf in list(user.assigned_farms or []):
             db.delete(uf)
         db.flush()
         for fid in new_farm_ids:
@@ -462,7 +462,7 @@ def assign_roles(
     old_roles = [ur.role_id for ur in (user.extra_roles or [])]
 
     # Clear and replace extra roles
-    for ur in list(user.extra_roles):
+    for ur in list(user.extra_roles or []):
         db.delete(ur)
     db.flush()
 
