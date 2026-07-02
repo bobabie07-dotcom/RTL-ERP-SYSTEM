@@ -170,8 +170,27 @@ def update_purchase_order(
     po = db.get(PurchaseOrder, po_id)
     if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    if body.farm_id is not None:
+        from models import Farm
+        new_farm = db.get(Farm, body.farm_id)
+        if not new_farm or (current_user.role_id != 6 and new_farm.company_id != current_user.company_id):
+            raise HTTPException(status_code=403, detail="New farm not found or access denied")
+        po.farm_id = body.farm_id
+        po.company_id = new_farm.company_id
+
+    if body.batch_id is not None:
+        from models import Batch
+        new_batch = db.get(Batch, body.batch_id)
+        if not new_batch or (current_user.role_id != 6 and new_batch.company_id != current_user.company_id):
+            raise HTTPException(status_code=403, detail="New batch not found or access denied")
+        po.batch_id = body.batch_id
+
+    exclude = {"farm_id", "batch_id"}
     for field, value in body.model_dump(exclude_none=True).items():
-        setattr(po, field, value)
+        if field not in exclude:
+            setattr(po, field, value)
+
     db.commit()
     return _fetch_po_row(db, po_id)
 

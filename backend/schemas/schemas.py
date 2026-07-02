@@ -1035,7 +1035,9 @@ class SyncInventoryPayload(BaseModel):
 
 
 class PurchaseOrderUpdate(BaseModel):
+    farm_id:       Optional[int] = None
     supplier_id:   Optional[int] = None
+    batch_id:      Optional[int] = None
     expected_date: Optional[date] = None
     total_amount:  Optional[Decimal] = None
     notes:         Optional[str] = None

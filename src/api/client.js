@@ -151,6 +151,7 @@ export const procurementApi = {
   suppliers:       ()            => get('/api/procurement/suppliers'),
   createSupplier:  (data)        => post('/api/procurement/suppliers', data),
   createOrder:     (data)        => post('/api/procurement/orders', data),
+  updateOrder:     (id, data)    => patch(`/api/procurement/orders/${id}`, data),
   approveOrder:    (id)          => post(`/api/procurement/orders/${id}/approve`),
   rejectOrder:     (id, reason)  => post(`/api/procurement/orders/${id}/reject`, { rejection_reason: reason }),
   receiveOrder:    (id)          => post(`/api/procurement/orders/${id}/receive`),

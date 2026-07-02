@@ -82,7 +82,7 @@ function TabBar({ active, onChange, overdueCount }) {
 }
 
 export default function SalesPage() {
-  const { farmId } = useFarm();
+  const { farmId, farms } = useFarm();
   const { user }   = useAuth();
   const navigate   = useNavigate();
   const isManager  = user?.role_id <= 2 || user?.role_id === 5;
@@ -102,6 +102,34 @@ export default function SalesPage() {
   const [payTarget,    setPayTarget]    = useState(null);
   const [payStatus,    setPayStatus]    = useState('paid');
   const [paySaving,    setPaySaving]    = useState(false);
+
+  // Edit PO Farm modal
+  const [editPoTarget, setEditPoTarget] = useState(null);
+  const [editPoFarmId, setEditPoFarmId] = useState('');
+  const [editPoSaving, setEditPoSaving] = useState(false);
+  const [editPoError,  setEditPoError]  = useState('');
+
+  function openEditFarmModal(po) {
+    setEditPoTarget(po);
+    setEditPoFarmId(String(po.farm_id || farmId));
+    setEditPoError('');
+    setEditPoSaving(false);
+  }
+
+  async function handleSavePoFarm() {
+    setEditPoSaving(true);
+    setEditPoError('');
+    try {
+      await procurementApi.updateOrder(editPoTarget.id, { farm_id: Number(editPoFarmId) });
+      const updated = await procurementApi.orders({ farm_id: farmId });
+      setPos(updated);
+      setEditPoTarget(null);
+    } catch (e) {
+      setEditPoError(e.message || 'Failed to update farm.');
+    } finally {
+      setEditPoSaving(false);
+    }
+  }
 
   // Sale modal
   const [saleModal, setSaleModal] = useState(false);
@@ -478,6 +506,13 @@ export default function SalesPage() {
               <Button variant="ghost" size="sm" onClick={() => openSyncModal(r)} style={{ color: 'var(--text-brand)' }}>Sync Inventory</Button>
               <Button variant="ghost" size="sm" onClick={() => navigate('/inventory')} style={{ color: 'var(--text-brand)' }}>View Inventory</Button>
             </>
+          )}
+          {(r.status === 'pending_approval' || r.status === 'ordered') && isManager && (
+            <Button variant="ghost" size="sm" icon={<I.farm w={12} />}
+              style={{ color: 'var(--text-brand)' }}
+              onClick={() => openEditFarmModal(r)}>
+              Edit Farm
+            </Button>
           )}
           {isManager && (
             <Button variant="ghost" size="sm" icon={<I.trash w={12} />}
@@ -918,6 +953,26 @@ export default function SalesPage() {
           <FieldSelect value={payStatus} onChange={e => setPayStatus(e.target.value)}>
             <option value="partial">Partial — partially paid</option>
             <option value="paid">Paid — fully settled</option>
+          </FieldSelect>
+        </FormRow>
+      </Modal>
+
+      {/* Edit PO Farm Modal */}
+      <Modal
+        open={!!editPoTarget}
+        title={`Edit Farm for PO: ${editPoTarget?.po_no || '—'}`}
+        onClose={() => setEditPoTarget(null)}
+        onConfirm={handleSavePoFarm}
+        confirmLabel="Save Farm"
+        loading={editPoSaving}
+        width={400}
+      >
+        {editPoError && <div style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{editPoError}</div>}
+        <FormRow label="Assign to Farm" required>
+          <FieldSelect value={editPoFarmId} onChange={e => setEditPoFarmId(e.target.value)}>
+            {farms.map(f => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
           </FieldSelect>
         </FormRow>
       </Modal>
