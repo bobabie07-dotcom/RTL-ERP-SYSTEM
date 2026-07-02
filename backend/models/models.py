@@ -116,6 +116,10 @@ class UserRole(Base):
     assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_at = Column(DateTime, default=func.now())
 
+    user     = relationship("User", foreign_keys=[user_id], back_populates="extra_roles")
+    role     = relationship("Role")
+    assigner = relationship("User", foreign_keys=[assigned_by])
+
 
 class UserFarm(Base):
     __tablename__ = "user_farms"
@@ -127,10 +131,6 @@ class UserFarm(Base):
 
     user = relationship("User", back_populates="assigned_farms")
     farm = relationship("Farm")
-
-    user     = relationship("User", foreign_keys=[user_id], back_populates="extra_roles")
-    role     = relationship("Role")
-    assigner = relationship("User", foreign_keys=[assigned_by])
 
 
 # UserRole is now defined — use real column objects to avoid FK ambiguity

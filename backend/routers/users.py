@@ -55,6 +55,7 @@ def _build_detail(user: User) -> dict:
     return {
         "id":                      user.id,
         "employee_id":             user.employee_id,
+        "company_id":              user.company_id,
         "full_name":               user.full_name,
         "email":                   user.email,
         "username":                user.username,
