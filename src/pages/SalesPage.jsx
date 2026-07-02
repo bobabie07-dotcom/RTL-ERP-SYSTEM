@@ -106,12 +106,15 @@ export default function SalesPage() {
   // Edit PO Farm modal
   const [editPoTarget, setEditPoTarget] = useState(null);
   const [editPoFarmId, setEditPoFarmId] = useState('');
+  const [editPoBatchId, setEditPoBatchId] = useState('');
   const [editPoSaving, setEditPoSaving] = useState(false);
   const [editPoError,  setEditPoError]  = useState('');
+  const [allCompanyBatches, setAllCompanyBatches] = useState([]);
 
   function openEditFarmModal(po) {
     setEditPoTarget(po);
     setEditPoFarmId(String(po.farm_id || farmId));
+    setEditPoBatchId(po.batch_id ? String(po.batch_id) : '');
     setEditPoError('');
     setEditPoSaving(false);
   }
@@ -120,12 +123,15 @@ export default function SalesPage() {
     setEditPoSaving(true);
     setEditPoError('');
     try {
-      await procurementApi.updateOrder(editPoTarget.id, { farm_id: Number(editPoFarmId) });
+      await procurementApi.updateOrder(editPoTarget.id, {
+        farm_id: Number(editPoFarmId),
+        batch_id: editPoBatchId ? Number(editPoBatchId) : null,
+      });
       const updated = await procurementApi.orders({ farm_id: farmId });
       setPos(updated);
       setEditPoTarget(null);
     } catch (e) {
-      setEditPoError(e.message || 'Failed to update farm.');
+      setEditPoError(e.message || 'Failed to update Purchase Order.');
     } finally {
       setEditPoSaving(false);
     }
@@ -193,6 +199,7 @@ export default function SalesPage() {
     setLoading(true);
     loadAll().catch(e => setLoadError(e.message || 'Failed to load sales data.')).finally(() => setLoading(false));
     batchesApi.list({ farm_id: farmId }).then(setBatches).catch(() => {});
+    batchesApi.list().then(setAllCompanyBatches).catch(() => {});
     batchesApi.buyers().then(setBuyers).catch(() => {});
     procurementApi.suppliers().then(setSuppliers).catch(() => {});
     loadReceivables();
@@ -960,19 +967,36 @@ export default function SalesPage() {
       {/* Edit PO Farm Modal */}
       <Modal
         open={!!editPoTarget}
-        title={`Edit Farm for PO: ${editPoTarget?.po_no || '—'}`}
+        title={`Edit Details for PO: ${editPoTarget?.po_no || '—'}`}
         onClose={() => setEditPoTarget(null)}
         onConfirm={handleSavePoFarm}
-        confirmLabel="Save Farm"
+        confirmLabel="Save Changes"
         loading={editPoSaving}
         width={400}
       >
         {editPoError && <div style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{editPoError}</div>}
         <FormRow label="Assign to Farm" required>
-          <FieldSelect value={editPoFarmId} onChange={e => setEditPoFarmId(e.target.value)}>
+          <FieldSelect
+            value={editPoFarmId}
+            onChange={e => {
+              setEditPoFarmId(e.target.value);
+              setEditPoBatchId(''); // reset batch selection when farm changes
+            }}
+          >
             {farms.map(f => (
               <option key={f.id} value={f.id}>{f.name}</option>
             ))}
+          </FieldSelect>
+        </FormRow>
+        <FormRow label="Link to Batch">
+          <FieldSelect value={editPoBatchId} onChange={e => setEditPoBatchId(e.target.value)}>
+            <option value="">No batch (farm-level PO)</option>
+            {allCompanyBatches
+              .filter(b => b.farm_id === Number(editPoFarmId) && ['active', 'harvest_soon'].includes(b.status))
+              .map(b => (
+                <option key={b.id} value={b.id}>{b.batch_no} — {b.house}</option>
+              ))
+            }
           </FieldSelect>
         </FormRow>
       </Modal>
