@@ -108,7 +108,7 @@ class User(Base):
     company = relationship("Company", back_populates="users")
     farm = relationship("Farm", back_populates="users", foreign_keys=[farm_id])
     role = relationship("Role", back_populates="users", foreign_keys=[role_id])
-    assigned_farms: list[UserFarm] = relationship("UserFarm", back_populates="user", cascade="all, delete-orphan")
+    assigned_farms: list[UserFarm] = relationship("UserFarm", back_populates="user", cascade="all, delete-orphan", uselist=True)
 
 
 class UserRole(Base):
