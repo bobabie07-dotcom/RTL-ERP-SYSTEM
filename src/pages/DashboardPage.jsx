@@ -63,7 +63,7 @@ export default function DashboardPage() {
       );
       setSummary(sum);
     }).catch(e => setLoadError(e.message || 'Failed to load dashboard data.')).finally(() => setLoading(false));
-  }, [farmId]);
+  }, [farmId, isLayer]);
 
   const tableRows = batches.map((b) => {
     const ageStatus = getBatchAgeStatus(b.age_days, b.cycle_length_days);

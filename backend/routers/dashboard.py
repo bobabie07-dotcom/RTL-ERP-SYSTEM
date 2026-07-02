@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -48,25 +50,36 @@ def get_dashboard(
           AND b.status IN ('active', 'harvest_soon')
     """), {"farm_id": farm_id}).scalar()
 
-    # 7-day mortality rate across farm
+    # 7-day mortality rate: deaths in window / initial count of affected batches
+    # Use separate subqueries so initial_count is not multiplied by # of mortality rows
     mort_row = db.execute(text("""
         SELECT
-          COALESCE(SUM(m.count), 0)              AS deaths,
-          COALESCE(SUM(b.initial_count), 1)      AS placed
-        FROM mortality_records m
-        JOIN batches b ON m.batch_id = b.id
-        WHERE b.farm_id = :farm_id
-          AND m.record_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+          COALESCE((
+              SELECT SUM(m.count)
+              FROM mortality_records m
+              JOIN batches b ON m.batch_id = b.id
+              WHERE b.farm_id = :farm_id
+                AND m.record_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+          ), 0) AS deaths,
+          COALESCE((
+              SELECT SUM(initial_count)
+              FROM batches
+              WHERE farm_id = :farm_id AND status IN ('active', 'harvest_soon')
+          ), 1) AS placed
     """), {"farm_id": farm_id}).mappings().one()
     mortality_rate = round(mort_row["deaths"] / mort_row["placed"] * 100, 3)
 
-    # Cumulative mortality rate: all-time deaths / all-time birds placed (active batches)
+    # Cumulative mortality: group deaths per batch first, then join to avoid fan-out
     cumul_row = db.execute(text("""
         SELECT
-          COALESCE(SUM(m.count), 0)         AS total_deaths,
+          COALESCE(SUM(mr.deaths), 0)       AS total_deaths,
           COALESCE(SUM(b.initial_count), 1) AS total_placed
         FROM batches b
-        LEFT JOIN mortality_records m ON m.batch_id = b.id
+        LEFT JOIN (
+            SELECT batch_id, SUM(count) AS deaths
+            FROM mortality_records
+            GROUP BY batch_id
+        ) mr ON mr.batch_id = b.id
         WHERE b.farm_id = :farm_id
           AND b.status IN ('active', 'harvest_soon')
     """), {"farm_id": farm_id}).mappings().one()
@@ -186,13 +199,22 @@ def get_layer_dashboard(
     culling_pct     = round(culling_count / initial_birds * 100, 3) if initial_birds > 0 else 0.0
 
     # ── 7-day mortality rate ───────────────────────────────────────────────────
+    # Separate subqueries prevent initial_count fan-out from the JOIN
+    _7d_ago = date.today() - timedelta(days=7)
     mort7_row = db.execute(text("""
-        SELECT COALESCE(SUM(m.count), 0) AS deaths,
-               COALESCE(SUM(b.initial_count), 1) AS placed
-        FROM mortality_records m
-        JOIN batches b ON m.batch_id = b.id
-        WHERE b.farm_id = :fid AND m.record_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-    """), {"fid": farm_id}).mappings().one()
+        SELECT
+          COALESCE((
+              SELECT SUM(m.count)
+              FROM mortality_records m
+              JOIN batches b ON m.batch_id = b.id
+              WHERE b.farm_id = :fid AND m.record_date >= :start7
+          ), 0) AS deaths,
+          COALESCE((
+              SELECT SUM(initial_count)
+              FROM batches
+              WHERE farm_id = :fid AND status = 'active'
+          ), 1) AS placed
+    """), {"fid": farm_id, "start7": _7d_ago}).mappings().one()
     mortality_rate_7d = round(mort7_row["deaths"] / mort7_row["placed"] * 100, 3)
 
     # ── Today's egg production ─────────────────────────────────────────────────
@@ -232,13 +254,15 @@ def get_layer_dashboard(
     water_per_bird = round(water_consumed_l / total_live_birds, 4) if water_consumed_l and total_live_birds > 0 else None
 
     # ── Production trends (7d and 30d daily averages) ─────────────────────────
+    # Use Python-computed dates — MySQL does not support named params inside INTERVAL
     def _avg_daily(days: int) -> float:
+        start = date.today() - timedelta(days=days)
         row = db.execute(text("""
-            SELECT COALESCE(SUM(total_collected), 0) / GREATEST(:days, 1) AS avg_eggs
+            SELECT COALESCE(SUM(total_collected), 0) / :days AS avg_eggs
             FROM egg_collections
             WHERE farm_id = :fid AND company_id = :cid
-              AND collect_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
-        """), {"fid": farm_id, "cid": cid, "days": days}).scalar()
+              AND collect_date >= :start
+        """), {"fid": farm_id, "cid": cid, "days": days, "start": start}).scalar()
         return round(float(row or 0), 1)
 
     avg_7d_eggs  = _avg_daily(7)
