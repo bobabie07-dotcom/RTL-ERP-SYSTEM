@@ -104,6 +104,7 @@ class User(Base):
     company = relationship("Company", back_populates="users")
     farm = relationship("Farm", back_populates="users", foreign_keys=[farm_id])
     role = relationship("Role", back_populates="users", foreign_keys=[role_id])
+    assigned_farms: list[UserFarm] = relationship("UserFarm", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserRole(Base):
@@ -114,6 +115,18 @@ class UserRole(Base):
     role_id     = Column(SmallInteger, ForeignKey("roles.id"), nullable=False)
     assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_at = Column(DateTime, default=func.now())
+
+
+class UserFarm(Base):
+    __tablename__ = "user_farms"
+    __table_args__ = (UniqueConstraint("user_id", "farm_id", name="uq_user_farm"),)
+
+    id      = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    farm_id = Column(SmallInteger, ForeignKey("farms.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("User", back_populates="assigned_farms")
+    farm = relationship("Farm")
 
     user     = relationship("User", foreign_keys=[user_id], back_populates="extra_roles")
     role     = relationship("Role")

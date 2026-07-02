@@ -363,6 +363,18 @@ def run_startup_migrations():
         """))
         # ── Recreate v_batch_pnl with LEFT JOIN so feed issues without purchase records
         # use a fallback price (25/kg) instead of being silently dropped.
+        # ── Multi-farm assignment junction table ──────────────────────────────
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_farms (
+                id      INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                farm_id SMALLINT NOT NULL,
+                UNIQUE KEY uq_user_farm (user_id, farm_id),
+                CONSTRAINT fk_uf_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                CONSTRAINT fk_uf_farm FOREIGN KEY (farm_id) REFERENCES farms(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
+
         conn.execute(text("""
             CREATE OR REPLACE VIEW v_batch_pnl AS
             SELECT

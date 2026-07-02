@@ -48,7 +48,7 @@ class UserCreate(BaseModel):
     username:     Optional[str] = None
     role_id:      int = 3
     company_id:   Optional[int] = 1
-    farm_id:      Optional[int] = 1
+    farm_ids:     List[int] = []
     department:   Optional[str] = None
     position:     Optional[str] = None
     phone:        Optional[str] = None
@@ -62,6 +62,7 @@ class UserUpdate(BaseModel):
     employee_id: Optional[str] = None
     role_id:     Optional[int] = None
     company_id:  Optional[int] = None
+    farm_ids:    Optional[List[int]] = None
     department:  Optional[str] = None
     position:    Optional[str] = None
     phone:       Optional[str] = None
@@ -162,6 +163,7 @@ class UserDetailOut(OrmBase):
     role_name:               Optional[str] = None
     all_role_ids:            list[int] = []
     all_role_names:          list[str] = []
+    farm_ids:                List[int] = []
 
 
 # ── Support Tickets ───────────────────────────────────────────────────────────

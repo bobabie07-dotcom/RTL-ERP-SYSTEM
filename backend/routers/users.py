@@ -6,7 +6,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import LoginHistory, Role, User, UserAuditLog, UserRole
+from models import Farm, LoginHistory, Role, User, UserAuditLog, UserFarm, UserRole
 from routers.auth import DEFAULT_PASSWORD, _hash, get_current_user, require_permission
 from schemas.schemas import (
     LoginHistoryOut, RoleCreate, RoleOut, RoleUpdate, StatusChangePayload,
@@ -49,6 +49,9 @@ def _build_detail(user: User) -> dict:
     all_names = [primary_role_name] + [n   for n   in extra_role_names if n     != primary_role_name]
     all_ids   = [x for x in all_ids   if x is not None]
     all_names = [x for x in all_names if x is not None]
+    junction_farm_ids = [uf.farm_id for uf in (user.assigned_farms or [])]
+    if user.farm_id and user.farm_id not in junction_farm_ids:
+        junction_farm_ids.insert(0, user.farm_id)
     return {
         "id":                      user.id,
         "employee_id":             user.employee_id,
@@ -56,6 +59,7 @@ def _build_detail(user: User) -> dict:
         "email":                   user.email,
         "username":                user.username,
         "farm_id":                 user.farm_id,
+        "farm_ids":                junction_farm_ids,
         "role_id":                 user.role_id,
         "department":              user.department,
         "position":                getattr(user, "position", None),
@@ -251,6 +255,15 @@ def create_user(
         raise HTTPException(400, "Username already taken")
 
     company_id  = body.company_id if (current_user.role_id == 6 and body.company_id) else current_user.company_id
+    farm_ids    = body.farm_ids or []
+
+    # Validate all farms belong to this company
+    for fid in farm_ids:
+        f = db.get(Farm, fid)
+        if not f or f.company_id != company_id:
+            raise HTTPException(400, f"Farm {fid} does not belong to this company")
+
+    primary_farm_id = farm_ids[0] if farm_ids else None
     employee_id = _next_employee_id(db, company_id)
     user = User(
         employee_id=employee_id,
@@ -260,7 +273,7 @@ def create_user(
         password_hash=_hash(DEFAULT_PASSWORD),
         role_id=body.role_id,
         company_id=company_id,
-        farm_id=body.farm_id,
+        farm_id=primary_farm_id,
         department=body.department or None,
         position=getattr(body, "position", None),
         phone=body.phone or None,
@@ -271,6 +284,10 @@ def create_user(
     )
     db.add(user)
     db.flush()
+
+    for fid in farm_ids:
+        db.add(UserFarm(user_id=user.id, farm_id=fid))
+
     _audit(db, user.id, "user_created", current_user.id,
            new=user.email,
            notes=f"Created by {current_user.full_name}",
@@ -296,6 +313,8 @@ def update_user(
         raise HTTPException(404, "User not found")
 
     data = body.model_dump(exclude_none=True)
+    new_farm_ids = data.pop("farm_ids", None)  # handle separately
+
     for f in ("username", "department", "phone", "position", "employee_id"):
         if f in data and data[f] == "":
             data[f] = None
@@ -307,6 +326,20 @@ def update_user(
         conflict = db.query(User).filter(User.employee_id == data["employee_id"], User.id != user_id).first()
         if conflict:
             raise HTTPException(400, "Employee ID already taken")
+
+    if new_farm_ids is not None:
+        target_company = data.get("company_id") or user.company_id
+        for fid in new_farm_ids:
+            f = db.get(Farm, fid)
+            if not f or f.company_id != target_company:
+                raise HTTPException(400, f"Farm {fid} does not belong to this company")
+
+        for uf in list(user.assigned_farms):
+            db.delete(uf)
+        db.flush()
+        for fid in new_farm_ids:
+            db.add(UserFarm(user_id=user.id, farm_id=fid))
+        data["farm_id"] = new_farm_ids[0] if new_farm_ids else None
 
     old_snapshot = {k: str(getattr(user, k, None)) for k in data}
     for field, value in data.items():

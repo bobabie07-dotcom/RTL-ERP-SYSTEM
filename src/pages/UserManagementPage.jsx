@@ -28,7 +28,7 @@ const POSITIONS   = ['Manager','Supervisor','Staff','Coordinator','Analyst','Off
 
 const EMPTY_FORM = {
   full_name: '', email: '', username: '',
-  role_id: '3', farm_id: '', department: '', position: '', phone: '',
+  role_id: '3', farm_ids: [], department: '', position: '', phone: '',
   company_id: '',
 };
 
@@ -122,6 +122,25 @@ function Toast({ msg, ok }) {
 
 // ── User Form (standalone to prevent remount/focus loss on parent re-render) ──
 
+function FarmMultiSelect({ farms, selected, onChange }) {
+  const toggle = (id) => {
+    const next = selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id];
+    onChange(next);
+  };
+  if (!farms.length) return <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>No farms available for this company.</p>;
+  return (
+    <div style={{ border: '1px solid #d1d5db', borderRadius: 8, maxHeight: 140, overflowY: 'auto', padding: '6px 0' }}>
+      {farms.map(f => (
+        <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: 'pointer', background: selected.includes(f.id) ? '#eff6ff' : 'transparent' }}>
+          <input type="checkbox" checked={selected.includes(f.id)} onChange={() => toggle(f.id)} style={{ accentColor: '#2563eb' }} />
+          <span style={{ fontSize: 13, color: '#111827' }}>{f.name}</span>
+          {f.farm_type && <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 'auto' }}>{f.farm_type}</span>}
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions, companies, me, onSubmit, onCancel }) {
   const filteredFarms = form.company_id
     ? farms.filter(f => f.company_id === parseInt(form.company_id))
@@ -138,7 +157,7 @@ function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions
         {me?.role_id === 6 && (
           <div style={{ gridColumn: '1 / -1' }}>
             <FieldRow label="Company" required>
-              <select style={SEL} value={form.company_id} onChange={e => setForm(p => ({ ...p, company_id: e.target.value, farm_id: '' }))}>
+              <select style={SEL} value={form.company_id} onChange={e => setForm(p => ({ ...p, company_id: e.target.value, farm_ids: [] }))}>
                 <option value="">— Select Company —</option>
                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -164,12 +183,20 @@ function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions
             {roleOptions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
         </FieldRow>
-        <FieldRow label="Assigned Farm" required>
-          <select style={SEL} value={form.farm_id} onChange={e => setForm(p => ({ ...p, farm_id: e.target.value }))}>
-            <option value="">— Select Farm —</option>
-            {filteredFarms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
-        </FieldRow>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <FieldRow label="Assigned Farms">
+            <FarmMultiSelect
+              farms={filteredFarms}
+              selected={form.farm_ids}
+              onChange={ids => setForm(p => ({ ...p, farm_ids: ids }))}
+            />
+            {form.farm_ids.length > 0 && (
+              <p style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                {form.farm_ids.length} farm{form.farm_ids.length > 1 ? 's' : ''} selected · First selected is primary
+              </p>
+            )}
+          </FieldRow>
+        </div>
         <FieldRow label="Department">
           <select style={SEL} value={form.department} onChange={e => setForm(p => ({ ...p, department: e.target.value }))}>
             <option value="">— Select —</option>
@@ -307,7 +334,7 @@ export default function UserManagementPage() {
           email:       form.email,
           username:    form.username || undefined,
           role_id:     parseInt(form.role_id),
-          farm_id:     form.farm_id ? parseInt(form.farm_id) : undefined,
+          farm_ids:    form.farm_ids,
           department:  form.department || undefined,
           position:    form.position   || undefined,
           phone:       form.phone      || undefined,
@@ -321,7 +348,7 @@ export default function UserManagementPage() {
           email:       form.email,
           username:    form.username || undefined,
           role_id:     parseInt(form.role_id),
-          farm_id:     form.farm_id ? parseInt(form.farm_id) : undefined,
+          farm_ids:    form.farm_ids,
           department:  form.department || undefined,
           position:    form.position   || undefined,
           phone:       form.phone      || undefined,
@@ -398,7 +425,7 @@ export default function UserManagementPage() {
       email:       u.email       || '',
       username:    u.username    || '',
       role_id:     String(u.role_id || 3),
-      farm_id:     u.farm_id ? String(u.farm_id) : '',
+      farm_ids:    u.farm_ids?.length ? u.farm_ids : (u.farm_id ? [u.farm_id] : []),
       department:  u.department  || '',
       position:    u.position    || '',
       phone:       u.phone       || '',
