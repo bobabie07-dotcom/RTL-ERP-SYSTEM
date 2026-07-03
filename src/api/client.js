@@ -55,8 +55,10 @@ async function download(path) {
   const disp = res.headers.get('content-disposition') || '';
   const m    = disp.match(/filename=["']?([^"';\n]+)/);
   a.download = m ? m[1] : 'export.csv';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 const get    = (path, params) => {
