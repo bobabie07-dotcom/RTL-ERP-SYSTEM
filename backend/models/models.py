@@ -108,7 +108,6 @@ class User(Base):
     company = relationship("Company", back_populates="users")
     farm = relationship("Farm", back_populates="users", foreign_keys=[farm_id])
     role = relationship("Role", back_populates="users", foreign_keys=[role_id])
-    assigned_farms: list[UserFarm] = relationship("UserFarm", back_populates="user", cascade="all, delete-orphan", uselist=True)
 
 
 class UserRole(Base):
@@ -133,11 +132,20 @@ class UserFarm(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     farm_id = Column(SmallInteger, ForeignKey("farms.id", ondelete="CASCADE"), nullable=False)
 
-    user = relationship("User", back_populates="assigned_farms")
+    user = relationship("User", foreign_keys=[user_id], back_populates="assigned_farms")
     farm = relationship("Farm")
 
 
-# UserRole is now defined — use real column objects to avoid FK ambiguity
+# UserRole and UserFarm are now defined — use real column objects to avoid FK ambiguity
+User.assigned_farms = relationship(
+    UserFarm,
+    primaryjoin=User.id == UserFarm.user_id,
+    foreign_keys=[UserFarm.user_id],
+    back_populates="user",
+    cascade="all, delete-orphan",
+    uselist=True,
+)
+
 User.extra_roles = relationship(
     UserRole,
     primaryjoin=User.id == UserRole.user_id,
