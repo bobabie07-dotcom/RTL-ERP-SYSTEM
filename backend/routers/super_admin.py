@@ -75,7 +75,11 @@ def list_companies(
     _require_super_admin(current_user)
     companies = db.query(Company).order_by(Company.id).all()
     subs      = {s.company_id: s for s in db.query(Subscription).all()}
-    u_counts  = dict(db.query(User.company_id, func.count(User.id)).group_by(User.company_id).all())
+    u_counts  = dict(
+        db.query(User.company_id, func.count(User.id))
+        .filter(User.deleted_at.is_(None))
+        .group_by(User.company_id).all()
+    )
     f_counts  = dict(db.query(Farm.company_id, func.count(Farm.id)).group_by(Farm.company_id).all())
     return [
         {
@@ -329,7 +333,11 @@ def system_health(
 
     expiring_soon = (
         db.query(func.count(Subscription.id))
-        .filter(Subscription.expires_at >= now, Subscription.expires_at <= now + timedelta(days=30))
+        .filter(
+            Subscription.status == "active",
+            Subscription.expires_at >= now,
+            Subscription.expires_at <= now + timedelta(days=30),
+        )
         .scalar() or 0
     )
     expired_active = (
@@ -368,12 +376,7 @@ def list_roles(
     _require_super_admin(current_user)
     roles = db.query(Role).order_by(Role.id).all()
     return [
-        {
-            "id":          r.id,
-            "name":        r.name,
-            "description": getattr(r, "description", None),
-            "is_active":   getattr(r, "is_active", True),
-        }
+        {"id": r.id, "name": r.name, "description": r.description, "is_active": r.is_active}
         for r in roles
     ]
 
@@ -388,7 +391,11 @@ def export_companies_csv(
     _require_super_admin(current_user)
     companies = db.query(Company).order_by(Company.id).all()
     subs      = {s.company_id: s for s in db.query(Subscription).all()}
-    u_counts  = dict(db.query(User.company_id, func.count(User.id)).group_by(User.company_id).all())
+    u_counts  = dict(
+        db.query(User.company_id, func.count(User.id))
+        .filter(User.deleted_at.is_(None))
+        .group_by(User.company_id).all()
+    )
     f_counts  = dict(db.query(Farm.company_id, func.count(Farm.id)).group_by(Farm.company_id).all())
 
     out = StringIO()

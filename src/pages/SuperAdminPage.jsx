@@ -355,6 +355,7 @@ function UsersTab({ companies }) {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
+  const [committedSearch, setCommittedSearch] = useState('');
   const [coFilter, setCoFilter] = useState('');
   const [stFilter, setStFilter] = useState('');
   const [skip,    setSkip]    = useState(0);
@@ -362,15 +363,16 @@ function UsersTab({ companies }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    superAdminApi.listAllUsers({ search: search || undefined, company_id: coFilter || undefined, status: stFilter || undefined, skip, limit: LIMIT })
+    superAdminApi.listAllUsers({ search: committedSearch || undefined, company_id: coFilter || undefined, status: stFilter || undefined, skip, limit: LIMIT })
       .then(d => { setData(d); setError(''); })
       .catch(err => setError(err.message || 'Failed to load users'))
       .finally(() => setLoading(false));
-  }, [search, coFilter, stFilter, skip]);
+  }, [committedSearch, coFilter, stFilter, skip]);
 
   useEffect(() => { load(); }, [load]);
 
-  const applyFilter = () => { setSkip(0); load(); };
+  // Committing search resets page and triggers load via useEffect (no double request)
+  const applyFilter = () => { setCommittedSearch(search); setSkip(0); };
 
   return (
     <div>
