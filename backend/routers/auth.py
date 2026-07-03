@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
-from models import LoginHistory, User, Company
+from models import LoginHistory, Subscription, User, Company
 from schemas.schemas import (
     ChangePasswordRequest, FirstPasswordRequest, LoginRequest, TokenResponse,
     UserCreate, UserOut, UserUpdate,
@@ -115,6 +115,7 @@ def get_current_user(
             algorithms=[settings.JWT_ALGORITHM],
         )
         user_id = int(payload["sub"])
+        imp_by  = payload.get("imp_by")
     except (JWTError, KeyError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
@@ -122,12 +123,28 @@ def get_current_user(
     if not user or user.deleted_at:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    if user.company_id:
+    # Attach impersonation context so audit helpers can surface it
+    if imp_by:
+        user._imp_by = int(imp_by)
+
+    if user.company_id and user.role_id != 6:
         company = db.get(Company, user.company_id)
         if not company:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your company account no longer exists. Contact system administrator.")
         if company.status == "suspended":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Company subscription is suspended. Contact system administrator.")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Company is suspended. Contact system administrator.")
+
+        sub = (
+            db.query(Subscription)
+            .filter(Subscription.company_id == user.company_id)
+            .order_by(Subscription.expires_at.desc())
+            .first()
+        )
+        if sub and sub.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your subscription has expired. Please contact your system administrator.",
+            )
 
     st = getattr(user, "status", "active")
     if st == "inactive":

@@ -483,17 +483,28 @@ function CompaniesTab() {
 // ── All Users Tab ─────────────────────────────────────────────────────────────
 
 function UsersTab({ companies }) {
-  const [data,         setData]         = useState({ total: 0, items: [] });
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState('');
-  const [impData,      setImpData]      = useState(null);  // { access_token, user }
-  const [impBusy,      setImpBusy]      = useState(null);  // user_id being impersonated
-  const [search,       setSearch]       = useState('');
-  const [committedSearch, setCommittedSearch] = useState('');
-  const [coFilter, setCoFilter] = useState('');
-  const [stFilter, setStFilter] = useState('');
-  const [skip,    setSkip]    = useState(0);
+  const [data,             setData]             = useState({ total: 0, items: [] });
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState('');
+  const [impData,          setImpData]          = useState(null);
+  const [impBusy,          setImpBusy]          = useState(null);
+  const [editRoleUser,     setEditRoleUser]     = useState(null);
+  const [roleForm,         setRoleForm]         = useState('');
+  const [roleSaving,       setRoleSaving]       = useState(false);
+  const [roleErr,          setRoleErr]          = useState('');
+  const [allRoles,         setAllRoles]         = useState([]);
+  const [search,           setSearch]           = useState('');
+  const [committedSearch,  setCommittedSearch]  = useState('');
+  const [coFilter,         setCoFilter]         = useState('');
+  const [stFilter,         setStFilter]         = useState('');
+  const [skip,             setSkip]             = useState(0);
   const LIMIT = 50;
+
+  useEffect(() => {
+    superAdminApi.listRoles()
+      .then(d => setAllRoles(Array.isArray(d) ? d : (d.items || [])))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -515,6 +526,24 @@ function UsersTab({ companies }) {
       setImpData(result);
     } catch (err) { setError(err.message || 'Impersonation failed'); }
     finally { setImpBusy(null); }
+  };
+
+  const openEditRole = (u) => {
+    setEditRoleUser(u);
+    setRoleForm(String(u.role_id));
+    setRoleErr('');
+  };
+
+  const handleRoleSave = async (e) => {
+    e.preventDefault();
+    if (!roleForm) return;
+    setRoleSaving(true); setRoleErr('');
+    try {
+      await superAdminApi.updateUserRole(editRoleUser.id, Number(roleForm));
+      setEditRoleUser(null);
+      load();
+    } catch (err) { setRoleErr(err.message || 'Failed to update role'); }
+    finally { setRoleSaving(false); }
   };
 
   return (
@@ -571,15 +600,46 @@ function UsersTab({ companies }) {
                 <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{fmtDateTime(u.last_login_at)}</td>
                 <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{fmtDate(u.created_at)}</td>
                 <td style={{ padding: '10px 14px' }}>
-                  <Btn disabled={impBusy === u.id} onClick={() => handleImpersonate(u)}>
-                    {impBusy === u.id ? '…' : 'Login As'}
-                  </Btn>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <Btn onClick={() => openEditRole(u)}>Edit Role</Btn>
+                    <Btn disabled={impBusy === u.id} onClick={() => handleImpersonate(u)}>
+                      {impBusy === u.id ? '…' : 'Login As'}
+                    </Btn>
+                  </div>
                 </td>
               </tr>
             ))}
           />
           <Pager total={data.total} skip={skip} limit={LIMIT} onPage={setSkip} />
         </>
+      )}
+
+      {editRoleUser && (
+        <ModalShell title={`Change Role — ${editRoleUser.full_name}`} onClose={() => setEditRoleUser(null)}>
+          <form onSubmit={handleRoleSave}>
+            <ErrBanner msg={roleErr} />
+            <p style={{ fontSize: 13, color: 'var(--text-body)', marginBottom: 14 }}>
+              Current role: <strong>{editRoleUser.role_name || `Role #${editRoleUser.role_id}`}</strong>
+              {editRoleUser.company_name && (
+                <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>— {editRoleUser.company_name}</span>
+              )}
+            </p>
+            <FormField label="New Role" required>
+              <select style={SELECT_STYLE} value={roleForm} onChange={e => setRoleForm(e.target.value)} required>
+                <option value="">— Select role —</option>
+                {allRoles.filter(r => r.id !== 6).map(r => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </FormField>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <Btn onClick={() => setEditRoleUser(null)}>Cancel</Btn>
+              <Btn type="submit" variant="primary" disabled={roleSaving || !roleForm}>
+                {roleSaving ? 'Saving…' : 'Save Role'}
+              </Btn>
+            </div>
+          </form>
+        </ModalShell>
       )}
 
       {impData && (
@@ -794,7 +854,7 @@ function TicketsTab({ companies }) {
   const LIMIT = 50;
 
   useEffect(() => {
-    superAdminApi.listAllUsers({ role_id: 6, limit: 50 })
+    superAdminApi.listAllUsers({ role_id: 6, status: 'active', limit: 50 })
       .then(d => setAdmins(d.items || []))
       .catch(() => {});
   }, []);

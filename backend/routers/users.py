@@ -28,7 +28,9 @@ def _require_admin(user: User):
 
 
 def _audit(db: Session, target_id: int, action: str, by_id: int,
-           old=None, new=None, notes=None, ip=None):
+           old=None, new=None, notes=None, ip=None, imp_by=None):
+    if imp_by:
+        notes = f"[IMP by #{imp_by}] " + (notes or "")
     db.add(UserAuditLog(
         target_user_id=target_id,
         action_type=action,
@@ -298,7 +300,8 @@ def create_user(
     _audit(db, user.id, "user_created", current_user.id,
            new=user.email,
            notes=f"Created by {current_user.full_name}",
-           ip=request.client.host if request.client else None)
+           ip=request.client.host if request.client else None,
+           imp_by=getattr(current_user, '_imp_by', None))
     db.commit()
     db.refresh(user)
     result = _build_detail(user)
@@ -357,7 +360,8 @@ def update_user(
 
     _audit(db, user.id, "user_updated", current_user.id,
            old=str(old_snapshot), new=str(data),
-           ip=request.client.host if request.client else None)
+           ip=request.client.host if request.client else None,
+           imp_by=getattr(current_user, '_imp_by', None))
     db.commit()
     db.refresh(user)
     return _build_detail(user)
@@ -398,7 +402,8 @@ def change_status(
     user.updated_by = current_user.id
     _audit(db, user.id, f"status_{body.status}", current_user.id,
            old=old_status, new=body.status, notes=body.notes,
-           ip=request.client.host if request.client else None)
+           ip=request.client.host if request.client else None,
+           imp_by=getattr(current_user, '_imp_by', None))
     db.commit()
     db.refresh(user)
     return _build_detail(user)
@@ -423,7 +428,8 @@ def reset_password(
     user.updated_by              = current_user.id
     _audit(db, user.id, "password_reset", current_user.id,
            notes=f"Reset by {current_user.full_name}",
-           ip=request.client.host if request.client else None)
+           ip=request.client.host if request.client else None,
+           imp_by=getattr(current_user, '_imp_by', None))
     db.commit()
     return {"message": "Password reset successfully", "temp_password": DEFAULT_PASSWORD}
 
@@ -480,7 +486,8 @@ def assign_roles(
 
     _audit(db, user.id, "roles_assigned", current_user.id,
            old=str(old_roles), new=str(body.role_ids),
-           ip=request.client.host if request.client else None)
+           ip=request.client.host if request.client else None,
+           imp_by=getattr(current_user, '_imp_by', None))
     db.commit()
     db.refresh(user)
     return _build_detail(user)
@@ -503,7 +510,8 @@ def remove_role(
     db.delete(ur)
     _audit(db, user_id, "role_removed", current_user.id,
            old=str(role_id),
-           ip=request.client.host if request.client else None)
+           ip=request.client.host if request.client else None,
+           imp_by=getattr(current_user, '_imp_by', None))
     db.commit()
 
 

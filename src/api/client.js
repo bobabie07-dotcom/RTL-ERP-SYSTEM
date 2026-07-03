@@ -328,6 +328,9 @@ export const superAdminApi = {
   // Impersonation
   impersonateUser:     (id)                 => post(`/api/super-admin/users/${id}/impersonate`, {}),
 
+  // User role management
+  updateUserRole:      (id, role_id)        => patch(`/api/super-admin/users/${id}/role`, { role_id }),
+
   // Subscriptions
   listSubscriptions:   (params)             => get('/api/super-admin/subscriptions', params),
 

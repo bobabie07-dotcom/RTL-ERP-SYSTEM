@@ -65,6 +65,10 @@ class FeatureFlagsUpdate(BaseModel):
     flags: dict
 
 
+class UserRoleUpdate(BaseModel):
+    role_id: int
+
+
 # ── Auth guard ────────────────────────────────────────────────────────────────
 
 def _require_super_admin(current_user: User):
@@ -717,6 +721,40 @@ def impersonate_user(
     }
 
 
+# ── User Role Update ──────────────────────────────────────────────────────────
+
+@router.patch("/users/{user_id}/role")
+def update_user_role(
+    user_id: int,
+    body: UserRoleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    user = db.get(User, user_id)
+    if not user or user.deleted_at:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.role_id == 6:
+        raise HTTPException(status_code=400, detail="Cannot change the role of another super admin")
+    role = db.get(Role, body.role_id)
+    if not role:
+        raise HTTPException(status_code=400, detail=f"Role {body.role_id} not found")
+
+    old_role_id   = user.role_id
+    user.role_id  = body.role_id
+    db.add(UserAuditLog(
+        target_user_id=user.id,
+        performed_by=current_user.id,
+        action_type="update",
+        old_value=str(old_role_id),
+        new_value=str(body.role_id),
+        notes=f"Super admin changed primary role: {old_role_id} → {body.role_id} ({role.name})",
+    ))
+    db.commit()
+    role_map = dict(db.query(Role.id, Role.name).all())
+    return {"id": user.id, "role_id": user.role_id, "role_name": role_map.get(user.role_id)}
+
+
 # ── Subscriptions ─────────────────────────────────────────────────────────────
 
 _PLAN_PRICE = {"starter": 999, "standard": 2499, "enterprise": 4999}
@@ -784,6 +822,8 @@ def bulk_company_action(
     _require_super_admin(current_user)
     if body.action not in ("suspend", "activate"):
         raise HTTPException(status_code=400, detail="action must be 'suspend' or 'activate'")
+    if len(body.ids) > 100:
+        raise HTTPException(status_code=400, detail="Cannot bulk-act on more than 100 companies at once")
     new_status = "suspended" if body.action == "suspend" else "active"
     rows = db.query(Company).filter(Company.id.in_(body.ids)).all()
     for c in rows:
