@@ -307,6 +307,7 @@ export default function FarmsPage() {
           <select value={form.farm_type} onChange={f('farm_type')} style={selectStyle}>
             <option value="broiler">Broiler (Meat Production)</option>
             <option value="layer">Layer (Egg Production)</option>
+            <option value="rtl">RTL</option>
           </select>
         </FormRow>
       </Modal>
