@@ -379,6 +379,19 @@ def run_startup_migrations():
         """)
 
         conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS system_announcements (
+                id         INT AUTO_INCREMENT PRIMARY KEY,
+                title      VARCHAR(200) NOT NULL,
+                body       TEXT NOT NULL,
+                target     VARCHAR(50) NOT NULL DEFAULT 'all',
+                company_id INT DEFAULT NULL,
+                created_by INT DEFAULT NULL,
+                expires_at DATETIME DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_ann_company (company_id)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
+        conn.execute(text("""
             CREATE OR REPLACE VIEW v_batch_pnl AS
             SELECT
               b.id                                              AS batch_id,

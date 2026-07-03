@@ -240,6 +240,21 @@ class TicketActivityLog(Base):
     actor  = relationship("User")
 
 
+# ── System Announcements ──────────────────────────────────────────────────────
+
+class SystemAnnouncement(Base):
+    __tablename__ = "system_announcements"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    title      = Column(String(200), nullable=False)
+    body       = Column(Text, nullable=False)
+    target     = Column(String(50), nullable=False, default="all")
+    company_id = Column(Integer, nullable=True)
+    created_by = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    expires_at = Column(DateTime, nullable=True)
+
+
 # ── Flocks / Batches ─────────────────────────────────────────────────────────
 
 class House(Base):

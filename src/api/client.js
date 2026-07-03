@@ -42,6 +42,23 @@ async function request(method, path, body) {
   return res.json();
 }
 
+async function download(path) {
+  const token = localStorage.getItem('erp_token');
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error('Download failed');
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  const disp = res.headers.get('content-disposition') || '';
+  const m    = disp.match(/filename=["']?([^"';\n]+)/);
+  a.download = m ? m[1] : 'export.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const get    = (path, params) => {
   const clean = params
     ? Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
@@ -270,12 +287,37 @@ export const usersApi = {
 };
 
 export const superAdminApi = {
-  listCompanies:      ()           => get('/api/super-admin/companies'),
-  createCompany:      (data)       => post('/api/super-admin/companies', data),
-  updateCompany:      (id, data)   => patch(`/api/super-admin/companies/${id}`, data),
-  deleteCompany:      (id)         => del(`/api/super-admin/companies/${id}`),
-  getSubscription:    (companyId)  => get(`/api/super-admin/companies/${companyId}/subscription`),
-  updateSubscription: (companyId, data) => patch(`/api/super-admin/companies/${companyId}/subscription`, data),
+  // Companies
+  listCompanies:       ()                   => get('/api/super-admin/companies'),
+  createCompany:       (data)               => post('/api/super-admin/companies', data),
+  updateCompany:       (id, data)           => patch(`/api/super-admin/companies/${id}`, data),
+  deleteCompany:       (id, force = false)  => del(`/api/super-admin/companies/${id}${force ? '?force=true' : ''}`),
+  getSubscription:     (id)                 => get(`/api/super-admin/companies/${id}/subscription`),
+  updateSubscription:  (id, data)           => patch(`/api/super-admin/companies/${id}/subscription`, data),
+
+  // Users
+  listAllUsers:        (params)             => get('/api/super-admin/users', params),
+
+  // Audit logs
+  getAuditLogs:        (params)             => get('/api/super-admin/audit-logs', params),
+
+  // System health
+  getHealth:           ()                   => get('/api/super-admin/health'),
+
+  // Roles
+  listRoles:           ()                   => get('/api/super-admin/roles'),
+
+  // Export
+  exportCompanies:     ()                   => download('/api/super-admin/export/companies'),
+
+  // Announcements
+  listAnnouncements:   ()                   => get('/api/super-admin/announcements'),
+  createAnnouncement:  (data)               => post('/api/super-admin/announcements', data),
+  deleteAnnouncement:  (id)                 => del(`/api/super-admin/announcements/${id}`),
+
+  // Support tickets
+  listSupportTickets:  (params)             => get('/api/super-admin/support-tickets', params),
+  updateSupportTicket: (id, data)           => patch(`/api/super-admin/support-tickets/${id}`, data),
 };
 
 export const eggsApi = {
