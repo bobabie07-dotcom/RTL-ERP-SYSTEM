@@ -156,22 +156,20 @@ def delete_company(
     company = db.get(Company, company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    # Block if company still has farms — deleting without removing farms first
+    # leaves orphaned farms visible to super admin and breaks company segregation.
+    # Admin must delete all farms via Farm Management before deleting the company.
+    farm_count = db.query(func.count(Farm.id)).filter(Farm.company_id == company_id).scalar() or 0
+    if farm_count:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Company has {farm_count} farm(s). Delete all farms in Farm Management first, then delete the company.",
+        )
     user_count = db.query(func.count(User.id)).filter(User.company_id == company_id).scalar() or 0
     if user_count and not force:
         raise HTTPException(
             status_code=400,
             detail=f"Company has {user_count} user(s). Pass ?force=true to delete anyway, or suspend the company instead.",
-        )
-    active_batches = (
-        db.query(func.count(Batch.id))
-        .join(Farm, Batch.farm_id == Farm.id)
-        .filter(Farm.company_id == company_id, Batch.status == "active")
-        .scalar() or 0
-    )
-    if active_batches:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Company has {active_batches} active batch(es). Close them before deleting.",
         )
     db.delete(company)
     db.commit()

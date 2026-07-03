@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
-from models import Batch, Farm, House, User
+from models import Batch, Company, Farm, House, User
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import FarmCreate, FarmOut, FarmUpdate, HouseCreate, HouseOut, HouseUpdate
 
@@ -23,7 +23,11 @@ def _get_farm_or_404(farm_id: int, db: Session, current_user) -> Farm:
 @router.get("", response_model=list[FarmOut])
 def list_farms(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     q = db.query(Farm).options(joinedload(Farm.company))
-    if current_user.role_id not in (6,):
+    if current_user.role_id == 6:
+        # Super admin sees all farms — but only farms whose company still exists,
+        # to prevent orphaned farms (from deleted companies) leaking into the view.
+        q = q.join(Company, Farm.company_id == Company.id)
+    else:
         q = q.filter(Farm.company_id == current_user.company_id)
 
     if current_user.role_id in (1, 5, 6):

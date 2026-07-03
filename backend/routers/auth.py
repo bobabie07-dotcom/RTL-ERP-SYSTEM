@@ -124,7 +124,9 @@ def get_current_user(
 
     if user.company_id:
         company = db.get(Company, user.company_id)
-        if company and company.status == "suspended":
+        if not company:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your company account no longer exists. Contact system administrator.")
+        if company.status == "suspended":
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Company subscription is suspended. Contact system administrator.")
 
     st = getattr(user, "status", "active")
