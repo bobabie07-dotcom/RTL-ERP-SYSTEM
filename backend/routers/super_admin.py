@@ -287,9 +287,18 @@ def list_audit_logs(
         user_ids.add(log.target_user_id)
         user_ids.add(log.performed_by)
     user_ids.discard(None)
-    name_map = {}
+    name_map     = {}
+    comp_id_map  = {}  # user_id → company_id
     if user_ids:
-        name_map = dict(db.query(User.id, User.full_name).filter(User.id.in_(user_ids)).all())
+        rows = db.query(User.id, User.full_name, User.company_id).filter(User.id.in_(user_ids)).all()
+        for uid, fname, cid in rows:
+            name_map[uid]    = fname
+            comp_id_map[uid] = cid
+
+    all_comp_ids = set(comp_id_map.values()) - {None}
+    comp_name_map = {}
+    if all_comp_ids:
+        comp_name_map = dict(db.query(Company.id, Company.name).filter(Company.id.in_(all_comp_ids)).all())
 
     return {
         "total": total,
@@ -298,6 +307,8 @@ def list_audit_logs(
                 "id":             log.id,
                 "target_user_id": log.target_user_id,
                 "target_name":    name_map.get(log.target_user_id),
+                "company_id":     comp_id_map.get(log.target_user_id),
+                "company_name":   comp_name_map.get(comp_id_map.get(log.target_user_id)),
                 "action_type":    log.action_type,
                 "old_value":      log.old_value,
                 "new_value":      log.new_value,

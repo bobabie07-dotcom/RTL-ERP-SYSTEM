@@ -315,6 +315,11 @@ function CompaniesTab() {
         <ModalShell title={modal === 'add' ? 'Register New Company' : 'Edit Company'} onClose={() => setModal(null)}>
           <form onSubmit={handleSave}>
             <ErrBanner msg={formErr} />
+            {modal === 'edit' && editId && (
+              <div style={{ marginBottom: 14, padding: '8px 12px', background: '#f3f4f6', borderRadius: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                Company ID: <strong style={{ color: 'var(--text-strong)', fontFamily: 'monospace' }}>#{editId}</strong>
+              </div>
+            )}
             <FormField label="Company Name" required>
               <input type="text" value={form.name} onChange={f('name')} placeholder="e.g. Acme Farms" style={FIELD_STYLE} />
             </FormField>
@@ -391,7 +396,7 @@ function UsersTab({ companies }) {
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Company</label>
           <select style={SELECT_STYLE} value={coFilter} onChange={e => { setCoFilter(e.target.value); setSkip(0); }}>
             <option value="">All companies</option>
-            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {companies.map(c => <option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
           </select>
         </div>
         <div style={{ flex: 1, minWidth: 120 }}>
@@ -418,7 +423,11 @@ function UsersTab({ companies }) {
                 <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{u.id}</td>
                 <td style={{ padding: '10px 14px', fontWeight: 600 }}>{u.full_name}</td>
                 <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{u.email}</td>
-                <td style={{ padding: '10px 14px' }}>{u.company_name || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                <td style={{ padding: '10px 14px' }}>
+                  {u.company_name
+                    ? <span>{u.company_name}<span style={{ marginLeft: 5, fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{u.company_id}</span></span>
+                    : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                </td>
                 <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{u.role_name || `Role ${u.role_id}`}</td>
                 <td style={{ padding: '10px 14px' }}><Badge value={u.status} /></td>
                 <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{fmtDateTime(u.last_login_at)}</td>
@@ -463,7 +472,7 @@ function AuditLogsTab({ companies }) {
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Company</label>
           <select style={SELECT_STYLE} value={coFilter} onChange={e => { setCoFilter(e.target.value); setSkip(0); }}>
             <option value="">All companies</option>
-            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {companies.map(c => <option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
           </select>
         </div>
         <div style={{ flex: 1, minWidth: 140 }}>
@@ -480,11 +489,16 @@ function AuditLogsTab({ companies }) {
         <>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>{data.total} log entries</div>
           <STable
-            headers={['When', 'Target User', 'Action', 'Performed By', 'Old Value', 'New Value', 'Notes']}
+            headers={['When', 'Company', 'Target User', 'Action', 'Performed By', 'Old Value', 'New Value', 'Notes']}
             empty="No audit logs."
             rows={data.items.map(log => (
               <tr key={log.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <td style={{ padding: '10px 14px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDateTime(log.created_at)}</td>
+                <td style={{ padding: '10px 14px', fontSize: 12 }}>
+                  {log.company_name
+                    ? <span>{log.company_name}<span style={{ marginLeft: 4, color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{log.company_id}</span></span>
+                    : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                </td>
                 <td style={{ padding: '10px 14px', fontWeight: 500 }}>{log.target_name || `#${log.target_user_id}`}</td>
                 <td style={{ padding: '10px 14px' }}>
                   <code style={{ fontSize: 12, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{log.action_type}</code>
@@ -649,7 +663,7 @@ function TicketsTab({ companies }) {
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Company</label>
           <select style={SELECT_STYLE} value={coFilter} onChange={e => { setCoFilter(e.target.value); setSkip(0); }}>
             <option value="">All companies</option>
-            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {companies.map(c => <option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
           </select>
         </div>
       </div>
@@ -664,7 +678,11 @@ function TicketsTab({ companies }) {
             rows={data.items.map(t => (
               <tr key={t.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-brand)' }}>{t.ticket_no}</td>
-                <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>{t.company_name || '—'}</td>
+                <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>
+                  {t.company_name
+                    ? <span>{t.company_name}<span style={{ marginLeft: 4, color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{t.company_id}</span></span>
+                    : '—'}
+                </td>
                 <td style={{ padding: '10px 14px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.subject}>{t.subject}</td>
                 <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontSize: 12 }}>{t.category}</td>
                 <td style={{ padding: '10px 14px' }}><Badge value={t.priority} map={PRIORITY_COLOR} /></td>
@@ -801,7 +819,7 @@ function AnnouncementsTab({ companies }) {
             <FormField label="Company">
               <select style={SELECT_STYLE} value={form.company_id} onChange={af('company_id')}>
                 <option value="">— Select —</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {companies.map(c => <option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
               </select>
             </FormField>
           )}
