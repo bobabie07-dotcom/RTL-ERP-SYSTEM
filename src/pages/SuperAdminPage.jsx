@@ -161,15 +161,27 @@ function ModalShell({ title, onClose, children }) {
 
 const EMPTY_CO_FORM = { name: '', plan_name: 'standard', expires_at: '', business_model: 'broiler' };
 
+const KNOWN_FLAGS = [
+  { key: 'procurement',     label: 'Procurement Module' },
+  { key: 'hr',              label: 'HR & Payroll' },
+  { key: 'site_management', label: 'Site Management' },
+  { key: 'finance',         label: 'Finance / Batch P&L' },
+  { key: 'reports',         label: 'Reports & Analytics' },
+];
+
 function CompaniesTab() {
-  const [companies, setCompanies] = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState('');
-  const [modal,     setModal]     = useState(null); // null | 'add' | 'edit'
-  const [form,      setForm]      = useState(EMPTY_CO_FORM);
-  const [editId,    setEditId]    = useState(null);
-  const [saving,    setSaving]    = useState(false);
-  const [formErr,   setFormErr]   = useState('');
+  const [companies,  setCompanies]  = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
+  const [modal,      setModal]      = useState(null); // null | 'add' | 'edit' | 'flags'
+  const [form,       setForm]       = useState(EMPTY_CO_FORM);
+  const [editId,     setEditId]     = useState(null);
+  const [saving,     setSaving]     = useState(false);
+  const [formErr,    setFormErr]    = useState('');
+  const [selected,   setSelected]   = useState(new Set());
+  const [bulkBusy,   setBulkBusy]   = useState(false);
+  const [flagsData,  setFlagsData]  = useState(null);  // { company_id, company_name, flags }
+  const [flagsSaving,setFlagsSaving]= useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -242,6 +254,60 @@ function CompaniesTab() {
     catch (err) { setError(err.message || 'Export failed'); }
   };
 
+  const handleExportCompany = async (c) => {
+    try { await superAdminApi.exportCompanyData(c.id); }
+    catch (err) { setError(`Export failed for ${c.name}: ${err.message}`); }
+  };
+
+  const toggleSelect = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (selected.size === companies.length) setSelected(new Set());
+    else setSelected(new Set(companies.map(c => c.id)));
+  };
+
+  const handleBulk = async (action) => {
+    if (!selected.size) return;
+    const label = action === 'suspend' ? 'suspend' : 'activate';
+    if (!window.confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${selected.size} company(ies)?`)) return;
+    setBulkBusy(true);
+    try {
+      await superAdminApi.bulkCompanyAction([...selected], action);
+      setSelected(new Set());
+      load();
+    } catch (err) { setError(err.message || 'Bulk action failed'); }
+    finally { setBulkBusy(false); }
+  };
+
+  const openFlags = async (c) => {
+    try {
+      const data = await superAdminApi.getFeatureFlags(c.id);
+      setFlagsData(data);
+      setModal('flags');
+    } catch (err) { setError(err.message || 'Failed to load feature flags'); }
+  };
+
+  const handleFlagToggle = (key) => {
+    setFlagsData(prev => ({
+      ...prev,
+      flags: { ...prev.flags, [key]: !(prev.flags[key] !== false) },
+    }));
+  };
+
+  const handleFlagsSave = async () => {
+    setFlagsSaving(true);
+    try {
+      await superAdminApi.updateFeatureFlags(flagsData.company_id, flagsData.flags);
+      setModal(null);
+      setFlagsData(null);
+    } catch (err) { setError(err.message || 'Failed to save flags'); }
+    finally { setFlagsSaving(false); }
+  };
+
   const activeCount    = companies.filter(c => c.status === 'active').length;
   const suspendedCount = companies.filter(c => c.status === 'suspended').length;
 
@@ -261,10 +327,26 @@ function CompaniesTab() {
         </div>
       </div>
 
+      {selected.size > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#1d4ed8' }}>{selected.size} selected</span>
+          <Btn variant="danger"   disabled={bulkBusy} onClick={() => handleBulk('suspend')}>Suspend All</Btn>
+          <Btn                    disabled={bulkBusy} onClick={() => handleBulk('activate')}>Activate All</Btn>
+          <Btn onClick={() => setSelected(new Set())}>Clear</Btn>
+        </div>
+      )}
+
       <ErrBanner msg={error} />
       {loading ? <Spinner /> : (
         <STable
-          headers={['#', 'Company Name', 'Model', 'Plan', 'Expires', 'Users', 'Farms', 'Created', 'Status', '']}
+          headers={[
+            <input type="checkbox" key="chk"
+              checked={selected.size === companies.length && companies.length > 0}
+              onChange={toggleAll}
+              style={{ cursor: 'pointer' }}
+            />,
+            '#', 'Company Name', 'Model', 'Plan', 'Expires', 'Users', 'Farms', 'Created', 'Status', ''
+          ]}
           empty="No companies registered yet."
           rows={companies.map(c => {
             const sub = c.subscription;
@@ -273,8 +355,12 @@ function CompaniesTab() {
             const now = new Date();
             const exp = sub?.expires_at ? new Date(sub.expires_at) : null;
             const expiring = exp && exp > now && exp < new Date(now.getTime() + 30 * 86400000);
+            const isSel = selected.has(c.id);
             return (
-              <tr key={c.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <tr key={c.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: isSel ? '#f0f9ff' : 'transparent' }}>
+                <td style={{ padding: '12px 14px' }}>
+                  <input type="checkbox" checked={isSel} onChange={() => toggleSelect(c.id)} style={{ cursor: 'pointer' }} />
+                </td>
                 <td style={{ padding: '12px 14px', color: 'var(--text-muted)' }}>#{c.id}</td>
                 <td style={{ padding: '12px 14px', fontWeight: 600 }}>{c.name}</td>
                 <td style={{ padding: '12px 14px' }}>
@@ -297,8 +383,10 @@ function CompaniesTab() {
                 <td style={{ padding: '12px 14px', color: 'var(--text-muted)' }}>{fmtDate(c.created_at)}</td>
                 <td style={{ padding: '12px 14px' }}><Badge value={c.status} /></td>
                 <td style={{ padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', gap: 5 }}>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     <Btn onClick={() => openEdit(c)}>Edit</Btn>
+                    <Btn onClick={() => openFlags(c)}>Flags</Btn>
+                    <Btn onClick={() => handleExportCompany(c)}>↓ Export</Btn>
                     <Btn variant={c.status === 'active' ? 'danger' : 'default'} onClick={() => handleToggle(c)}>
                       {c.status === 'active' ? 'Suspend' : 'Activate'}
                     </Btn>
@@ -311,7 +399,46 @@ function CompaniesTab() {
         />
       )}
 
-      {modal && (
+      {modal === 'flags' && flagsData && (
+        <ModalShell title={`Feature Flags — ${flagsData.company_name}`} onClose={() => { setModal(null); setFlagsData(null); }}>
+          <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)' }}>
+            Disabled flags hide the module from all users in this company. Defaults to enabled if not set.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+            {KNOWN_FLAGS.map(({ key, label }) => {
+              const enabled = flagsData.flags[key] !== false;
+              return (
+                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '10px 14px', background: '#f9fafb', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <div
+                    onClick={() => handleFlagToggle(key)}
+                    style={{
+                      width: 40, height: 22, borderRadius: 11, background: enabled ? 'var(--green-500)' : '#d1d5db',
+                      position: 'relative', flexShrink: 0, cursor: 'pointer', transition: 'background 0.2s',
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute', top: 3, left: enabled ? 21 : 3, width: 16, height: 16,
+                      borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    }} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{label}</div>
+                    <div style={{ fontSize: 11, color: enabled ? '#065f46' : '#9ca3af', marginTop: 1 }}>{enabled ? 'Enabled' : 'Disabled'}</div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <Btn onClick={() => { setModal(null); setFlagsData(null); }}>Cancel</Btn>
+            <Btn variant="primary" disabled={flagsSaving} onClick={handleFlagsSave}>
+              {flagsSaving ? 'Saving…' : 'Save Flags'}
+            </Btn>
+          </div>
+        </ModalShell>
+      )}
+
+      {(modal === 'add' || modal === 'edit') && (
         <ModalShell title={modal === 'add' ? 'Register New Company' : 'Edit Company'} onClose={() => setModal(null)}>
           <form onSubmit={handleSave}>
             <ErrBanner msg={formErr} />
@@ -356,10 +483,12 @@ function CompaniesTab() {
 // ── All Users Tab ─────────────────────────────────────────────────────────────
 
 function UsersTab({ companies }) {
-  const [data,    setData]    = useState({ total: 0, items: [] });
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
-  const [search,  setSearch]  = useState('');
+  const [data,         setData]         = useState({ total: 0, items: [] });
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState('');
+  const [impData,      setImpData]      = useState(null);  // { access_token, user }
+  const [impBusy,      setImpBusy]      = useState(null);  // user_id being impersonated
+  const [search,       setSearch]       = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
   const [coFilter, setCoFilter] = useState('');
   const [stFilter, setStFilter] = useState('');
@@ -378,6 +507,15 @@ function UsersTab({ companies }) {
 
   // Committing search resets page and triggers load via useEffect (no double request)
   const applyFilter = () => { setCommittedSearch(search); setSkip(0); };
+
+  const handleImpersonate = async (u) => {
+    setImpBusy(u.id);
+    try {
+      const result = await superAdminApi.impersonateUser(u.id);
+      setImpData(result);
+    } catch (err) { setError(err.message || 'Impersonation failed'); }
+    finally { setImpBusy(null); }
+  };
 
   return (
     <div>
@@ -416,7 +554,7 @@ function UsersTab({ companies }) {
         <>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>{data.total} user(s) found</div>
           <STable
-            headers={['#', 'Full Name', 'Email', 'Company', 'Role', 'Status', 'Last Login', 'Joined']}
+            headers={['#', 'Full Name', 'Email', 'Company', 'Role', 'Status', 'Last Login', 'Joined', '']}
             empty="No users found."
             rows={data.items.map(u => (
               <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -432,11 +570,46 @@ function UsersTab({ companies }) {
                 <td style={{ padding: '10px 14px' }}><Badge value={u.status} /></td>
                 <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{fmtDateTime(u.last_login_at)}</td>
                 <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{fmtDate(u.created_at)}</td>
+                <td style={{ padding: '10px 14px' }}>
+                  <Btn disabled={impBusy === u.id} onClick={() => handleImpersonate(u)}>
+                    {impBusy === u.id ? '…' : 'Login As'}
+                  </Btn>
+                </td>
               </tr>
             ))}
           />
           <Pager total={data.total} skip={skip} limit={LIMIT} onPage={setSkip} />
         </>
+      )}
+
+      {impData && (
+        <ModalShell title="Impersonation Session" onClose={() => setImpData(null)}>
+          <div style={{ marginBottom: 14, padding: 14, background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 13 }}>
+            <strong>Impersonating:</strong> {impData.user.full_name} ({impData.user.email})
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-body)', margin: '0 0 12px' }}>
+            A 2-hour session token has been generated. To view the system as this user:
+          </p>
+          <ol style={{ fontSize: 13, color: 'var(--text-body)', margin: '0 0 16px', paddingLeft: 20, lineHeight: 1.8 }}>
+            <li>Open a <strong>private/incognito window</strong></li>
+            <li>Navigate to the ERP login page</li>
+            <li>Open DevTools → Console and run:</li>
+          </ol>
+          <div style={{ background: '#1e293b', borderRadius: 8, padding: '10px 14px', marginBottom: 16, position: 'relative' }}>
+            <code style={{ fontSize: 12, color: '#86efac', wordBreak: 'break-all' }}>
+              {`localStorage.setItem('erp_token', '${impData.access_token}')`}
+            </code>
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <Btn onClick={() => {
+              navigator.clipboard.writeText(`localStorage.setItem('erp_token', '${impData.access_token}')`);
+            }}>Copy Command</Btn>
+            <Btn onClick={() => {
+              navigator.clipboard.writeText(impData.access_token);
+            }}>Copy Token Only</Btn>
+            <Btn variant="primary" onClick={() => setImpData(null)}>Done</Btn>
+          </div>
+        </ModalShell>
       )}
     </div>
   );
@@ -875,15 +1048,207 @@ function AnnouncementsTab({ companies }) {
   );
 }
 
+// ── Subscriptions Tab ─────────────────────────────────────────────────────────
+
+const PLAN_COLOR = {
+  starter:    { bg: '#f3f4f6', color: '#374151' },
+  standard:   { bg: '#eff6ff', color: '#1d4ed8' },
+  enterprise: { bg: '#fdf4ff', color: '#7e22ce' },
+};
+
+function SubscriptionsTab() {
+  const [data,       setData]       = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
+  const [planFilter, setPlanFilter] = useState('');
+  const [stFilter,   setStFilter]   = useState('');
+
+  const load = useCallback(() => {
+    setLoading(true);
+    superAdminApi.listSubscriptions({ plan_name: planFilter || undefined, status: stFilter || undefined })
+      .then(d => { setData(d); setError(''); })
+      .catch(err => setError(err.message || 'Failed to load subscriptions'))
+      .finally(() => setLoading(false));
+  }, [planFilter, stFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const s = data?.summary;
+  const fmt = n => n?.toLocaleString('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }) ?? '—';
+
+  return (
+    <div>
+      {s && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <KpiCard label="Total"          value={s.total} />
+          <KpiCard label="Active"         value={s.active}        color="var(--success)" />
+          <KpiCard label="Expiring ≤30d"  value={s.expiring_soon} color={s.expiring_soon > 0 ? '#92400e' : undefined} />
+          <KpiCard label="Expired"        value={s.expired}       color={s.expired > 0 ? 'var(--danger)' : undefined} />
+          <KpiCard label="Est. MRR"       value={fmt(s.mrr_estimate)} color="var(--text-brand)"
+            sub={Object.entries(s.plan_counts || {}).map(([p, n]) => `${n} ${p}`).join(' · ')} />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ flex: 1, minWidth: 120 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Plan</label>
+          <select style={SELECT_STYLE} value={planFilter} onChange={e => setPlanFilter(e.target.value)}>
+            <option value="">All plans</option>
+            <option value="starter">Starter</option>
+            <option value="standard">Standard</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </div>
+        <div style={{ flex: 1, minWidth: 120 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Status</label>
+          <select style={SELECT_STYLE} value={stFilter} onChange={e => setStFilter(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+          </select>
+        </div>
+      </div>
+
+      <ErrBanner msg={error} />
+      {loading ? <Spinner /> : (
+        <STable
+          headers={['Company', 'Plan', 'Sub Status', 'Co. Status', 'Expires', 'Days Left', '']}
+          empty="No subscriptions."
+          rows={(data?.items || []).map(sub => {
+            const urgent   = sub.days_left !== null && sub.days_left <= 7 && sub.status === 'active';
+            const warning  = sub.days_left !== null && sub.days_left <= 30 && sub.days_left > 7 && sub.status === 'active';
+            const pc       = PLAN_COLOR[sub.plan_name] || PLAN_COLOR.standard;
+            return (
+              <tr key={sub.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: urgent ? '#fff7f7' : 'transparent' }}>
+                <td style={{ padding: '11px 14px', fontWeight: 600 }}>
+                  {sub.company_name}
+                  <span style={{ marginLeft: 5, fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{sub.company_id}</span>
+                </td>
+                <td style={{ padding: '11px 14px' }}>
+                  <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', background: pc.bg, color: pc.color }}>
+                    {sub.plan_name}
+                  </span>
+                </td>
+                <td style={{ padding: '11px 14px' }}><Badge value={sub.status} /></td>
+                <td style={{ padding: '11px 14px' }}><Badge value={sub.company_status} /></td>
+                <td style={{ padding: '11px 14px', color: urgent ? '#991b1b' : warning ? '#92400e' : 'inherit', fontWeight: (urgent || warning) ? 600 : 400 }}>
+                  {fmtDate(sub.expires_at)}
+                </td>
+                <td style={{ padding: '11px 14px', fontWeight: 700, color: urgent ? '#991b1b' : warning ? '#92400e' : sub.days_left < 0 ? '#6b7280' : 'inherit' }}>
+                  {sub.days_left === null ? '—' : sub.days_left < 0 ? `${Math.abs(sub.days_left)}d ago` : `${sub.days_left}d`}
+                </td>
+                <td style={{ padding: '11px 14px' }}>
+                  {(urgent || warning) && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: urgent ? '#991b1b' : '#92400e' }}>
+                      {urgent ? '🔴 URGENT' : '⚠ EXPIRING'}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        />
+      )}
+    </div>
+  );
+}
+
+
+// ── Login History Tab ─────────────────────────────────────────────────────────
+
+function LoginHistoryTab({ companies }) {
+  const [data,      setData]      = useState({ total: 0, items: [] });
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState('');
+  const [coFilter,  setCoFilter]  = useState('');
+  const [okFilter,  setOkFilter]  = useState('');
+  const [skip,      setSkip]      = useState(0);
+  const LIMIT = 100;
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = { skip, limit: LIMIT };
+    if (coFilter) params.company_id = coFilter;
+    if (okFilter !== '') params.success = okFilter;
+    superAdminApi.getLoginHistory(params)
+      .then(d => { setData(d); setError(''); })
+      .catch(err => setError(err.message || 'Failed to load login history'))
+      .finally(() => setLoading(false));
+  }, [coFilter, okFilter, skip]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const failCount = data.items.filter(i => !i.success).length;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Company</label>
+          <select style={SELECT_STYLE} value={coFilter} onChange={e => { setCoFilter(e.target.value); setSkip(0); }}>
+            <option value="">All companies</option>
+            {companies.map(c => <option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1, minWidth: 120 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Result</label>
+          <select style={SELECT_STYLE} value={okFilter} onChange={e => { setOkFilter(e.target.value); setSkip(0); }}>
+            <option value="">All</option>
+            <option value="true">Successful</option>
+            <option value="false">Failed</option>
+          </select>
+        </div>
+      </div>
+
+      <ErrBanner msg={error} />
+      {!loading && data.total > 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+          {data.total} entries · <span style={{ color: '#991b1b', fontWeight: 600 }}>{failCount} failed</span> on this page
+        </div>
+      )}
+      {loading ? <Spinner /> : (
+        <>
+          <STable
+            headers={['When', 'User', 'Company', 'Result', 'IP Address', 'Failure Reason']}
+            empty="No login history."
+            rows={data.items.map(l => (
+              <tr key={l.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: !l.success ? '#fff7f7' : 'transparent' }}>
+                <td style={{ padding: '9px 14px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDateTime(l.created_at)}</td>
+                <td style={{ padding: '9px 14px', fontWeight: 500 }}>{l.user_name || `#${l.user_id}`}</td>
+                <td style={{ padding: '9px 14px', fontSize: 12 }}>
+                  {l.company_name
+                    ? <span>{l.company_name}<span style={{ marginLeft: 4, color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{l.company_id}</span></span>
+                    : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                </td>
+                <td style={{ padding: '9px 14px' }}>
+                  {l.success
+                    ? <span style={{ color: '#065f46', fontWeight: 700, fontSize: 12 }}>✓ OK</span>
+                    : <span style={{ color: '#991b1b', fontWeight: 700, fontSize: 12 }}>✗ FAIL</span>}
+                </td>
+                <td style={{ padding: '9px 14px', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>{l.ip_address || '—'}</td>
+                <td style={{ padding: '9px 14px', fontSize: 12, color: '#991b1b' }}>{l.failure_reason || '—'}</td>
+              </tr>
+            ))}
+          />
+          <Pager total={data.total} skip={skip} limit={LIMIT} onPage={setSkip} />
+        </>
+      )}
+    </div>
+  );
+}
+
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 const TABS = [
   { id: 'companies',     label: 'Companies' },
   { id: 'users',         label: 'All Users' },
+  { id: 'subscriptions', label: 'Subscriptions' },
   { id: 'audit',         label: 'Audit Logs' },
   { id: 'health',        label: 'System Health' },
   { id: 'tickets',       label: 'Support Tickets' },
   { id: 'announcements', label: 'Announcements' },
+  { id: 'login-history', label: 'Login History' },
 ];
 
 export default function SuperAdminPage() {
@@ -935,10 +1300,12 @@ export default function SuperAdminPage() {
       {/* Tab panels */}
       {tab === 'companies'     && <CompaniesTab />}
       {tab === 'users'         && <UsersTab companies={companies} />}
+      {tab === 'subscriptions' && <SubscriptionsTab />}
       {tab === 'audit'         && <AuditLogsTab companies={companies} />}
       {tab === 'health'        && <HealthTab />}
       {tab === 'tickets'       && <TicketsTab companies={companies} />}
       {tab === 'announcements' && <AnnouncementsTab companies={companies} />}
+      {tab === 'login-history' && <LoginHistoryTab companies={companies} />}
     </div>
   );
 }

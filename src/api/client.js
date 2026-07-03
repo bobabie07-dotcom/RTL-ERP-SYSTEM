@@ -318,6 +318,25 @@ export const superAdminApi = {
   // Support tickets
   listSupportTickets:  (params)             => get('/api/super-admin/support-tickets', params),
   updateSupportTicket: (id, data)           => patch(`/api/super-admin/support-tickets/${id}`, data),
+
+  // Login history
+  getLoginHistory:     (params)             => get('/api/super-admin/login-history', params),
+
+  // Impersonation
+  impersonateUser:     (id)                 => post(`/api/super-admin/users/${id}/impersonate`, {}),
+
+  // Subscriptions
+  listSubscriptions:   (params)             => get('/api/super-admin/subscriptions', params),
+
+  // Bulk company actions
+  bulkCompanyAction:   (ids, action)        => post('/api/super-admin/companies/bulk', { ids, action }),
+
+  // Per-company data export
+  exportCompanyData:   (id)                 => download(`/api/super-admin/export/company/${id}`),
+
+  // Feature flags
+  getFeatureFlags:     (id)                 => get(`/api/super-admin/companies/${id}/feature-flags`),
+  updateFeatureFlags:  (id, flags)          => patch(`/api/super-admin/companies/${id}/feature-flags`, { flags }),
 };
 
 export const eggsApi = {

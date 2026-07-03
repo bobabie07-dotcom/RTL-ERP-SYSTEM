@@ -1,12 +1,15 @@
 from datetime import datetime, timedelta, timezone
-from io import StringIO
+from io import StringIO, BytesIO
 import csv
+import json
+import zipfile
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from config import settings
 from database import get_db
 from models import (
     Batch, Company, Farm, LoginHistory, Role,
@@ -50,6 +53,15 @@ class TicketUpdate(BaseModel):
     assigned_to: int | None = None
     priority: str | None = None
     resolution_notes: str | None = None
+
+
+class BulkCompanyAction(BaseModel):
+    ids: list[int]
+    action: str  # "suspend" | "activate"
+
+
+class FeatureFlagsUpdate(BaseModel):
+    flags: dict
 
 
 # ── Auth guard ────────────────────────────────────────────────────────────────
@@ -578,3 +590,267 @@ def update_support_ticket(
         "priority":         ticket.priority,
         "resolution_notes": ticket.resolution_notes,
     }
+
+
+# ── Login History ─────────────────────────────────────────────────────────────
+
+@router.get("/login-history")
+def list_login_history(
+    company_id: int | None  = Query(None),
+    success:    bool | None = Query(None),
+    skip:       int         = Query(0, ge=0),
+    limit:      int         = Query(100, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    q = db.query(LoginHistory)
+    if company_id:
+        uid_list = [r[0] for r in db.query(User.id).filter(User.company_id == company_id).all()]
+        if not uid_list:
+            return {"total": 0, "items": []}
+        q = q.filter(LoginHistory.user_id.in_(uid_list))
+    if success is not None:
+        q = q.filter(LoginHistory.success == success)
+    total = q.count()
+    logs  = q.order_by(LoginHistory.created_at.desc()).offset(skip).limit(limit).all()
+
+    uid_set = {l.user_id for l in logs}
+    name_map    = {}
+    cid_map     = {}
+    if uid_set:
+        for uid, fname, cid in db.query(User.id, User.full_name, User.company_id).filter(User.id.in_(uid_set)).all():
+            name_map[uid] = fname
+            cid_map[uid]  = cid
+    all_cids = set(cid_map.values()) - {None}
+    cname_map = dict(db.query(Company.id, Company.name).filter(Company.id.in_(all_cids)).all()) if all_cids else {}
+
+    return {
+        "total": total,
+        "items": [
+            {
+                "id":             l.id,
+                "user_id":        l.user_id,
+                "user_name":      name_map.get(l.user_id),
+                "company_id":     cid_map.get(l.user_id),
+                "company_name":   cname_map.get(cid_map.get(l.user_id)),
+                "success":        l.success,
+                "ip_address":     l.ip_address,
+                "user_agent":     l.user_agent,
+                "failure_reason": l.failure_reason,
+                "created_at":     l.created_at,
+            }
+            for l in logs
+        ],
+    }
+
+
+# ── Impersonation ─────────────────────────────────────────────────────────────
+
+@router.post("/users/{user_id}/impersonate")
+def impersonate_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot impersonate yourself")
+    if target.role_id == 6:
+        raise HTTPException(status_code=400, detail="Cannot impersonate another super admin")
+
+    from jose import jwt
+    expire = datetime.now(timezone.utc) + timedelta(hours=2)
+    token = jwt.encode(
+        {"sub": str(target.id), "exp": expire, "imp_by": current_user.id},
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+    db.add(UserAuditLog(
+        target_user_id=target.id,
+        performed_by=current_user.id,
+        action_type="impersonate",
+        notes=f"Super admin started impersonation session (2h token)",
+    ))
+    db.commit()
+
+    return {
+        "access_token": token,
+        "expires_in":   7200,
+        "user": {
+            "id":           target.id,
+            "full_name":    target.full_name,
+            "email":        target.email,
+            "role_id":      target.role_id,
+            "company_id":   target.company_id,
+        },
+    }
+
+
+# ── Subscriptions ─────────────────────────────────────────────────────────────
+
+_PLAN_PRICE = {"starter": 999, "standard": 2499, "enterprise": 4999}
+
+@router.get("/subscriptions")
+def list_subscriptions(
+    plan_name:  str | None = Query(None),
+    sub_status: str | None = Query(None, alias="status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    q = db.query(Subscription)
+    if plan_name:  q = q.filter(Subscription.plan_name == plan_name)
+    if sub_status: q = q.filter(Subscription.status == sub_status)
+    subs = q.order_by(Subscription.expires_at.asc()).all()
+
+    comp_rows = db.query(Company.id, Company.name, Company.status).all()
+    comp_map  = {r[0]: {"name": r[1], "status": r[2]} for r in comp_rows}
+
+    now     = _now_naive()
+    mrr     = sum(_PLAN_PRICE.get(s.plan_name, 0) for s in subs if s.status == "active")
+    expiring_soon = sum(1 for s in subs if s.status == "active" and s.expires_at and 0 <= (s.expires_at - now).days <= 30)
+
+    plan_counts: dict[str, int] = {}
+    items = []
+    for s in subs:
+        plan_counts[s.plan_name] = plan_counts.get(s.plan_name, 0) + 1
+        exp       = s.expires_at
+        days_left = (exp - now).days if exp else None
+        co        = comp_map.get(s.company_id, {})
+        items.append({
+            "id":             s.id,
+            "company_id":     s.company_id,
+            "company_name":   co.get("name"),
+            "company_status": co.get("status"),
+            "plan_name":      s.plan_name,
+            "status":         s.status,
+            "expires_at":     s.expires_at,
+            "created_at":     s.created_at,
+            "days_left":      days_left,
+        })
+
+    return {
+        "items": items,
+        "summary": {
+            "total":          len(items),
+            "active":         sum(1 for s in subs if s.status == "active"),
+            "expired":        sum(1 for s in subs if s.status == "expired"),
+            "expiring_soon":  expiring_soon,
+            "mrr_estimate":   mrr,
+            "plan_counts":    plan_counts,
+        },
+    }
+
+
+# ── Bulk Company Actions ───────────────────────────────────────────────────────
+
+@router.post("/companies/bulk")
+def bulk_company_action(
+    body: BulkCompanyAction,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    if body.action not in ("suspend", "activate"):
+        raise HTTPException(status_code=400, detail="action must be 'suspend' or 'activate'")
+    new_status = "suspended" if body.action == "suspend" else "active"
+    rows = db.query(Company).filter(Company.id.in_(body.ids)).all()
+    for c in rows:
+        c.status = new_status
+    db.commit()
+    return {"updated": len(rows), "status": new_status}
+
+
+# ── Per-Company Data Export ────────────────────────────────────────────────────
+
+@router.get("/export/company/{company_id}")
+def export_company_data(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    company = db.get(Company, company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    role_map = dict(db.query(Role.id, Role.name).all())
+
+    # Users CSV
+    users = db.query(User).filter(User.company_id == company_id, User.deleted_at.is_(None)).all()
+    ubuf  = StringIO()
+    w = csv.writer(ubuf)
+    w.writerow(["ID", "Full Name", "Email", "Username", "Role", "Status", "Farm ID", "Created At"])
+    for u in users:
+        w.writerow([u.id, u.full_name, u.email, u.username or "", role_map.get(u.role_id, ""), u.status,
+                    u.farm_id or "", u.created_at.date().isoformat() if u.created_at else ""])
+
+    # Farms CSV
+    farms    = db.query(Farm).filter(Farm.company_id == company_id).all()
+    farm_ids = [f.id for f in farms]
+    fbuf     = StringIO()
+    w2 = csv.writer(fbuf)
+    w2.writerow(["ID", "Name", "Created At"])
+    for f in farms:
+        w2.writerow([f.id, f.name, f.created_at.date().isoformat() if f.created_at else ""])
+
+    # Batches CSV
+    bbuf = StringIO()
+    w3 = csv.writer(bbuf)
+    w3.writerow(["ID", "Batch No", "Farm ID", "Status", "Created At"])
+    if farm_ids:
+        for b in db.query(Batch).filter(Batch.farm_id.in_(farm_ids)).all():
+            w3.writerow([b.id, b.batch_no, b.farm_id, b.status,
+                         b.created_at.date().isoformat() if b.created_at else ""])
+
+    safe = company.name.replace(" ", "_").replace("/", "_")[:30]
+    zip_buf = BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"{safe}_users.csv",   ubuf.getvalue())
+        zf.writestr(f"{safe}_farms.csv",   fbuf.getvalue())
+        zf.writestr(f"{safe}_batches.csv", bbuf.getvalue())
+    zip_buf.seek(0)
+
+    return Response(
+        content=zip_buf.read(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={safe}_export.zip"},
+    )
+
+
+# ── Feature Flags ─────────────────────────────────────────────────────────────
+
+@router.get("/companies/{company_id}/feature-flags")
+def get_feature_flags(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    company = db.get(Company, company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    raw   = getattr(company, "feature_flags", None)
+    flags = json.loads(raw) if raw else {}
+    return {"company_id": company_id, "company_name": company.name, "flags": flags}
+
+
+@router.patch("/companies/{company_id}/feature-flags")
+def update_feature_flags(
+    company_id: int,
+    body: FeatureFlagsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    company = db.get(Company, company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    company.feature_flags = json.dumps(body.flags)
+    db.commit()
+    return {"company_id": company_id, "flags": body.flags}

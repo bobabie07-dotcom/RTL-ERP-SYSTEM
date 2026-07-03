@@ -391,6 +391,8 @@ def run_startup_migrations():
                 INDEX idx_ann_company (company_id)
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
+        _safe_add_column(conn, "ALTER TABLE companies ADD COLUMN feature_flags TEXT DEFAULT NULL")
+
         conn.execute(text("""
             CREATE OR REPLACE VIEW v_batch_pnl AS
             SELECT

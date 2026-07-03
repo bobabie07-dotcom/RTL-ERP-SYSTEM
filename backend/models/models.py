@@ -23,6 +23,7 @@ class Company(Base):
     name           = Column(String(150), nullable=False)
     business_model = Column(String(20), nullable=False, default="broiler")  # broiler, rtl, layer
     status         = Column(String(50), nullable=False, default="active")   # active, suspended
+    feature_flags  = Column(Text, nullable=True)                            # JSON: per-company feature toggles
     created_at     = Column(DateTime, default=func.now())
 
     farms: list[Farm] = relationship("Farm", back_populates="company")
