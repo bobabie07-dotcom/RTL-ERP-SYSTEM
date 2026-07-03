@@ -320,6 +320,7 @@ export const superAdminApi = {
   // Support tickets
   listSupportTickets:  (params)             => get('/api/super-admin/support-tickets', params),
   updateSupportTicket: (id, data)           => patch(`/api/super-admin/support-tickets/${id}`, data),
+  quickTicketStatus:   (id, status)         => patch(`/api/super-admin/support-tickets/${id}`, { status }),
 
   // Login history
   getLoginHistory:     (params)             => get('/api/super-admin/login-history', params),

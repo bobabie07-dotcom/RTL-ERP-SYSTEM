@@ -764,33 +764,68 @@ function HealthTab() {
 
 // ── Support Tickets Tab ───────────────────────────────────────────────────────
 
+function DetailRow({ label, value }) {
+  if (!value) return null;
+  return (
+    <div style={{ display: 'flex', gap: 10, marginBottom: 10, fontSize: 13 }}>
+      <span style={{ minWidth: 130, fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0 }}>{label}</span>
+      <span style={{ color: 'var(--text-body)', wordBreak: 'break-word' }}>{value}</span>
+    </div>
+  );
+}
+
 function TicketsTab({ companies }) {
-  const [data,      setData]      = useState({ total: 0, items: [] });
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState('');
-  const [stFilter,  setStFilter]  = useState('');
-  const [priFilter, setPriFilter] = useState('');
-  const [coFilter,  setCoFilter]  = useState('');
-  const [skip,      setSkip]      = useState(0);
-  const [editTkt,   setEditTkt]   = useState(null);
-  const [tktForm,   setTktForm]   = useState({ status: '', priority: '', resolution_notes: '' });
-  const [tktSaving, setTktSaving] = useState(false);
-  const [tktErr,    setTktErr]    = useState('');
+  const [data,            setData]            = useState({ total: 0, summary: null, items: [] });
+  const [loading,         setLoading]         = useState(true);
+  const [error,           setError]           = useState('');
+  const [stFilter,        setStFilter]        = useState('');
+  const [priFilter,       setPriFilter]       = useState('');
+  const [coFilter,        setCoFilter]        = useState('');
+  const [search,          setSearch]          = useState('');
+  const [committedSearch, setCommittedSearch] = useState('');
+  const [skip,            setSkip]            = useState(0);
+  const [viewTkt,         setViewTkt]         = useState(null);
+  const [editTkt,         setEditTkt]         = useState(null);
+  const [tktForm,         setTktForm]         = useState({ status: '', priority: '', resolution_notes: '', escalation_notes: '', assigned_to: '' });
+  const [tktSaving,       setTktSaving]       = useState(false);
+  const [tktErr,          setTktErr]          = useState('');
+  const [quickBusy,       setQuickBusy]       = useState(null);
+  const [admins,          setAdmins]          = useState([]);
   const LIMIT = 50;
+
+  useEffect(() => {
+    superAdminApi.listAllUsers({ role_id: 6, limit: 50 })
+      .then(d => setAdmins(d.items || []))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
-    superAdminApi.listSupportTickets({ status: stFilter || undefined, priority: priFilter || undefined, company_id: coFilter || undefined, skip, limit: LIMIT })
+    superAdminApi.listSupportTickets({
+      status:     stFilter         || undefined,
+      priority:   priFilter        || undefined,
+      company_id: coFilter         || undefined,
+      search:     committedSearch  || undefined,
+      skip, limit: LIMIT,
+    })
       .then(d => { setData(d); setError(''); })
       .catch(err => setError(err.message || 'Failed to load tickets'))
       .finally(() => setLoading(false));
-  }, [stFilter, priFilter, coFilter, skip]);
+  }, [stFilter, priFilter, coFilter, committedSearch, skip]);
 
   useEffect(() => { load(); }, [load]);
 
+  const applySearch = () => { setCommittedSearch(search); setSkip(0); };
+
   const openEdit = (t) => {
     setEditTkt(t);
-    setTktForm({ status: t.status, priority: t.priority, resolution_notes: t.resolution_notes || '' });
+    setTktForm({
+      status:           t.status,
+      priority:         t.priority,
+      resolution_notes: t.resolution_notes  || '',
+      escalation_notes: t.escalation_notes  || '',
+      assigned_to:      t.assigned_to       || '',
+    });
     setTktErr('');
   };
 
@@ -798,18 +833,50 @@ function TicketsTab({ companies }) {
     e.preventDefault();
     setTktSaving(true); setTktErr('');
     try {
-      await superAdminApi.updateSupportTicket(editTkt.id, tktForm);
+      const payload = { ...tktForm };
+      if (payload.assigned_to === '') payload.assigned_to = null;
+      else if (payload.assigned_to) payload.assigned_to = Number(payload.assigned_to);
+      await superAdminApi.updateSupportTicket(editTkt.id, payload);
       setEditTkt(null);
       load();
     } catch (err) { setTktErr(err.message || 'Failed to update ticket.'); }
     finally { setTktSaving(false); }
   };
 
+  const handleQuick = async (t, newStatus) => {
+    setQuickBusy(`${t.id}-${newStatus}`);
+    try {
+      await superAdminApi.quickTicketStatus(t.id, newStatus);
+      load();
+    } catch (err) { setError(err.message || 'Failed to update'); }
+    finally { setQuickBusy(null); }
+  };
+
   const tf = k => e => setTktForm(p => ({ ...p, [k]: e.target.value }));
+  const s  = data.summary;
+
+  const isClosed = t => t.status === 'closed';
+  const isResolved = t => t.status === 'resolved' || t.status === 'closed';
 
   return (
     <div>
+      {/* KPI cards */}
+      {s && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <KpiCard label="New"              value={s.new}              color={s.new > 0 ? 'var(--text-brand)' : undefined} />
+          <KpiCard label="Open / In Progress" value={s.open_in_progress} color={s.open_in_progress > 0 ? '#92400e' : undefined} />
+          <KpiCard label="Critical (open)"  value={s.critical}         color={s.critical > 0 ? 'var(--danger)' : undefined} />
+          <KpiCard label="Resolved Today"   value={s.resolved_today}   color={s.resolved_today > 0 ? 'var(--success)' : undefined} />
+        </div>
+      )}
+
+      {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ flex: 2, minWidth: 180 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Search</label>
+          <input style={FIELD_STYLE} placeholder="Ticket # or subject…" value={search}
+            onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && applySearch()} />
+        </div>
         <div style={{ flex: 1, minWidth: 120 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Status</label>
           <select style={SELECT_STYLE} value={stFilter} onChange={e => { setStFilter(e.target.value); setSkip(0); }}>
@@ -839,6 +906,7 @@ function TicketsTab({ companies }) {
             {companies.map(c => <option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
           </select>
         </div>
+        <Btn variant="primary" onClick={applySearch}>Search</Btn>
       </div>
 
       <ErrBanner msg={error} />
@@ -846,65 +914,150 @@ function TicketsTab({ companies }) {
         <>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>{data.total} ticket(s)</div>
           <STable
-            headers={['Ticket #', 'Company', 'Subject', 'Category', 'Priority', 'Status', 'Submitted By', 'Date', '']}
+            headers={['Ticket #', 'Company', 'Subject', 'Priority', 'Status', 'Assignee', 'Submitted By', 'Date', '']}
             empty="No tickets found."
-            rows={data.items.map(t => (
-              <tr key={t.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-brand)' }}>{t.ticket_no}</td>
-                <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>
-                  {t.company_name
-                    ? <span>{t.company_name}<span style={{ marginLeft: 4, color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{t.company_id}</span></span>
-                    : '—'}
-                </td>
-                <td style={{ padding: '10px 14px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.subject}>{t.subject}</td>
-                <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontSize: 12 }}>{t.category}</td>
-                <td style={{ padding: '10px 14px' }}><Badge value={t.priority} map={PRIORITY_COLOR} /></td>
-                <td style={{ padding: '10px 14px' }}><Badge value={t.status} /></td>
-                <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>{t.submitter_name || `#${t.user_id}`}</td>
-                <td style={{ padding: '10px 14px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(t.created_at)}</td>
-                <td style={{ padding: '10px 14px' }}><Btn onClick={() => openEdit(t)}>Update</Btn></td>
-              </tr>
-            ))}
+            rows={data.items.map(t => {
+              const isCrit = t.priority === 'critical' && !isResolved(t);
+              return (
+                <tr key={t.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: isCrit ? '#fff7f7' : 'transparent' }}>
+                  <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-brand)', whiteSpace: 'nowrap' }}>{t.ticket_no}</td>
+                  <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>
+                    {t.company_name
+                      ? <span>{t.company_name}<span style={{ marginLeft: 4, color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{t.company_id}</span></span>
+                      : '—'}
+                  </td>
+                  <td style={{ padding: '10px 14px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.subject}>{t.subject}</td>
+                  <td style={{ padding: '10px 14px' }}><Badge value={t.priority} map={PRIORITY_COLOR} /></td>
+                  <td style={{ padding: '10px 14px' }}><Badge value={t.status} /></td>
+                  <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)' }}>{t.assignee_name || <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}</td>
+                  <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>{t.submitter_name || `#${t.user_id}`}</td>
+                  <td style={{ padding: '10px 14px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(t.created_at)}</td>
+                  <td style={{ padding: '10px 14px' }}>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <Btn onClick={() => setViewTkt(t)}>View</Btn>
+                      <Btn onClick={() => openEdit(t)}>Edit</Btn>
+                      {!isResolved(t) && (
+                        <Btn
+                          disabled={quickBusy === `${t.id}-resolved`}
+                          onClick={() => handleQuick(t, 'resolved')}
+                        >
+                          {quickBusy === `${t.id}-resolved` ? '…' : '✓ Resolve'}
+                        </Btn>
+                      )}
+                      {!isClosed(t) && (
+                        <Btn
+                          variant="danger"
+                          disabled={quickBusy === `${t.id}-closed`}
+                          onClick={() => handleQuick(t, 'closed')}
+                        >
+                          {quickBusy === `${t.id}-closed` ? '…' : 'Close'}
+                        </Btn>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           />
           <Pager total={data.total} skip={skip} limit={LIMIT} onPage={setSkip} />
         </>
       )}
 
+      {/* View modal */}
+      {viewTkt && (
+        <ModalShell title={`Ticket ${viewTkt.ticket_no}`} onClose={() => setViewTkt(null)}>
+          <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Badge value={viewTkt.priority} map={PRIORITY_COLOR} />
+            <Badge value={viewTkt.status} />
+            {viewTkt.company_name && (
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{viewTkt.company_name} #{viewTkt.company_id}</span>
+            )}
+          </div>
+          <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700, color: 'var(--text-strong)' }}>{viewTkt.subject}</h4>
+          {viewTkt.description && (
+            <div style={{ marginBottom: 16, padding: '12px 14px', background: '#f9fafb', borderRadius: 8, fontSize: 13, color: 'var(--text-body)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+              {viewTkt.description}
+            </div>
+          )}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 14 }}>
+            <DetailRow label="Category"        value={viewTkt.category} />
+            <DetailRow label="Affected Module" value={viewTkt.affected_module} />
+            <DetailRow label="Department"      value={viewTkt.department} />
+            <DetailRow label="Farm ID"         value={viewTkt.farm_id ? `#${viewTkt.farm_id}` : null} />
+            <DetailRow label="Contact Info"    value={viewTkt.contact_info} />
+            <DetailRow label="Submitted By"    value={viewTkt.submitter_name} />
+            <DetailRow label="Assigned To"     value={viewTkt.assignee_name || 'Unassigned'} />
+          </div>
+          {viewTkt.resolution_notes && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#065f46', marginBottom: 4 }}>Resolution Notes</div>
+              <div style={{ fontSize: 13, color: 'var(--text-body)', background: '#f0fdf4', padding: '10px 12px', borderRadius: 6, whiteSpace: 'pre-wrap' }}>{viewTkt.resolution_notes}</div>
+            </div>
+          )}
+          {viewTkt.escalation_notes && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>Escalation Notes</div>
+              <div style={{ fontSize: 13, color: 'var(--text-body)', background: '#fffbeb', padding: '10px 12px', borderRadius: 6, whiteSpace: 'pre-wrap' }}>{viewTkt.escalation_notes}</div>
+            </div>
+          )}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 8, display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
+            <span>Created: {fmtDateTime(viewTkt.created_at)}</span>
+            <span>Updated: {fmtDateTime(viewTkt.updated_at)}</span>
+            {viewTkt.resolved_at && <span style={{ color: '#065f46' }}>Resolved: {fmtDateTime(viewTkt.resolved_at)}</span>}
+            {viewTkt.closed_at   && <span style={{ color: '#6b7280' }}>Closed: {fmtDateTime(viewTkt.closed_at)}</span>}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <Btn onClick={() => { setViewTkt(null); openEdit(viewTkt); }}>Edit This Ticket</Btn>
+            <Btn variant="primary" onClick={() => setViewTkt(null)}>Close</Btn>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Edit modal */}
       {editTkt && (
-        <ModalShell title={`Update Ticket ${editTkt.ticket_no}`} onClose={() => setEditTkt(null)}>
+        <ModalShell title={`Edit Ticket ${editTkt.ticket_no}`} onClose={() => setEditTkt(null)}>
           <form onSubmit={handleTktSave}>
             <ErrBanner msg={tktErr} />
-            <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--text-body)' }}>{editTkt.subject}</p>
-            <FormField label="Status">
-              <select style={SELECT_STYLE} value={tktForm.status} onChange={tf('status')}>
-                <option value="new">New</option>
-                <option value="open">Open</option>
-                <option value="in_progress">In Progress</option>
-                <option value="waiting_on_user">Waiting on User</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
-              </select>
-            </FormField>
-            <FormField label="Priority">
-              <select style={SELECT_STYLE} value={tktForm.priority} onChange={tf('priority')}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
+            <p style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{editTkt.subject}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+              <FormField label="Status">
+                <select style={SELECT_STYLE} value={tktForm.status} onChange={tf('status')}>
+                  <option value="new">New</option>
+                  <option value="open">Open</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="waiting_on_user">Waiting on User</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </FormField>
+              <FormField label="Priority">
+                <select style={SELECT_STYLE} value={tktForm.priority} onChange={tf('priority')}>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </FormField>
+            </div>
+            <FormField label="Assign To">
+              <select style={SELECT_STYLE} value={tktForm.assigned_to} onChange={tf('assigned_to')}>
+                <option value="">— Unassigned —</option>
+                {admins.map(a => <option key={a.id} value={a.id}>{a.full_name}</option>)}
               </select>
             </FormField>
             <FormField label="Resolution Notes">
-              <textarea
-                rows={3}
-                value={tktForm.resolution_notes}
-                onChange={tf('resolution_notes')}
-                placeholder="Internal notes or resolution details…"
-                style={{ ...FIELD_STYLE, height: 'auto', padding: '8px 10px', resize: 'vertical' }}
-              />
+              <textarea rows={3} value={tktForm.resolution_notes} onChange={tf('resolution_notes')}
+                placeholder="Steps taken, fix applied, or answer provided…"
+                style={{ ...FIELD_STYLE, height: 'auto', padding: '8px 10px', resize: 'vertical' }} />
+            </FormField>
+            <FormField label="Escalation Notes">
+              <textarea rows={2} value={tktForm.escalation_notes} onChange={tf('escalation_notes')}
+                placeholder="Escalation context, next steps, or handoff notes…"
+                style={{ ...FIELD_STYLE, height: 'auto', padding: '8px 10px', resize: 'vertical' }} />
             </FormField>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <Btn onClick={() => setEditTkt(null)}>Cancel</Btn>
-              <Btn type="submit" variant="primary" disabled={tktSaving}>{tktSaving ? 'Saving…' : 'Save'}</Btn>
+              <Btn type="submit" variant="primary" disabled={tktSaving}>{tktSaving ? 'Saving…' : 'Save Changes'}</Btn>
             </div>
           </form>
         </ModalShell>

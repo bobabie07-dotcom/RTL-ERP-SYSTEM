@@ -53,6 +53,7 @@ class TicketUpdate(BaseModel):
     assigned_to: int | None = None
     priority: str | None = None
     resolution_notes: str | None = None
+    escalation_notes: str | None = None
 
 
 class BulkCompanyAction(BaseModel):
@@ -514,16 +515,32 @@ def list_support_tickets(
     tkt_status: str | None = Query(None, alias="status"),
     priority:   str | None = Query(None),
     company_id: int | None = Query(None),
+    search:     str | None = Query(None),
     skip:       int        = Query(0, ge=0),
     limit:      int        = Query(50, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_super_admin(current_user)
+
+    # Summary KPI counts (unfiltered — whole queue health)
+    now        = _now_naive()
+    today      = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    open_stats = ("open", "in_progress", "new", "waiting_on_user")
+    summary = {
+        "new":            db.query(func.count(SupportTicket.id)).filter(SupportTicket.status == "new").scalar() or 0,
+        "open_in_progress": db.query(func.count(SupportTicket.id)).filter(SupportTicket.status.in_(("open", "in_progress"))).scalar() or 0,
+        "critical":       db.query(func.count(SupportTicket.id)).filter(SupportTicket.priority == "critical", SupportTicket.status.in_(open_stats)).scalar() or 0,
+        "resolved_today": db.query(func.count(SupportTicket.id)).filter(SupportTicket.resolved_at >= today).scalar() or 0,
+    }
+
     q = db.query(SupportTicket)
     if tkt_status: q = q.filter(SupportTicket.status == tkt_status)
     if priority:   q = q.filter(SupportTicket.priority == priority)
     if company_id: q = q.filter(SupportTicket.company_id == company_id)
+    if search:
+        like = f"%{search}%"
+        q = q.filter((SupportTicket.ticket_no.ilike(like)) | (SupportTicket.subject.ilike(like)))
     total   = q.count()
     tickets = q.order_by(SupportTicket.created_at.desc()).offset(skip).limit(limit).all()
 
@@ -537,7 +554,8 @@ def list_support_tickets(
     name_map = dict(db.query(User.id, User.full_name).filter(User.id.in_(user_ids)).all()) if user_ids else {}
 
     return {
-        "total": total,
+        "total":   total,
+        "summary": summary,
         "items": [
             {
                 "id":               t.id,
@@ -547,15 +565,22 @@ def list_support_tickets(
                 "user_id":          t.user_id,
                 "submitter_name":   name_map.get(t.user_id),
                 "subject":          t.subject,
+                "description":      t.description,
                 "category":         t.category,
                 "priority":         t.priority,
                 "status":           t.status,
+                "affected_module":  t.affected_module,
+                "contact_info":     t.contact_info,
+                "department":       t.department,
+                "farm_id":          t.farm_id,
                 "assigned_to":      t.assigned_to,
                 "assignee_name":    name_map.get(t.assigned_to),
-                "affected_module":  t.affected_module,
                 "resolution_notes": t.resolution_notes,
+                "escalation_notes": t.escalation_notes,
                 "created_at":       t.created_at,
                 "updated_at":       t.updated_at,
+                "resolved_at":      t.resolved_at,
+                "closed_at":        t.closed_at,
             }
             for t in tickets
         ],
@@ -581,6 +606,7 @@ def update_support_ticket(
     if body.assigned_to      is not None: ticket.assigned_to      = body.assigned_to
     if body.priority         is not None: ticket.priority         = body.priority
     if body.resolution_notes is not None: ticket.resolution_notes = body.resolution_notes
+    if body.escalation_notes is not None: ticket.escalation_notes = body.escalation_notes
     db.commit()
     db.refresh(ticket)
     return {
