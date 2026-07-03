@@ -83,7 +83,7 @@ function STable({ headers, rows, empty = 'No data.' }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
         <thead>
           <tr style={{ background: 'var(--gray-50)', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontWeight: 600 }}>
-            {headers.map(h => <th key={h} style={{ padding: '10px 14px' }}>{h}</th>)}
+            {headers.map((h, i) => <th key={i} style={{ padding: '10px 14px' }}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
