@@ -189,13 +189,10 @@ export function AppLayout({ children }) {
     if (item.key === 'helpdesk')   return hasRole(1, 2, 5);
     if (item.key === 'support')    return hasRole(3, 4);
 
-    if (farmType === 'broiler') {
+    if (farmType !== 'layer') {
       if (['egg_collections', 'egg_gradings', 'egg_sales', 'spent_hens'].includes(item.key)) return false;
     } else if (farmType === 'layer') {
       if (item.key === 'batches') return false;
-    } else {
-      // rtl or others: hide spent hens
-      if (item.key === 'spent_hens') return false;
     }
     return true;
   });

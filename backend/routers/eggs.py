@@ -14,6 +14,7 @@ from models.models import (
     EggSalesOrder,
     Batch,
     BatchDailyLog,
+    Farm,
     House,
     User,
 )
@@ -39,6 +40,18 @@ def _verify_farm_access(farm_id: int, current_user: User):
         )
 
 
+def _require_layer_farm(db: Session, farm_id: int, current_user: User):
+    _verify_farm_access(farm_id, current_user)
+    farm = db.get(Farm, farm_id)
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    if current_user.role_id != 6 and farm.company_id != current_user.company_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this farm's operations")
+    if (farm.farm_type or "broiler") != "layer":
+        raise HTTPException(status_code=400, detail="Egg operations are only available for layer farms.")
+    return farm
+
+
 # ── Egg Collections ──────────────────────────────────────────────────────────
 
 
@@ -51,7 +64,7 @@ def list_collections(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_farm_access(farm_id, current_user)
+    _require_layer_farm(db, farm_id, current_user)
 
     q = db.query(EggCollection).filter(
         EggCollection.company_id == current_user.company_id,
@@ -90,7 +103,7 @@ def create_collection(
     if not batch:
         raise HTTPException(status_code=404, detail="Active batch not found")
 
-    _verify_farm_access(batch.farm_id, current_user)
+    _require_layer_farm(db, batch.farm_id, current_user)
 
     # Save collection
     db_collection = EggCollection(
@@ -120,7 +133,7 @@ def list_gradings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_farm_access(farm_id, current_user)
+    _require_layer_farm(db, farm_id, current_user)
 
     return (
         db.query(EggGrading)
@@ -154,7 +167,7 @@ def create_grading(
     if not collection:
         raise HTTPException(status_code=404, detail="Egg collection not found")
 
-    _verify_farm_access(collection.farm_id, current_user)
+    _require_layer_farm(db, collection.farm_id, current_user)
 
     # Sum graded eggs
     graded_sum = (
@@ -235,7 +248,7 @@ def get_inventory(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_farm_access(farm_id, current_user)
+    _require_layer_farm(db, farm_id, current_user)
 
     return (
         db.query(EggInventory)
@@ -256,7 +269,7 @@ def list_sales(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_farm_access(farm_id, current_user)
+    _require_layer_farm(db, farm_id, current_user)
 
     return (
         db.query(EggSalesOrder)
@@ -280,7 +293,7 @@ def create_sale(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("write", "sales")),
 ):
-    _verify_farm_access(farm_id, current_user)
+    _require_layer_farm(db, farm_id, current_user)
 
     # Determine multiplier by package type
     multiplier = 30 if body.package_type == "tray" else 360
@@ -370,7 +383,7 @@ def update_sale_status(
     if not sale:
         raise HTTPException(status_code=404, detail="Egg sales order not found")
 
-    _verify_farm_access(sale.farm_id, current_user)
+    _require_layer_farm(db, sale.farm_id, current_user)
 
     # Handle cancellation (revert inventory)
     if status == "cancelled" and sale.status != "cancelled":
@@ -420,7 +433,7 @@ def get_egg_metrics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_farm_access(farm_id, current_user)
+    _require_layer_farm(db, farm_id, current_user)
 
     # Total eggs collected
     total_col = (
