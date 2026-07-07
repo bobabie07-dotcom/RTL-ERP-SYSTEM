@@ -212,7 +212,7 @@ function UserForm({ form, setForm, formErr, saving, editUser, farms, roleOptions
       </div>
       {!editUser && (
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#1e40af', marginTop: 4, marginBottom: 14 }}>
-          Default password: <strong>Welcome@123</strong> — user must change on first login.
+          A one-time temporary password will be generated. The user must change it on first login.
         </div>
       )}
       <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
@@ -354,7 +354,7 @@ export default function UserManagementPage() {
           phone:       form.phone      || undefined,
           company_id:  (me?.role_id === 6 && form.company_id) ? parseInt(form.company_id) : undefined,
         });
-        setTempPwd(res.temp_password || 'Welcome@123');
+        setTempPwd(res.temp_password || '');
         showToast(`${form.full_name} created`);
         setAddModal(false);
       }
@@ -392,7 +392,7 @@ export default function UserManagementPage() {
     if (!window.confirm(`Reset password for ${u.full_name}? They will receive a temporary password.`)) return;
     try {
       const res = await usersApi.resetPassword(u.id);
-      setTempPwd(res.temp_password || 'Welcome@123');
+      setTempPwd(res.temp_password || '');
       showToast(`Password reset for ${u.full_name}`);
       load();
     } catch (e) {

@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+import secrets
+import string
 from typing import Optional
 
 import bcrypt
@@ -10,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
-from models import LoginHistory, Subscription, User, Company
+from models import Farm, LoginHistory, Subscription, User, Company
 from schemas.schemas import (
     ChangePasswordRequest, FirstPasswordRequest, LoginRequest, TokenResponse,
     UserCreate, UserOut, UserUpdate,
@@ -20,9 +22,22 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 bearer = HTTPBearer()
 
-DEFAULT_PASSWORD = "Welcome@123"
+TEMP_PASSWORD_LENGTH = 14
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 30
+
+
+def generate_temp_password(length: int = TEMP_PASSWORD_LENGTH) -> str:
+    alphabet = string.ascii_letters + string.digits + "!@#$%&*"
+    while True:
+        password = "".join(secrets.choice(alphabet) for _ in range(length))
+        if (
+            any(c.islower() for c in password)
+            and any(c.isupper() for c in password)
+            and any(c.isdigit() for c in password)
+            and any(c in "!@#$%&*" for c in password)
+        ):
+            return password
 
 
 def _verify(plain: str, hashed: str) -> bool:
@@ -304,11 +319,16 @@ def create_user(
     if body.username and db.query(User).filter(User.username == body.username).first():
         raise HTTPException(status_code=400, detail="Username already taken")
     company_id = body.company_id if (current_user.role_id == 6 and body.company_id) else current_user.company_id
+    if body.farm_id:
+        farm = db.get(Farm, body.farm_id)
+        if not farm or farm.company_id != company_id:
+            raise HTTPException(status_code=400, detail="Farm does not belong to this company")
+    temp_password = generate_temp_password()
     user = User(
         full_name=body.full_name,
         email=body.email,
         username=body.username or None,
-        password_hash=_hash(DEFAULT_PASSWORD),
+        password_hash=_hash(temp_password),
         role_id=body.role_id,
         company_id=company_id,
         farm_id=body.farm_id,
@@ -334,7 +354,7 @@ def create_user(
         "is_active":      user.is_active,
         "is_first_login": user.is_first_login,
         "created_at":     user.created_at,
-        "temp_password":  DEFAULT_PASSWORD,
+        "temp_password":  temp_password,
     }
 
 
@@ -348,7 +368,16 @@ def update_user(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if current_user.role_id != 6 and user.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     data = body.model_dump(exclude_none=True)
+    if "company_id" in data and current_user.role_id != 6:
+        data.pop("company_id")
+    if data.get("farm_id"):
+        target_company = data.get("company_id") or user.company_id
+        farm = db.get(Farm, data["farm_id"])
+        if not farm or farm.company_id != target_company:
+            raise HTTPException(status_code=400, detail="Farm does not belong to this company")
     for f in ("username", "department", "phone", "position", "employee_id"):
         if f in data and data[f] == "":
             data[f] = None
@@ -376,13 +405,16 @@ def reset_user_password(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if current_user.role_id != 6 and user.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Use the change password form to update your own password")
-    user.password_hash          = _hash(DEFAULT_PASSWORD)
+    temp_password = generate_temp_password()
+    user.password_hash          = _hash(temp_password)
     user.is_first_login         = True
     user.last_password_change_at = datetime.now(timezone.utc)
     db.commit()
-    return {"message": "Password reset successfully", "temp_password": DEFAULT_PASSWORD}
+    return {"message": "Password reset successfully", "temp_password": temp_password}
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -396,5 +428,7 @@ def delete_user(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if current_user.role_id != 6 and user.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     db.delete(user)
     db.commit()

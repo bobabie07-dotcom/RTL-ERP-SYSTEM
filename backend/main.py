@@ -6,6 +6,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from config import settings
+
+settings.validate_runtime()
+
 from database import engine
 from routers import alerts, auth, batch_finance, batch_plans, batches, dashboard, farms, feed, harvest, health, inventory, maintenance, mortality, procurement, reports, sales, spent_hens, support, users, super_admin, eggs
 
@@ -440,8 +443,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[],
-    allow_origin_regex=".*",  # allow any origin; auth is JWT-gated
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -457,11 +459,11 @@ async def _bare_500_handler(request: Request, exc: Exception):
         "Access-Control-Allow-Origin": origin or "*",
         "Access-Control-Allow-Credentials": "true",
     }
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"{type(exc).__name__}: {exc}"},
-        headers=cors_headers,
-    )
+    logger.exception("Unhandled request error: %s %s", request.method, request.url.path)
+    detail = "Internal server error"
+    if not settings.is_production:
+        detail = f"{type(exc).__name__}: {exc}"
+    return JSONResponse(status_code=500, content={"detail": detail}, headers=cors_headers)
 
 
 API = "/api"
@@ -488,7 +490,8 @@ app.include_router(eggs.router,         prefix=API)
 app.include_router(spent_hens.router,   prefix=API)
 
 
-run_startup_migrations()
+if settings.RUN_STARTUP_MIGRATIONS:
+    run_startup_migrations()
 
 
 @app.get("/api/health-check")

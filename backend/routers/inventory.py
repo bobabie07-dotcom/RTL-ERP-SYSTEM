@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import InventoryCategory, InventoryItem, InventoryMovement, Supplier
+from models import Farm, InventoryCategory, InventoryItem, InventoryMovement, Supplier
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import (
     InventoryCategoryCreate, InventoryCategoryOut,
@@ -15,6 +15,32 @@ from schemas.schemas import (
 from utils import check_and_create_inventory_alerts
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
+
+
+def _can_access_farm(current_user, farm_id: int, db: Session) -> bool:
+    farm = db.get(Farm, farm_id)
+    if not farm:
+        return False
+    if current_user.role_id == 6:
+        return True
+    if farm.company_id != current_user.company_id:
+        return False
+    if current_user.role_id in (1, 5):
+        return True
+    return farm_id == current_user.farm_id
+
+
+def _get_item_for_user(item_id: int, current_user, db: Session) -> InventoryItem:
+    item = db.get(InventoryItem, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if current_user.role_id == 6:
+        return item
+    if item.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied to this inventory item")
+    if current_user.role_id not in (1, 5) and item.farm_id != current_user.farm_id:
+        raise HTTPException(status_code=403, detail="Access denied to this inventory item")
+    return item
 
 
 # ── Categories ────────────────────────────────────────────────────────────────
@@ -80,7 +106,12 @@ def create_item(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "inventory")),
 ):
-    item = InventoryItem(**body.model_dump(), company_id=current_user.company_id)
+    farm = db.get(Farm, body.farm_id)
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    if not _can_access_farm(current_user, body.farm_id, db):
+        raise HTTPException(status_code=403, detail="Access denied to this farm")
+    item = InventoryItem(**body.model_dump(), company_id=farm.company_id)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -94,9 +125,7 @@ def update_item(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "inventory")),
 ):
-    item = db.get(InventoryItem, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    item = _get_item_for_user(item_id, current_user, db)
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(item, field, value)
     db.commit()
@@ -108,11 +137,9 @@ def update_item(
 def delete_item(
     item_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("delete")),
+    current_user=Depends(require_permission("delete")),
 ):
-    item = db.get(InventoryItem, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    item = _get_item_for_user(item_id, current_user, db)
     db.delete(item)
     db.commit()
 
@@ -124,10 +151,16 @@ def list_movements(
     item_id: Optional[int] = Query(None),
     limit:   int = Query(50, le=200),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
     q = db.query(InventoryMovement)
+    if current_user.role_id != 6:
+        q = q.join(InventoryItem, InventoryMovement.item_id == InventoryItem.id)
+        q = q.filter(InventoryItem.company_id == current_user.company_id)
+        if current_user.role_id not in (1, 5):
+            q = q.filter(InventoryItem.farm_id == current_user.farm_id)
     if item_id:
+        _get_item_for_user(item_id, current_user, db)
         q = q.filter(InventoryMovement.item_id == item_id)
     return q.order_by(InventoryMovement.created_at.desc()).limit(limit).all()
 
@@ -138,9 +171,7 @@ def record_movement(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    item = db.get(InventoryItem, body.item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    item = _get_item_for_user(body.item_id, current_user, db)
 
     movement = InventoryMovement(**body.model_dump(), created_by=current_user.id)
     db.add(movement)
@@ -163,9 +194,7 @@ def reserve_stock(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "inventory")),
 ):
-    item = db.get(InventoryItem, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    item = _get_item_for_user(item_id, current_user, db)
     if float(body.qty) > item.qty_available:
         raise HTTPException(
             status_code=400,
@@ -193,9 +222,7 @@ def release_stock(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "inventory")),
 ):
-    item = db.get(InventoryItem, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    item = _get_item_for_user(item_id, current_user, db)
     release_qty = min(float(body.qty), float(item.qty_reserved))
     item.qty_reserved = max(0.0, float(item.qty_reserved) - release_qty)
     db.add(InventoryMovement(
@@ -224,8 +251,10 @@ def check_inventory_alerts(
     current_user=Depends(get_current_user),
 ):
     target_farm_id = body.farm_id
-    if current_user.role_id not in (1, 5):
+    if current_user.role_id not in (1, 5, 6):
         target_farm_id = current_user.farm_id
+    elif not _can_access_farm(current_user, target_farm_id, db):
+        raise HTTPException(status_code=403, detail="Access denied to this farm")
     items = db.query(InventoryItem).filter(InventoryItem.farm_id == target_farm_id).all()
     for item in items:
         check_and_create_inventory_alerts(item, db)
@@ -235,5 +264,8 @@ def check_inventory_alerts(
 # ── Suppliers ─────────────────────────────────────────────────────────────────
 
 @router.get("/suppliers", response_model=list[SupplierOut])
-def list_suppliers(db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Supplier).filter(Supplier.is_active == True).all()
+def list_suppliers(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    q = db.query(Supplier).filter(Supplier.is_active == True)
+    if current_user.role_id != 6:
+        q = q.filter(Supplier.company_id == current_user.company_id)
+    return q.order_by(Supplier.name).all()

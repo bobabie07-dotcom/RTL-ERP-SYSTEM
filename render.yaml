@@ -8,6 +8,8 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health-check
     envVars:
+      - key: ENVIRONMENT
+        value: production
       - key: DB_HOST
         sync: false
       - key: DB_PORT
@@ -26,6 +28,8 @@ services:
         value: "480"
       - key: CORS_ORIGINS
         sync: false          # set to your Render frontend URL, e.g. https://rtl-poultry-erp-ui.onrender.com
+      - key: RUN_STARTUP_MIGRATIONS
+        value: "true"        # set false after replacing startup DDL with a migration runner
 
   # ── React / Vite frontend ─────────────────────────────────────────────────
   - type: static

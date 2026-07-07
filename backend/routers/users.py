@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
 from models import Farm, LoginHistory, Role, User, UserAuditLog, UserFarm, UserRole
-from routers.auth import DEFAULT_PASSWORD, _hash, get_current_user, require_permission
+from routers.auth import generate_temp_password, _hash, get_current_user, require_permission
 from schemas.schemas import (
     LoginHistoryOut, RoleCreate, RoleOut, RoleUpdate, StatusChangePayload,
     UserAuditLogOut, UserCreate, UserDetailOut, UserRoleAssign, UserUpdate,
@@ -25,6 +25,11 @@ def _now():
 def _require_admin(user: User):
     if user.role_id not in ADMIN_ROLES and user.role_id != 6:
         raise HTTPException(403, "Admin access required")
+
+
+def _ensure_user_scope(current_user: User, target_user: User):
+    if current_user.role_id != 6 and target_user.company_id != current_user.company_id:
+        raise HTTPException(403, "Access denied")
 
 
 def _audit(db: Session, target_id: int, action: str, by_id: int,
@@ -152,7 +157,10 @@ def user_stats(
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
-    users = db.query(User).filter(User.deleted_at == None).all()  # noqa: E711
+    q = db.query(User).filter(User.deleted_at == None)  # noqa: E711
+    if current_user.role_id != 6:
+        q = q.filter(User.company_id == current_user.company_id)
+    users = q.all()
     by_status = {}
     by_role   = {}
     by_dept   = {}
@@ -183,7 +191,13 @@ def get_all_audit_logs(
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
-    rows = (db.query(UserAuditLog)
+    q = db.query(UserAuditLog)
+    if current_user.role_id != 6:
+        target_ids = [r[0] for r in db.query(User.id).filter(User.company_id == current_user.company_id).all()]
+        if not target_ids:
+            return []
+        q = q.filter(UserAuditLog.target_user_id.in_(target_ids))
+    rows = (q
               .order_by(UserAuditLog.created_at.desc())
               .limit(limit)
               .all())
@@ -243,8 +257,8 @@ def get_user(
     user = db.query(User).options(joinedload(User.assigned_farms)).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    if current_user.role_id != 6 and current_user.id != user_id and user.company_id != current_user.company_id:
-        raise HTTPException(403, "Access denied")
+    if current_user.id != user_id:
+        _ensure_user_scope(current_user, user)
     return _build_detail(user)
 
 
@@ -274,12 +288,13 @@ def create_user(
 
     primary_farm_id = farm_ids[0] if farm_ids else None
     employee_id = _next_employee_id(db, company_id)
+    temp_password = generate_temp_password()
     user = User(
         employee_id=employee_id,
         full_name=body.full_name,
         email=body.email,
         username=body.username or None,
-        password_hash=_hash(DEFAULT_PASSWORD),
+        password_hash=_hash(temp_password),
         role_id=body.role_id,
         company_id=company_id,
         farm_id=primary_farm_id,
@@ -305,7 +320,7 @@ def create_user(
     db.commit()
     db.refresh(user)
     result = _build_detail(user)
-    result["temp_password"] = DEFAULT_PASSWORD
+    result["temp_password"] = temp_password
     return result
 
 
@@ -321,9 +336,12 @@ def update_user(
     user = db.get(User, user_id)
     if not user or user.deleted_at:
         raise HTTPException(404, "User not found")
+    _ensure_user_scope(current_user, user)
 
     data = body.model_dump(exclude_none=True)
     new_farm_ids = data.pop("farm_ids", None)  # handle separately
+    if "company_id" in data and current_user.role_id != 6:
+        data.pop("company_id")
 
     for f in ("username", "department", "phone", "position", "employee_id"):
         if f in data and data[f] == "":
@@ -381,6 +399,7 @@ def change_status(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    _ensure_user_scope(current_user, user)
     if current_user.role_id != 6 and user.company_id != current_user.company_id:
         raise HTTPException(403, "Access denied")
     if user.id == current_user.id and body.status in ("inactive", "suspended", "archived", "locked"):
@@ -420,9 +439,11 @@ def reset_password(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    _ensure_user_scope(current_user, user)
     if user.id == current_user.id:
         raise HTTPException(400, "Use the change password form to update your own password")
-    user.password_hash          = _hash(DEFAULT_PASSWORD)
+    temp_password = generate_temp_password()
+    user.password_hash          = _hash(temp_password)
     user.is_first_login         = True
     user.last_password_change_at = _now()
     user.updated_by              = current_user.id
@@ -431,7 +452,7 @@ def reset_password(
            ip=request.client.host if request.client else None,
            imp_by=getattr(current_user, '_imp_by', None))
     db.commit()
-    return {"message": "Password reset successfully", "temp_password": DEFAULT_PASSWORD}
+    return {"message": "Password reset successfully", "temp_password": temp_password}
 
 
 # ── Role Assignment ───────────────────────────────────────────────────────────
@@ -446,6 +467,7 @@ def get_user_roles(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    _ensure_user_scope(current_user, user)
     primary = {"role_id": user.role_id, "role_name": user.role.name if user.role else None, "is_primary": True}
     extras  = [
         {"role_id": ur.role_id, "role_name": ur.role.name if ur.role else None, "is_primary": False,
@@ -467,6 +489,7 @@ def assign_roles(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    _ensure_user_scope(current_user, user)
 
     # Validate all role IDs exist
     for rid in body.role_ids:
@@ -507,6 +530,7 @@ def remove_role(
     ).first()
     if not ur:
         raise HTTPException(404, "Role assignment not found")
+    _ensure_user_scope(current_user, ur.user)
     db.delete(ur)
     _audit(db, user_id, "role_removed", current_user.id,
            old=str(role_id),
@@ -526,6 +550,11 @@ def get_login_history(
 ):
     if current_user.role_id not in ADMIN_ROLES and current_user.id != user_id:
         raise HTTPException(403, "Access denied")
+    if current_user.id != user_id:
+        target = db.get(User, user_id)
+        if not target:
+            raise HTTPException(404, "User not found")
+        _ensure_user_scope(current_user, target)
     rows = (db.query(LoginHistory)
               .filter(LoginHistory.user_id == user_id)
               .order_by(LoginHistory.created_at.desc())
@@ -542,6 +571,10 @@ def get_user_audit_logs(
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(404, "User not found")
+    _ensure_user_scope(current_user, target)
     rows = (db.query(UserAuditLog)
               .filter(UserAuditLog.target_user_id == user_id)
               .order_by(UserAuditLog.created_at.desc())

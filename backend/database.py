@@ -1,5 +1,6 @@
 import os
 import tempfile
+import atexit
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
@@ -16,6 +17,7 @@ def _build_engine():
         tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False)
         tmp.write(pem)
         tmp.close()
+        atexit.register(lambda path=tmp.name: os.path.exists(path) and os.remove(path))
         connect_args["ssl"] = {"ca": tmp.name}
 
     return create_engine(
