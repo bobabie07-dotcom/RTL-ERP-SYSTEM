@@ -437,6 +437,23 @@ class FeedIssue(Base):
 
 # ── Health & Veterinary ──────────────────────────────────────────────────────
 
+class StandardFeedSchedule(Base):
+    __tablename__ = "standard_feed_schedule"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    week_number      = Column(SmallInteger, nullable=False, unique=True)
+    age_day_start    = Column(SmallInteger, nullable=False)
+    age_day_end      = Column(SmallInteger, nullable=False)
+    body_weight      = Column(Numeric(10, 2), nullable=True)
+    daily_feed_grams = Column(Numeric(10, 2), nullable=False)
+    feed_type        = Column(String(100), nullable=False)
+    cost_per_bird    = Column(Numeric(10, 4), nullable=True)
+    bags_required    = Column(Numeric(10, 2), nullable=True)
+    cumulative_feed  = Column(Numeric(12, 3), nullable=True)
+    created_at       = Column(DateTime, default=func.now())
+    updated_at       = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class Medication(Base):
     __tablename__ = "medications"
 

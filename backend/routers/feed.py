@@ -1,17 +1,23 @@
+from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Batch, FeedIssue, FeedPurchase, FeedStock, FeedType, House, InventoryItem, InventoryMovement, Farm, Supplier
+from models import (
+    Batch, FeedIssue, FeedPurchase, FeedStock, FeedType, House, InventoryItem,
+    InventoryMovement, Farm, MortalityRecord, StandardFeedSchedule, Supplier,
+)
 from routers.auth import get_current_user, require_permission
 from utils import check_and_create_inventory_alerts
 from schemas.schemas import (
+    BatchFeedStandardSummary, BatchFeedTimelineRow, FeedVarianceReportRow,
     FeedIssueCreate, FeedIssueOut, FeedIssueRow,
     FeedPurchaseCreate, FeedPurchaseOut, FeedPurchaseRow,
     FeedStockRow, FeedTypeCreate, FeedTypePatch, FeedTypeOut,
+    StandardFeedScheduleCreate, StandardFeedScheduleOut, StandardFeedScheduleUpdate,
 )
 
 router = APIRouter(prefix="/feed", tags=["feed"])
@@ -49,6 +55,347 @@ def _ensure_supplier_access(db: Session, supplier_id: int | None, current_user):
 def _ensure_inventory_item_access(item: InventoryItem, current_user):
     if current_user.role_id != 6 and item.company_id not in (None, current_user.company_id):
         raise HTTPException(status_code=403, detail="Access denied to linked inventory item")
+
+
+def _round2(value) -> float:
+    return round(float(value or 0), 2)
+
+
+def _variance_alert(variance_pct: Optional[float]) -> Optional[str]:
+    if variance_pct is None:
+        return None
+    if variance_pct > 10:
+        return "Feed usage is higher than expected."
+    if variance_pct < -10:
+        return "Feed usage is below standard."
+    return None
+
+
+def _schedule_for_age(db: Session, age_days: int) -> Optional[StandardFeedSchedule]:
+    age = max(1, int(age_days or 0))
+    row = db.query(StandardFeedSchedule).filter(
+        StandardFeedSchedule.age_day_start <= age,
+        StandardFeedSchedule.age_day_end >= age,
+    ).order_by(StandardFeedSchedule.week_number.asc()).first()
+    if row:
+        return row
+    return db.query(StandardFeedSchedule).order_by(StandardFeedSchedule.week_number.desc()).first()
+
+
+def _mortality_until(db: Session, batch_id: int, on_date: date) -> int:
+    return int(db.query(func.coalesce(func.sum(MortalityRecord.count), 0)).filter(
+        MortalityRecord.batch_id == batch_id,
+        MortalityRecord.record_date <= on_date,
+    ).scalar() or 0)
+
+
+def _actual_feed_between(db: Session, batch_id: int, start_date: date, end_date: date) -> float:
+    return float(db.query(func.coalesce(func.sum(FeedIssue.qty_kg), 0)).filter(
+        FeedIssue.batch_id == batch_id,
+        FeedIssue.issue_date >= start_date,
+        FeedIssue.issue_date <= end_date,
+    ).scalar() or 0)
+
+
+def _standard_row_for_day(db: Session, batch: Batch, on_date: date) -> dict:
+    age_days = max(0, (on_date - batch.placed_date).days)
+    schedule = _schedule_for_age(db, max(1, age_days))
+    birds_alive = max(0, int(batch.initial_count or 0) - _mortality_until(db, batch.id, on_date))
+    daily_grams = float(schedule.daily_feed_grams) if schedule else 0
+    standard_kg = birds_alive * daily_grams / 1000
+    actual_kg = _actual_feed_between(db, batch.id, on_date, on_date)
+    diff = actual_kg - standard_kg
+    variance = (diff / standard_kg * 100) if standard_kg else None
+    return {
+        "date": on_date,
+        "age_days": age_days,
+        "week_number": schedule.week_number if schedule else None,
+        "feed_type": schedule.feed_type if schedule else None,
+        "birds_alive": birds_alive,
+        "daily_feed_grams": daily_grams if schedule else None,
+        "standard_feed_kg": _round2(standard_kg),
+        "actual_feed_kg": _round2(actual_kg),
+        "difference_kg": _round2(diff),
+        "variance_pct": round(variance, 2) if variance is not None else None,
+        "alert": _variance_alert(variance),
+    }
+
+
+@router.get("/standard-schedule", response_model=list[StandardFeedScheduleOut])
+def list_standard_schedule(
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    return db.query(StandardFeedSchedule).order_by(StandardFeedSchedule.week_number.asc()).all()
+
+
+@router.post("/standard-schedule", response_model=StandardFeedScheduleOut, status_code=status.HTTP_201_CREATED)
+def create_standard_schedule_row(
+    body: StandardFeedScheduleCreate,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("write", "feed")),
+):
+    if body.age_day_end < body.age_day_start:
+        raise HTTPException(status_code=400, detail="Age day end must be after start")
+    if db.query(StandardFeedSchedule).filter(StandardFeedSchedule.week_number == body.week_number).first():
+        raise HTTPException(status_code=400, detail="Week number already exists")
+    row = StandardFeedSchedule(**body.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.patch("/standard-schedule/{row_id}", response_model=StandardFeedScheduleOut)
+def update_standard_schedule_row(
+    row_id: int,
+    body: StandardFeedScheduleUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("write", "feed")),
+):
+    row = db.get(StandardFeedSchedule, row_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Schedule row not found")
+    data = body.model_dump(exclude_unset=True)
+    start = data.get("age_day_start", row.age_day_start)
+    end = data.get("age_day_end", row.age_day_end)
+    if end < start:
+        raise HTTPException(status_code=400, detail="Age day end must be after start")
+    if "week_number" in data:
+        existing = db.query(StandardFeedSchedule).filter(
+            StandardFeedSchedule.week_number == data["week_number"],
+            StandardFeedSchedule.id != row.id,
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Week number already exists")
+    for field, value in data.items():
+        setattr(row, field, value)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/standard-schedule/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_standard_schedule_row(
+    row_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("write", "feed")),
+):
+    row = db.get(StandardFeedSchedule, row_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Schedule row not found")
+    db.delete(row)
+    db.commit()
+
+
+@router.get("/batches/{batch_id}/standard", response_model=BatchFeedStandardSummary)
+def get_batch_feed_standard(
+    batch_id: int,
+    on_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    batch = _ensure_batch_access(db, batch_id, current_user)
+    target = on_date or date.today()
+    day = _standard_row_for_day(db, batch, target)
+
+    week_start = target - timedelta(days=target.weekday())
+    week_end = week_start + timedelta(days=6)
+    actual_week = _actual_feed_between(db, batch.id, week_start, week_end)
+    weekly_standard = day["standard_feed_kg"] * 7
+    monthly_projection = day["standard_feed_kg"] * 30
+
+    cumulative_standard = 0.0
+    cursor = batch.placed_date
+    while cursor <= target:
+        cumulative_standard += _standard_row_for_day(db, batch, cursor)["standard_feed_kg"]
+        cursor += timedelta(days=1)
+    actual_to_date = _actual_feed_between(db, batch.id, batch.placed_date, target)
+    remaining = max(0.0, cumulative_standard - actual_to_date)
+
+    feed_efficiency = None
+    if day["birds_alive"] > 0 and day["actual_feed_kg"] > 0:
+        feed_efficiency = round(day["actual_feed_kg"] / day["birds_alive"], 4)
+
+    return BatchFeedStandardSummary(
+        batch_id=batch.id,
+        batch_no=batch.batch_no,
+        date=target,
+        current_age_days=day["age_days"],
+        current_week=day["week_number"],
+        current_feed_type=day["feed_type"],
+        birds_alive=day["birds_alive"],
+        daily_feed_grams=day["daily_feed_grams"],
+        daily_standard_kg=day["standard_feed_kg"],
+        weekly_standard_kg=_round2(weekly_standard),
+        monthly_projection_kg=_round2(monthly_projection),
+        actual_today_kg=day["actual_feed_kg"],
+        actual_week_kg=_round2(actual_week),
+        difference_kg=day["difference_kg"],
+        variance_pct=day["variance_pct"],
+        feed_efficiency=feed_efficiency,
+        remaining_feed_kg=_round2(remaining),
+        alert=day["alert"],
+    )
+
+
+@router.get("/batches/{batch_id}/timeline", response_model=list[BatchFeedTimelineRow])
+def get_batch_feed_timeline(
+    batch_id: int,
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    days: int = Query(30, ge=1, le=180),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    batch = _ensure_batch_access(db, batch_id, current_user)
+    end = end_date or date.today()
+    start = start_date or max(batch.placed_date, end - timedelta(days=days - 1))
+    if start < batch.placed_date:
+        start = batch.placed_date
+    if end < start:
+        raise HTTPException(status_code=400, detail="End date must be after start date")
+
+    rows = []
+    cursor = start
+    while cursor <= end:
+        day = _standard_row_for_day(db, batch, cursor)
+        rows.append(BatchFeedTimelineRow(
+            date=day["date"],
+            age_days=day["age_days"],
+            week_number=day["week_number"],
+            feed_type=day["feed_type"],
+            birds_alive=day["birds_alive"],
+            standard_feed_kg=day["standard_feed_kg"],
+            actual_feed_kg=day["actual_feed_kg"],
+            difference_kg=day["difference_kg"],
+            variance_pct=day["variance_pct"],
+            alert=day["alert"],
+        ))
+        cursor += timedelta(days=1)
+    return rows
+
+
+@router.get("/standard-variance", response_model=list[FeedVarianceReportRow])
+def standard_variance_report(
+    farm_id: Optional[int] = Query(None),
+    batch_id: Optional[int] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role_id not in (1, 5, 6):
+        farm_id = current_user.farm_id
+        if not farm_id:
+            return []
+    end = end_date or date.today()
+    start = start_date or (end - timedelta(days=30))
+
+    q = db.query(Batch)
+    if current_user.role_id != 6:
+        q = q.filter(Batch.company_id == current_user.company_id)
+    if farm_id:
+        farm = db.get(Farm, farm_id)
+        if not farm or (current_user.role_id != 6 and farm.company_id != current_user.company_id):
+            raise HTTPException(status_code=403, detail="Access denied")
+        q = q.filter(Batch.farm_id == farm_id)
+    if batch_id:
+        q = q.filter(Batch.id == batch_id)
+
+    rows = []
+    for batch in q.all():
+        cursor = max(batch.placed_date, start)
+        while cursor <= end:
+            day = _standard_row_for_day(db, batch, cursor)
+            rows.append(FeedVarianceReportRow(
+                batch_id=batch.id,
+                batch_no=batch.batch_no,
+                date=day["date"],
+                week_number=day["week_number"],
+                feed_type=day["feed_type"],
+                standard_feed_kg=day["standard_feed_kg"],
+                actual_feed_kg=day["actual_feed_kg"],
+                difference_kg=day["difference_kg"],
+                variance_pct=day["variance_pct"],
+                alert=day["alert"],
+            ))
+            cursor += timedelta(days=1)
+    return rows
+
+
+@router.get("/standard-report")
+def standard_feed_report(
+    farm_id: Optional[int] = Query(None),
+    batch_id: Optional[int] = Query(None),
+    period: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role_id not in (1, 5, 6):
+        farm_id = current_user.farm_id
+        if not farm_id:
+            return []
+    end = end_date or date.today()
+    start = start_date or (end - timedelta(days=30))
+
+    q = db.query(Batch)
+    if current_user.role_id != 6:
+        q = q.filter(Batch.company_id == current_user.company_id)
+    if farm_id:
+        farm = db.get(Farm, farm_id)
+        if not farm or (current_user.role_id != 6 and farm.company_id != current_user.company_id):
+            raise HTTPException(status_code=403, detail="Access denied")
+        q = q.filter(Batch.farm_id == farm_id)
+    if batch_id:
+        q = q.filter(Batch.id == batch_id)
+
+    buckets = {}
+    for batch in q.all():
+        cursor = max(batch.placed_date, start)
+        while cursor <= end:
+            day = _standard_row_for_day(db, batch, cursor)
+            if period == "weekly":
+                bucket_key = f"{cursor.isocalendar().year}-W{cursor.isocalendar().week:02d}"
+            elif period == "monthly":
+                bucket_key = cursor.strftime("%Y-%m")
+            else:
+                bucket_key = cursor.isoformat()
+            key = (batch.id, bucket_key)
+            bucket = buckets.setdefault(key, {
+                "batch_id": batch.id,
+                "batch_no": batch.batch_no,
+                "period": bucket_key,
+                "period_type": period,
+                "standard_feed_kg": 0.0,
+                "actual_feed_kg": 0.0,
+                "feed_cost": 0.0,
+                "days": 0,
+            })
+            schedule = _schedule_for_age(db, max(1, day["age_days"]))
+            cost_per_bird = float(schedule.cost_per_bird or 0) if schedule else 0
+            bucket["standard_feed_kg"] += day["standard_feed_kg"]
+            bucket["actual_feed_kg"] += day["actual_feed_kg"]
+            bucket["feed_cost"] += day["birds_alive"] * cost_per_bird
+            bucket["days"] += 1
+            cursor += timedelta(days=1)
+
+    result = []
+    for bucket in buckets.values():
+        diff = bucket["actual_feed_kg"] - bucket["standard_feed_kg"]
+        variance = (diff / bucket["standard_feed_kg"] * 100) if bucket["standard_feed_kg"] else None
+        result.append({
+            **bucket,
+            "standard_feed_kg": _round2(bucket["standard_feed_kg"]),
+            "actual_feed_kg": _round2(bucket["actual_feed_kg"]),
+            "difference_kg": _round2(diff),
+            "variance_pct": round(variance, 2) if variance is not None else None,
+            "feed_cost": _round2(bucket["feed_cost"]),
+            "alert": _variance_alert(variance),
+        })
+    return sorted(result, key=lambda r: (r["period"], r["batch_no"]))
 
 
 @router.get("/types", response_model=list[FeedTypeOut])

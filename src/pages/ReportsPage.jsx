@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/data/Card';
 import { Button } from '../components/core/Button';
-import { reportsApi } from '../api/client';
+import { feedApi, reportsApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
 import Icons from '../icons';
 
@@ -12,6 +12,7 @@ const I = Icons;
 const REPORTS = [
   { id: 'pnl',        title: 'Batch P&L',           description: 'Revenue, feed cost, expenses, and gross profit per batch.', icon: 'batch',     color: 'var(--green-500)', bg: 'var(--green-50)' },
   { id: 'feed',       title: 'Feed Efficiency',      description: 'FCR, total feed consumption, and cost analysis per batch.', icon: 'feed',      color: 'var(--warning)',   bg: 'var(--warning-bg)' },
+  { id: 'feedStandard', title: 'Feed Standard Variance', description: 'Expected feed, actual releases, variance, alerts, and feed cost by batch.', icon: 'feed', color: 'var(--info)', bg: 'var(--info-bg)' },
   { id: 'mortality',  title: 'Mortality Analysis',   description: 'Mortality trends and cause breakdown for the period.', icon: 'mortality', color: 'var(--danger)',    bg: 'var(--danger-bg)' },
   { id: 'monthly',    title: 'Monthly Summary',      description: 'KPIs, revenue, feed, and mortality overview for the month.', icon: 'reports',   color: 'var(--info)',      bg: 'var(--info-bg)' },
   { id: 'inventory',  title: 'Inventory Snapshot',   description: 'Stock levels, low-stock items, and reorder recommendations.', icon: 'inventory', color: 'var(--viz-labor)', bg: 'var(--info-bg)' },
@@ -31,6 +32,38 @@ function resolveRange(range) {
   if (range === 'Last 6 months') { const d = new Date(y, m-7, 1); return { year: d.getFullYear(), month: d.getMonth()+1, label: `Last 6 months` }; }
   if (range === 'This year')     return { year: y, month: null, label: `Year ${y}` };
   return { year: y, month: m, label: `${MONTH_NAMES[m-1]} ${y}` };
+}
+
+function toISODate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function resolveFeedStandardRange(range) {
+  const now = new Date();
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let start = new Date(end);
+  let period = 'daily';
+
+  if (range === 'This month') {
+    start = new Date(end.getFullYear(), end.getMonth(), 1);
+  } else if (range === 'Last month') {
+    start = new Date(end.getFullYear(), end.getMonth() - 1, 1);
+    end.setFullYear(start.getFullYear(), start.getMonth() + 1, 0);
+  } else if (range === 'Last 3 months') {
+    start = new Date(end.getFullYear(), end.getMonth() - 3, 1);
+    period = 'weekly';
+  } else if (range === 'Last 6 months') {
+    start = new Date(end.getFullYear(), end.getMonth() - 6, 1);
+    period = 'weekly';
+  } else if (range === 'This year') {
+    start = new Date(end.getFullYear(), 0, 1);
+    period = 'monthly';
+  }
+
+  return { start_date: toISODate(start), end_date: toISODate(end), period };
 }
 
 // ── CSV export ────────────────────────────────────────────────────────────────
@@ -113,6 +146,53 @@ function FeedTable({ rows, navigate }) {
             <TD right strong tone={!r.fcr ? 'neutral' : r.fcr < 2 ? 'success' : r.fcr < 2.5 ? 'warning' : 'danger'}>{r.fcr ? fmtN(r.fcr) : '—'}</TD>
           </tr>
         ))}
+      </tbody>
+    </table>
+  );
+}
+
+function FeedStandardTable({ rows, navigate }) {
+  if (!rows?.length) return <Empty />;
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <thead>
+        <tr>
+          <TH>Period</TH>
+          <TH>Batch</TH>
+          <TH right>Standard Feed</TH>
+          <TH right>Actual Feed</TH>
+          <TH right>Difference</TH>
+          <TH right>Variance</TH>
+          <TH right>Feed Cost</TH>
+          <TH>Alert</TH>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => (
+          <tr key={`${r.batch_id}-${r.period}-${i}`}>
+            <TD strong>{r.period}</TD>
+            <TD><BatchLink id={r.batch_id} name={r.batch_no} navigate={navigate} /></TD>
+            <TD right>{fmtN(r.standard_feed_kg)} kg</TD>
+            <TD right>{fmtN(r.actual_feed_kg)} kg</TD>
+            <TD right tone={parseFloat(r.difference_kg || 0) > 0 ? 'warning' : parseFloat(r.difference_kg || 0) < 0 ? 'danger' : 'success'}>
+              {fmtN(r.difference_kg)} kg
+            </TD>
+            <TD right tone={Math.abs(parseFloat(r.variance_pct || 0)) > 10 ? 'danger' : 'success'}>
+              {r.variance_pct == null ? '—' : `${fmtN(r.variance_pct)}%`}
+            </TD>
+            <TD right>{fmt(r.feed_cost)}</TD>
+            <TD tone={r.alert ? 'warning' : 'success'}>{r.alert || 'Within standard'}</TD>
+          </tr>
+        ))}
+        <tr style={{ background: 'var(--surface-page)' }}>
+          <td colSpan={2} style={{ padding: '8px 12px', fontWeight: 700, fontSize: 13 }}>Total</td>
+          <TD right strong>{fmtN(rows.reduce((s,r)=>s+parseFloat(r.standard_feed_kg||0),0))} kg</TD>
+          <TD right strong>{fmtN(rows.reduce((s,r)=>s+parseFloat(r.actual_feed_kg||0),0))} kg</TD>
+          <TD right strong>{fmtN(rows.reduce((s,r)=>s+parseFloat(r.difference_kg||0),0))} kg</TD>
+          <TD right>—</TD>
+          <TD right strong>{fmt(rows.reduce((s,r)=>s+parseFloat(r.feed_cost||0),0))}</TD>
+          <TD>—</TD>
+        </tr>
       </tbody>
     </table>
   );
@@ -274,6 +354,7 @@ function renderResult(id, data, navigate) {
   if (data.error) return <div style={{ color: 'var(--danger)', fontSize: 13, padding: '12px 0' }}>{data.error}</div>;
   if (id === 'pnl')        return <PnlTable rows={data} navigate={navigate} />;
   if (id === 'feed')       return <FeedTable rows={data} navigate={navigate} />;
+  if (id === 'feedStandard') return <FeedStandardTable rows={data} navigate={navigate} />;
   if (id === 'mortality')  return <MortalityTable rows={data} navigate={navigate} />;
   if (id === 'monthly')    return <MonthlySummaryCards data={data} />;
   if (id === 'inventory')  return <InventoryTable rows={data} />;
@@ -328,6 +409,7 @@ export default function ReportsPage() {
       let data;
       if (selected === 'pnl')             data = await reportsApi.batchPnl(farmId);
       else if (selected === 'feed')        data = await reportsApi.feedConsumption({ farm_id: farmId });
+      else if (selected === 'feedStandard') data = await feedApi.standardReport({ farm_id: farmId, ...resolveFeedStandardRange(range) });
       else if (selected === 'mortality')   data = await reportsApi.mortalityAnalysis({ farm_id: farmId });
       else if (selected === 'monthly')     data = await reportsApi.salesPerformance(farmId, year, month);
       else if (selected === 'inventory')   data = await reportsApi.inventorySnapshot(farmId);

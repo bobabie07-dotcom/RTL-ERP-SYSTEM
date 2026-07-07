@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card } from '../components/data/Card';
 import { DataTable } from '../components/data/DataTable';
 import { Button } from '../components/core/Button';
@@ -49,10 +49,24 @@ const PHASE_STYLE = {
 const I = Icons;
 
 const STOCK_TONE = { ok: 'success', low: 'warning', out_of_stock: 'danger' };
+const miniActionStyle = {
+  border: '1px solid var(--border)',
+  background: 'var(--white)',
+  cursor: 'pointer',
+  borderRadius: 6,
+  padding: '3px 10px',
+  fontSize: 12,
+  color: 'var(--text-secondary)',
+  fontWeight: 500,
+};
 
 const TODAY = new Date().toISOString().split('T')[0];
 const BLANK_ISSUE    = { batch_id: '', house_id: '', feed_type_id: '', issue_date: TODAY, qty_kg: '', fcr_snapshot: '' };
 const BLANK_PURCHASE = { feed_type_id: '', supplier_id: '', purchase_date: TODAY, qty_kg: '', cost_per_kg: '', invoice_no: '' };
+const BLANK_SCHEDULE = {
+  week_number: '', age_day_start: '', age_day_end: '', body_weight: '',
+  daily_feed_grams: '', feed_type: '', cost_per_bird: '', bags_required: '', cumulative_feed: '',
+};
 
 export default function FeedPage() {
   const { farmId } = useFarm();
@@ -70,6 +84,13 @@ export default function FeedPage() {
   const [loadError, setLoadError] = useState('');
   const [batchFilter, setBatchFilter] = useState('All Batches');
   const [guideOpen, setGuideOpen] = useState(false);
+  const [schedule, setSchedule] = useState([]);
+  const [scheduleModal, setScheduleModal] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState(BLANK_SCHEDULE);
+  const [scheduleEdit, setScheduleEdit] = useState(null);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleErr, setScheduleErr] = useState('');
+  const importInputRef = useRef(null);
 
   // purchases
   const [purchases,    setPurchases]    = useState([]);
@@ -91,11 +112,13 @@ export default function FeedPage() {
       feedApi.issues({ limit: 50, farm_id: farmId }),
       farmId ? feedApi.weekly(farmId) : Promise.resolve([]),
       feedApi.purchases({ limit: 50 }),
-    ]).then(([s, iss, w, p]) => {
+      feedApi.standardSchedule(),
+    ]).then(([s, iss, w, p, sch]) => {
       if (s.status   === 'fulfilled') setStock(s.value     || []);
       if (iss.status === 'fulfilled') setIssues(iss.value  || []);
       if (w.status   === 'fulfilled') setWeekly(w.value    || []);
       if (p.status   === 'fulfilled') setPurchases(p.value || []);
+      if (sch.status === 'fulfilled') setSchedule(sch.value || []);
     });
   }
 
@@ -152,6 +175,82 @@ export default function FeedPage() {
     setPurchaseForm(BLANK_PURCHASE); setPurchaseErr('');
     setAddTypeOpen(false); setNewTypeName(''); setNewTypeErr('');
     setPurchaseModal(true);
+  }
+
+  function openScheduleModal(row = null) {
+    setScheduleEdit(row);
+    setScheduleErr('');
+    setScheduleForm(row ? {
+      week_number: String(row.week_number ?? ''),
+      age_day_start: String(row.age_day_start ?? ''),
+      age_day_end: String(row.age_day_end ?? ''),
+      body_weight: row.body_weight != null ? String(row.body_weight) : '',
+      daily_feed_grams: String(row.daily_feed_grams ?? ''),
+      feed_type: row.feed_type || '',
+      cost_per_bird: row.cost_per_bird != null ? String(row.cost_per_bird) : '',
+      bags_required: row.bags_required != null ? String(row.bags_required) : '',
+      cumulative_feed: row.cumulative_feed != null ? String(row.cumulative_feed) : '',
+    } : BLANK_SCHEDULE);
+    setScheduleModal(true);
+  }
+
+  async function handleScheduleSave() {
+    if (!scheduleForm.week_number || !scheduleForm.age_day_start || !scheduleForm.age_day_end || !scheduleForm.daily_feed_grams || !scheduleForm.feed_type) {
+      setScheduleErr('Week, age range, feed grams, and feed type are required.'); return;
+    }
+    const payload = {
+      week_number: Number(scheduleForm.week_number),
+      age_day_start: Number(scheduleForm.age_day_start),
+      age_day_end: Number(scheduleForm.age_day_end),
+      body_weight: scheduleForm.body_weight ? Number(scheduleForm.body_weight) : null,
+      daily_feed_grams: Number(scheduleForm.daily_feed_grams),
+      feed_type: scheduleForm.feed_type,
+      cost_per_bird: scheduleForm.cost_per_bird ? Number(scheduleForm.cost_per_bird) : null,
+      bags_required: scheduleForm.bags_required ? Number(scheduleForm.bags_required) : null,
+      cumulative_feed: scheduleForm.cumulative_feed ? Number(scheduleForm.cumulative_feed) : null,
+    };
+    setScheduleSaving(true); setScheduleErr('');
+    try {
+      if (scheduleEdit) await feedApi.updateSchedule(scheduleEdit.id, payload);
+      else await feedApi.createSchedule(payload);
+      setSchedule(await feedApi.standardSchedule());
+      setScheduleModal(false);
+    } catch (err) { setScheduleErr(err.message || 'Failed to save schedule.'); }
+    finally { setScheduleSaving(false); }
+  }
+
+  async function handleScheduleDelete(row) {
+    if (!window.confirm(`Delete week ${row.week_number} from the standard feed schedule?`)) return;
+    await feedApi.deleteSchedule(row.id);
+    setSchedule(await feedApi.standardSchedule());
+  }
+
+  async function handleScheduleImport(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      alert('Please save the Excel file as CSV, then import the CSV file.');
+      return;
+    }
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    const rows = lines.slice(1).map(line => line.split(',').map(v => v.trim()));
+    for (const cols of rows) {
+      if (cols.length < 6 || !cols[0]) continue;
+      await feedApi.createSchedule({
+        week_number: Number(cols[0]),
+        age_day_start: Number(cols[1]),
+        age_day_end: Number(cols[2]),
+        body_weight: cols[3] ? Number(cols[3]) : null,
+        daily_feed_grams: Number(cols[4]),
+        feed_type: cols[5],
+        cost_per_bird: cols[6] ? Number(cols[6]) : null,
+        bags_required: cols[7] ? Number(cols[7]) : null,
+        cumulative_feed: cols[8] ? Number(cols[8]) : null,
+      });
+    }
+    setSchedule(await feedApi.standardSchedule());
   }
 
   async function handlePurchaseSave() {
@@ -394,6 +493,46 @@ export default function FeedPage() {
         />
       </Card>
 
+      <Card title="Feed Standard Schedule" action={
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input ref={importInputRef} type="file" accept=".csv" onChange={handleScheduleImport} style={{ display: 'none' }} />
+          <Button variant="secondary" size="sm" icon={<I.download w={14} />} onClick={() => importInputRef.current?.click()}>Import Excel</Button>
+          <Button variant="primary" size="sm" icon={<I.plus w={14} />} onClick={() => openScheduleModal()}>Add</Button>
+        </div>
+      }>
+        <DataTable
+          columns={[
+            { key: 'week_number', header: 'Week', align: 'right', numeric: true },
+            { key: 'age_range', header: 'Age' },
+            { key: 'body_weight_display', header: 'Body Weight', align: 'right', numeric: true },
+            { key: 'daily_feed_display', header: 'Feed g/Bird', align: 'right', numeric: true },
+            { key: 'feed_type', header: 'Feed Type', strong: true },
+            { key: 'cost_display', header: 'Cost', align: 'right', numeric: true },
+            { key: 'bags_display', header: 'Bags', align: 'right', numeric: true },
+            { key: 'cumulative_display', header: 'Cumulative', align: 'right', numeric: true },
+            {
+              key: '_actions', header: '',
+              render: row => (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button onClick={() => openScheduleModal(row)} style={miniActionStyle}>Edit</button>
+                  <button onClick={() => handleScheduleDelete(row)} style={{ ...miniActionStyle, color: 'var(--danger)' }}>Delete</button>
+                </div>
+              ),
+            },
+          ]}
+          rows={schedule.map(r => ({
+            ...r,
+            age_range: `${r.age_day_start}-${r.age_day_end} days`,
+            body_weight_display: r.body_weight != null ? `${Number(r.body_weight).toLocaleString()} g` : '-',
+            daily_feed_display: Number(r.daily_feed_grams).toLocaleString(),
+            cost_display: r.cost_per_bird != null ? `₱${Number(r.cost_per_bird).toFixed(2)}` : '-',
+            bags_display: r.bags_required != null ? Number(r.bags_required).toLocaleString() : '-',
+            cumulative_display: r.cumulative_feed != null ? `${Number(r.cumulative_feed).toFixed(3)} kg/bird` : '-',
+          }))}
+          rowKey="id"
+        />
+      </Card>
+
       {/* Layer Feeding Guide */}
       <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--white)' }}>
         <button
@@ -469,6 +608,39 @@ export default function FeedPage() {
           </div>
         )}
       </div>
+
+      <Modal open={scheduleModal} title={scheduleEdit ? 'Edit Feed Standard' : 'Add Feed Standard'} onClose={() => setScheduleModal(false)} onConfirm={handleScheduleSave} confirmLabel={scheduleEdit ? 'Save Changes' : 'Add Schedule'} loading={scheduleSaving}>
+        {scheduleErr && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{scheduleErr}</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          <FormRow label="Week" required>
+            <FieldInput type="number" value={scheduleForm.week_number} onChange={e => setScheduleForm(p => ({ ...p, week_number: e.target.value }))} min="1" />
+          </FormRow>
+          <FormRow label="Feed Type" required>
+            <FieldInput value={scheduleForm.feed_type} onChange={e => setScheduleForm(p => ({ ...p, feed_type: e.target.value }))} placeholder="BBC, CSM, CGM" />
+          </FormRow>
+          <FormRow label="Age Start Day" required>
+            <FieldInput type="number" value={scheduleForm.age_day_start} onChange={e => setScheduleForm(p => ({ ...p, age_day_start: e.target.value }))} min="0" />
+          </FormRow>
+          <FormRow label="Age End Day" required>
+            <FieldInput type="number" value={scheduleForm.age_day_end} onChange={e => setScheduleForm(p => ({ ...p, age_day_end: e.target.value }))} min="1" />
+          </FormRow>
+          <FormRow label="Body Weight (g)">
+            <FieldInput type="number" value={scheduleForm.body_weight} onChange={e => setScheduleForm(p => ({ ...p, body_weight: e.target.value }))} min="0" step="0.01" />
+          </FormRow>
+          <FormRow label="Daily Feed (g/bird)" required>
+            <FieldInput type="number" value={scheduleForm.daily_feed_grams} onChange={e => setScheduleForm(p => ({ ...p, daily_feed_grams: e.target.value }))} min="0" step="0.01" />
+          </FormRow>
+          <FormRow label="Cost per Bird">
+            <FieldInput type="number" value={scheduleForm.cost_per_bird} onChange={e => setScheduleForm(p => ({ ...p, cost_per_bird: e.target.value }))} min="0" step="0.0001" />
+          </FormRow>
+          <FormRow label="Bags Required">
+            <FieldInput type="number" value={scheduleForm.bags_required} onChange={e => setScheduleForm(p => ({ ...p, bags_required: e.target.value }))} min="0" step="0.01" />
+          </FormRow>
+          <FormRow label="Cumulative Feed" style={{ gridColumn: '1/-1' }}>
+            <FieldInput type="number" value={scheduleForm.cumulative_feed} onChange={e => setScheduleForm(p => ({ ...p, cumulative_feed: e.target.value }))} min="0" step="0.001" />
+          </FormRow>
+        </div>
+      </Modal>
 
       {/* Record Purchase Modal */}
       <Modal open={purchaseModal} title="Record Feed Purchase" onClose={() => setPurchaseModal(false)} onConfirm={handlePurchaseSave} confirmLabel="Save Purchase" loading={saving}>

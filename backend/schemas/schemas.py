@@ -546,6 +546,87 @@ class FeedIssueRow(BaseModel):
 
 # ── Mortality ────────────────────────────────────────────────────────────────
 
+class StandardFeedScheduleBase(BaseModel):
+    week_number:      int
+    age_day_start:    int
+    age_day_end:      int
+    body_weight:      Optional[float] = None
+    daily_feed_grams: float
+    feed_type:        str
+    cost_per_bird:    Optional[float] = None
+    bags_required:    Optional[float] = None
+    cumulative_feed:  Optional[float] = None
+
+
+class StandardFeedScheduleCreate(StandardFeedScheduleBase):
+    pass
+
+
+class StandardFeedScheduleUpdate(BaseModel):
+    week_number:      Optional[int] = None
+    age_day_start:    Optional[int] = None
+    age_day_end:      Optional[int] = None
+    body_weight:      Optional[float] = None
+    daily_feed_grams: Optional[float] = None
+    feed_type:        Optional[str] = None
+    cost_per_bird:    Optional[float] = None
+    bags_required:    Optional[float] = None
+    cumulative_feed:  Optional[float] = None
+
+
+class StandardFeedScheduleOut(StandardFeedScheduleBase):
+    id:         int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class BatchFeedStandardSummary(BaseModel):
+    batch_id:              int
+    batch_no:              str
+    date:                  date
+    current_age_days:      int
+    current_week:          Optional[int]
+    current_feed_type:     Optional[str]
+    birds_alive:           int
+    daily_feed_grams:      Optional[float]
+    daily_standard_kg:     float
+    weekly_standard_kg:    float
+    monthly_projection_kg: float
+    actual_today_kg:       float
+    actual_week_kg:        float
+    difference_kg:         float
+    variance_pct:          Optional[float]
+    feed_efficiency:       Optional[float]
+    remaining_feed_kg:     Optional[float]
+    alert:                 Optional[str] = None
+
+
+class BatchFeedTimelineRow(BaseModel):
+    date:             date
+    age_days:         int
+    week_number:      Optional[int]
+    feed_type:        Optional[str]
+    birds_alive:      int
+    standard_feed_kg: float
+    actual_feed_kg:   float
+    difference_kg:    float
+    variance_pct:     Optional[float]
+    alert:            Optional[str] = None
+
+
+class FeedVarianceReportRow(BaseModel):
+    batch_id:         int
+    batch_no:         str
+    date:             date
+    week_number:      Optional[int]
+    feed_type:        Optional[str]
+    standard_feed_kg: float
+    actual_feed_kg:   float
+    difference_kg:    float
+    variance_pct:     Optional[float]
+    alert:            Optional[str] = None
+
+
 class MortalityCreate(BaseModel):
     batch_id:          int
     house_id:          int

@@ -7,7 +7,7 @@ import { Badge } from '../components/core/Badge';
 import { Button } from '../components/core/Button';
 import { ProgressRing } from '../components/data/ProgressRing';
 import { LineChart } from '../charts';
-import { batchesApi, healthApi, batchPlansApi, salesApi, harvestApi, batchFinanceApi } from '../api/client';
+import { batchesApi, healthApi, batchPlansApi, salesApi, harvestApi, batchFinanceApi, feedApi } from '../api/client';
 import { getStoredMarketPrice } from '../utils/useMarketPrice';
 import { Modal, FormRow, FieldInput, FieldSelect } from '../components/core/Modal';
 import { useFarm } from '../context/FarmContext';
@@ -26,6 +26,7 @@ const EXP_LABEL    = { labor: 'Labor', utilities: 'Utilities', maintenance: 'Mai
 
 const fmt = n => n == null ? '—' : `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const pColor = n => n == null ? 'inherit' : n >= 0 ? 'var(--success)' : 'var(--danger)';
+const fmtKg = n => n == null ? '-' : `${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg`;
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -144,6 +145,8 @@ export default function BatchDetailPage() {
   const [finRevSaving,    setFinRevSaving]     = useState(false);
   const [finExpErr,       setFinExpErr]        = useState('');
   const [finRevErr,       setFinRevErr]        = useState('');
+  const [feedStandard,    setFeedStandard]     = useState(null);
+  const [feedTimeline,    setFeedTimeline]     = useState([]);
 
   useEffect(() => {
     Promise.all([
@@ -167,6 +170,7 @@ export default function BatchDetailPage() {
     loadVaccinations();
     loadExpenses();
     loadFinance();
+    loadFeedStandard();
     healthApi.medications('vaccine').then(setMedications).catch(() => {});
   }, [id]);
 
@@ -193,6 +197,15 @@ export default function BatchDetailPage() {
       setFinRevenues(revs || []);
       setFinCategories(cats || []);
     }).finally(() => setFinLoading(false));
+  }
+  function loadFeedStandard() {
+    Promise.all([
+      feedApi.batchStandard(id).catch(() => null),
+      feedApi.batchTimeline(id, { days: 30 }).catch(() => []),
+    ]).then(([summary, timeline]) => {
+      setFeedStandard(summary);
+      setFeedTimeline(timeline || []);
+    });
   }
 
   // ── Daily Log ──────────────────────────────────────────────────────────────
@@ -228,6 +241,7 @@ export default function BatchDetailPage() {
       }
       const [updated, updatedBatch] = await Promise.all([batchesApi.logs(id), batchesApi.get(id)]);
       setLogs(updated || []); setBatch(updatedBatch);
+      loadFeedStandard();
       setLogModal(false); setEditLogId(null);
     } catch (e) { setLogErr(e.message || 'Failed to save log.'); }
     finally { setLogSaving(false); }
@@ -239,6 +253,7 @@ export default function BatchDetailPage() {
       await batchesApi.deleteLog(id, deleteLogTarget.id);
       const [updated, updatedBatch] = await Promise.all([batchesApi.logs(id), batchesApi.get(id)]);
       setLogs(updated || []); setBatch(updatedBatch);
+      loadFeedStandard();
       setDeleteLogModal(false); setDeleteLogTarget(null);
     } catch (e) { setDeleteLogModal(false); setPageErr(e.message || 'Failed to delete log.'); }
     finally { setDeletingLog(false); }
@@ -722,6 +737,46 @@ export default function BatchDetailPage() {
             rows={logs}
             rowKey="id"
           />
+        )}
+      </Card>
+
+      <Card title="Feed Standard">
+        {feedStandard ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {feedStandard.alert && (
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--warning-bg)', color: 'var(--warning)', fontSize: 13, fontWeight: 600 }}>
+                {feedStandard.alert}
+              </div>
+            )}
+            <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              <StatCard label="Current Week" value={feedStandard.current_week || '-'} icon={<I.calendar w={22} />} caption={`Day ${feedStandard.current_age_days}`} />
+              <StatCard label="Feed Type" value={feedStandard.current_feed_type || '-'} tone="blue" icon={<I.feed w={22} />} caption={`${feedStandard.daily_feed_grams || 0} g/bird/day`} />
+              <StatCard label="Birds Alive" value={(feedStandard.birds_alive || 0).toLocaleString()} icon={<I.birds w={22} />} />
+              <StatCard label="Daily Standard" value={fmtKg(feedStandard.daily_standard_kg)} tone="amber" icon={<I.scale w={22} />} />
+            </div>
+            <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              <StatCard label="Weekly Standard" value={fmtKg(feedStandard.weekly_standard_kg)} icon={<I.feed w={22} />} />
+              <StatCard label="Monthly Projection" value={fmtKg(feedStandard.monthly_projection_kg)} icon={<I.reports w={22} />} />
+              <StatCard label="Actual Today" value={fmtKg(feedStandard.actual_today_kg)} tone="blue" icon={<I.box w={22} />} />
+              <StatCard label="Variance" value={`${Number(feedStandard.difference_kg || 0).toFixed(2)} kg`} tone={Math.abs(feedStandard.variance_pct || 0) > 10 ? 'red' : 'green'} icon={<I.percent w={22} />} caption={feedStandard.variance_pct != null ? `${feedStandard.variance_pct}%` : '-'} />
+            </div>
+            <DataTable
+              columns={[
+                { key: 'date', header: 'Date', strong: true },
+                { key: 'age_days', header: 'Age', align: 'right', numeric: true },
+                { key: 'feed_type', header: 'Feed Type' },
+                { key: 'standard_feed_kg', header: 'Standard Feed', align: 'right', render: r => fmtKg(r.standard_feed_kg) },
+                { key: 'actual_feed_kg', header: 'Actual Feed', align: 'right', render: r => fmtKg(r.actual_feed_kg) },
+                { key: 'difference_kg', header: 'Difference', align: 'right', render: r => `${Number(r.difference_kg || 0).toFixed(2)} kg` },
+                { key: 'variance_pct', header: 'Variance', align: 'right', render: r => r.variance_pct != null ? `${r.variance_pct}%` : '-' },
+                { key: 'alert', header: 'Alert', render: r => r.alert ? <Badge tone="warning">{r.alert}</Badge> : '-' },
+              ]}
+              rows={feedTimeline}
+              rowKey="date"
+            />
+          </div>
+        ) : (
+          <div style={{ padding: '16px 0', color: 'var(--text-muted)', fontSize: 13 }}>No standard feed schedule is available yet.</div>
         )}
       </Card>
 

@@ -39,6 +39,60 @@ def run_startup_migrations():
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN department VARCHAR(100) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN phone VARCHAR(50) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE feed_types ADD COLUMN inventory_item_id INT NULL")
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS standard_feed_schedule (
+                id               INT AUTO_INCREMENT PRIMARY KEY,
+                week_number      SMALLINT NOT NULL UNIQUE,
+                age_day_start    SMALLINT NOT NULL,
+                age_day_end      SMALLINT NOT NULL,
+                body_weight      DECIMAL(10,2) NULL,
+                daily_feed_grams DECIMAL(10,2) NOT NULL,
+                feed_type        VARCHAR(100) NOT NULL,
+                cost_per_bird    DECIMAL(10,4) NULL,
+                bags_required    DECIMAL(10,2) NULL,
+                cumulative_feed  DECIMAL(12,3) NULL,
+                created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_sfs_age (age_day_start, age_day_end)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
+        seed_count = conn.execute(text("SELECT COUNT(*) FROM standard_feed_schedule")).scalar() or 0
+        if seed_count == 0:
+            cumulative = 0.0
+            for week, body_weight, daily_feed, feed_type in [
+                (1,  65, 10, "BBC"),
+                (2, 120, 16, "BBC"),
+                (3, 180, 22, "CSM"),
+                (4, 250, 28, "CSM"),
+                (5, 331, 33, "CSM"),
+                (6, 418, 39, "CSM"),
+                (7, 508, 43, "CSM"),
+                (8, 597, 48, "CGM"),
+                (9, 682, 52, "CGM"),
+                (10, 763, 55, "CGM"),
+                (11, 841, 58, "CGM"),
+                (12, 915, 61, "CGM"),
+                (13, 986, 64, "CGM"),
+                (14, 1055, 67, "CGM"),
+                (15, 1122, 69, "CGM"),
+                (16, 1190, 73, "CGM"),
+            ]:
+                cumulative += float(daily_feed) * 7 / 1000
+                conn.execute(text("""
+                    INSERT INTO standard_feed_schedule (
+                        week_number, age_day_start, age_day_end, body_weight,
+                        daily_feed_grams, feed_type, cumulative_feed
+                    )
+                    VALUES (:week, :start_day, :end_day, :body_weight, :daily_feed, :feed_type, :cumulative)
+                """), {
+                    "week": week,
+                    "start_day": ((week - 1) * 7) + 1,
+                    "end_day": week * 7,
+                    "body_weight": body_weight,
+                    "daily_feed": daily_feed,
+                    "feed_type": feed_type,
+                    "cumulative": round(cumulative, 3),
+                })
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN username VARCHAR(50) UNIQUE NULL")
         _safe_add_column(conn, "ALTER TABLE purchase_order_items ADD COLUMN qty_received NUMERIC(12,2) NOT NULL DEFAULT 0")
         _safe_add_column(conn, "ALTER TABLE inventory_items ADD COLUMN qty_reserved NUMERIC(12,2) NOT NULL DEFAULT 0")
