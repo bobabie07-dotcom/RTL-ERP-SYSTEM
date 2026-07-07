@@ -252,24 +252,61 @@ function MonthlySummaryCards({ data }) {
 function FinancialTable({ data }) {
   if (!data) return <Empty />;
   const rows = [
-    { label: 'Total Revenue',    value: fmt(data.revenue),                     tone: 'success' },
-    { label: 'Total Expenses',   value: fmt(data.expenses),                    tone: 'danger'  },
-    { label: 'Feed Used (kg)',   value: `${parseFloat(data.feed_used_kg||0).toLocaleString()} kg`, tone: 'neutral' },
-    { label: 'Gross Profit',     value: fmt(data.gross_profit),                tone: data.gross_profit >= 0 ? 'success' : 'danger' },
-    { label: 'Total Mortalities',value: `${parseInt(data.total_mortality||0)} birds`,              tone: 'neutral' },
+    { label: 'Total Revenue', value: fmt(data.revenue), tone: 'success' },
+    { label: 'Total Expenses', value: fmt(data.expenses), tone: 'danger' },
+    { label: 'Gross Profit', value: fmt(data.gross_profit), tone: data.gross_profit >= 0 ? 'success' : 'danger' },
+    { label: 'Feed Consumption Cost', value: fmt(data.feed_cost), tone: 'danger' },
+    { label: 'Feed Used', value: `${parseFloat(data.feed_used_kg||0).toLocaleString()} kg`, tone: 'neutral' },
+    { label: 'Mortality Money Loss', value: fmt(data.mortality_loss ?? data.mortality_cost), tone: 'danger' },
+    { label: 'Estimated Mortality Exposure', value: fmt(data.estimated_mortality_cost), tone: 'warning' },
+    { label: 'Other Batch Expenses', value: fmt(data.other_batch_expenses), tone: 'danger' },
+    { label: 'Total Mortalities', value: `${parseInt(data.total_mortality||0).toLocaleString()} birds`, tone: 'neutral' },
+    { label: 'Active Birds', value: `${parseInt(data.active_birds||0).toLocaleString()} birds`, tone: 'neutral' },
+    { label: 'Cost / Active Bird', value: fmt(data.cost_per_active_bird), tone: 'neutral' },
+    { label: 'Cost / Placed Bird', value: fmt(data.cost_per_placed_bird), tone: 'neutral' },
   ];
+  const categoryRows = data.by_category || [];
+  const sourceRows = data.by_source || [];
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-      <thead><tr><TH>Metric</TH><TH right>Value</TH></tr></thead>
-      <tbody>
-        {rows.map((r,i) => (
-          <tr key={i}>
-            <TD strong>{r.label}</TD>
-            <TD right tone={r.tone}>{r.value}</TD>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div style={{ display: 'grid', gap: 18 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead><tr><TH>Metric</TH><TH right>Value</TH></tr></thead>
+        <tbody>
+          {rows.map((r,i) => (
+            <tr key={i}>
+              <TD strong>{r.label}</TD>
+              <TD right tone={r.tone}>{r.value}</TD>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {categoryRows.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr><TH>Expense Category</TH><TH right>Amount</TH></tr></thead>
+          <tbody>
+            {categoryRows.map((r, i) => (
+              <tr key={`${r.code}-${i}`}>
+                <TD strong>{r.name || r.code}</TD>
+                <TD right tone="danger">{fmt(r.amount)}</TD>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {sourceRows.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr><TH>Expense Source</TH><TH right>Amount</TH></tr></thead>
+          <tbody>
+            {sourceRows.map((r, i) => (
+              <tr key={`${r.source_module}-${i}`}>
+                <TD strong>{(r.source_module || 'Manual').replace(/_/g, ' ')}</TD>
+                <TD right tone="danger">{fmt(r.amount)}</TD>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }
 

@@ -83,14 +83,34 @@ def farm_finances(
         ) egg_sales ON 1=1
     """), {"fid": farm_id, "yr": year}).scalar()
 
-    exp = db.execute(text("""
-        SELECT COALESCE(SUM(be.amount), 0)
+    category_rows = db.execute(text("""
+        SELECT
+            ec.code,
+            ec.name,
+            ec.sort_order,
+            COALESCE(SUM(be.amount), 0) AS amount
+        FROM batch_expenses be
+        JOIN batches b ON be.batch_id = b.id
+        JOIN expense_categories ec ON ec.id = be.category_id
+        WHERE b.farm_id = :fid
+          AND be.is_voided = FALSE
+          AND YEAR(be.expense_date) = :yr
+        GROUP BY ec.id, ec.code, ec.name, ec.sort_order
+        ORDER BY ec.sort_order, ec.name
+    """), {"fid": farm_id, "yr": year}).mappings().all()
+
+    source_rows = db.execute(text("""
+        SELECT
+            COALESCE(NULLIF(be.source_module, ''), 'MANUAL') AS source_module,
+            COALESCE(SUM(be.amount), 0) AS amount
         FROM batch_expenses be
         JOIN batches b ON be.batch_id = b.id
         WHERE b.farm_id = :fid
           AND be.is_voided = FALSE
           AND YEAR(be.expense_date) = :yr
-    """), {"fid": farm_id, "yr": year}).scalar()
+        GROUP BY COALESCE(NULLIF(be.source_module, ''), 'MANUAL')
+        ORDER BY amount DESC
+    """), {"fid": farm_id, "yr": year}).mappings().all()
 
     # Per-feed-type average pricing avoids skewing when different feed grades are used.
     feed_exp = db.execute(text("""
@@ -118,12 +138,18 @@ def farm_finances(
         WHERE b.farm_id = :fid AND b.status IN ('active','harvest_soon')
     """), {"fid": farm_id}).mappings().one()
 
+    placed_year = db.execute(text("""
+        SELECT COALESCE(SUM(b.initial_count), 0)
+        FROM batches b
+        WHERE b.farm_id = :fid AND YEAR(b.placed_date) = :yr
+    """), {"fid": farm_id, "yr": year}).scalar()
+
     mortality = db.execute(text("""
         SELECT COALESCE(SUM(m.count), 0) AS total_deaths
         FROM mortality_records m
         JOIN batches b ON m.batch_id = b.id
-        WHERE b.farm_id = :fid AND b.status IN ('active','harvest_soon')
-    """), {"fid": farm_id}).scalar()
+        WHERE b.farm_id = :fid AND YEAR(m.record_date) = :yr
+    """), {"fid": farm_id, "yr": year}).scalar()
 
     current_birds = db.execute(text("""
         SELECT COALESCE(SUM(
@@ -145,23 +171,48 @@ def farm_finances(
     """), {"fid": farm_id}).scalar()
 
     total_rev = float(rev)
-    total_exp = float(exp) + float(feed_exp)
+    feed_cost = float(feed_exp)
+    batch_expense_total = sum(float(r["amount"] or 0) for r in category_rows)
+    mortality_loss = sum(float(r["amount"] or 0) for r in category_rows if r["code"] == "MORTALITY_LOSS")
+    other_batch_expenses = batch_expense_total - mortality_loss
+    total_exp = batch_expense_total + feed_cost
     deaths = int(mortality)
     initial = int(active["initial_birds"])
-    cost_per_bird = (total_exp / initial) if initial > 0 else 0
-    mortality_cost = deaths * cost_per_bird
+    placed = int(placed_year or 0)
+    cost_per_active_bird = (total_exp / initial) if initial > 0 else 0
+    cost_per_placed_bird = (total_exp / placed) if placed > 0 else 0
+    estimated_mortality_cost = deaths * cost_per_active_bird
 
     return {
-        "year":            year,
-        "active_batches":  int(active["cnt"]),
-        "active_birds":    int(current_birds or 0),
-        "initial_birds":   initial,
+        "year": year,
+        "active_batches": int(active["cnt"]),
+        "active_birds": int(current_birds or 0),
+        "initial_birds": initial,
+        "placed_birds_year": placed,
         "total_mortality": deaths,
-        "mortality_cost":  round(mortality_cost, 2),
-        "revenue":         round(total_rev, 2),
-        "expenses":        round(total_exp, 2),
-        "gross_profit":    round(total_rev - total_exp, 2),
-        "feed_used_kg":    round(float(feed_kg), 2),
+        "mortality_loss": round(mortality_loss, 2),
+        "mortality_cost": round(estimated_mortality_cost, 2),
+        "estimated_mortality_cost": round(estimated_mortality_cost, 2),
+        "revenue": round(total_rev, 2),
+        "feed_cost": round(feed_cost, 2),
+        "feed_used_kg": round(float(feed_kg), 2),
+        "batch_expenses": round(batch_expense_total, 2),
+        "other_batch_expenses": round(other_batch_expenses, 2),
+        "expenses": round(total_exp, 2),
+        "gross_profit": round(total_rev - total_exp, 2),
+        "cost_per_active_bird": round(cost_per_active_bird, 2),
+        "cost_per_placed_bird": round(cost_per_placed_bird, 2),
+        "by_category": [
+            {"code": "FEED", "name": "Feed Consumption Cost", "amount": round(feed_cost, 2)},
+            *[
+                {"code": r["code"], "name": r["name"], "amount": round(float(r["amount"] or 0), 2)}
+                for r in category_rows
+            ],
+        ],
+        "by_source": [
+            {"source_module": r["source_module"], "amount": round(float(r["amount"] or 0), 2)}
+            for r in source_rows
+        ],
     }
 
 
