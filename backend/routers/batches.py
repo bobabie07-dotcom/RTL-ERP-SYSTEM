@@ -197,7 +197,14 @@ def add_log(
     log = BatchDailyLog(**body.model_dump(), batch_id=batch_id, recorded_by=current_user.id)
     db.add(log)
     db.flush()
-    sync_log_to_mortality(db, batch_id, log.log_date, log.mortality_count, current_user.id)
+    sync_log_to_mortality(
+        db,
+        batch_id,
+        log.log_date,
+        log.mortality_count,
+        current_user.id,
+        log.avg_weight_g,
+    )
     db.commit()
     db.refresh(log)
     return log
@@ -221,7 +228,14 @@ def update_log(
     # If the log date changed, remove the sentinel from the old date
     if old_date != log.log_date:
         cleanup_sentinel_on_log_delete(db, batch_id, old_date)
-    sync_log_to_mortality(db, batch_id, log.log_date, log.mortality_count or 0, current_user.id)
+    sync_log_to_mortality(
+        db,
+        batch_id,
+        log.log_date,
+        log.mortality_count or 0,
+        current_user.id,
+        log.avg_weight_g,
+    )
     db.commit()
     db.refresh(log)
     return log

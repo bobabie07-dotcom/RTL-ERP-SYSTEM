@@ -93,9 +93,16 @@ def sync_log_to_mortality(
     on_date,
     mortality_count: int,
     recorded_by: int,
+    avg_weight_g=None,
 ):
     """After daily log create/update: if no manual records exist, upsert a sentinel."""
     from models import MortalityRecord, Batch
+
+    chicken_weight_kg = (
+        round(float(avg_weight_g) / 1000, 3)
+        if avg_weight_g is not None
+        else None
+    )
 
     # If any manually-entered record already exists, don't touch it.
     manual = (
@@ -123,6 +130,7 @@ def sync_log_to_mortality(
     if mortality_count > 0:
         if sentinel:
             sentinel.count = mortality_count
+            sentinel.chicken_weight_kg = chicken_weight_kg
         else:
             batch = db.get(Batch, batch_id)
             db.add(MortalityRecord(
@@ -130,6 +138,7 @@ def sync_log_to_mortality(
                 house_id=batch.house_id,
                 record_date=on_date,
                 count=mortality_count,
+                chicken_weight_kg=chicken_weight_kg,
                 cause="other",
                 cause_notes=_SENTINEL,
                 recorded_by=recorded_by,

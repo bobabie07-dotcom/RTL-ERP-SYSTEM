@@ -374,6 +374,16 @@ def run_startup_migrations():
         # ── Multi-farm assignment junction table ──────────────────────────────
         # Upgrade avg_weight_g to NUMERIC(10,2) to support decimal precision
         _safe_add_column(conn, "ALTER TABLE batch_daily_logs MODIFY COLUMN avg_weight_g NUMERIC(10,2) DEFAULT NULL")
+        _safe_add_column(conn, """
+            UPDATE mortality_records m
+            JOIN batch_daily_logs l
+              ON l.batch_id = m.batch_id
+             AND l.log_date = m.record_date
+            SET m.chicken_weight_kg = ROUND(l.avg_weight_g / 1000, 3)
+            WHERE m.cause_notes = '__AUTOSYNC__'
+              AND m.chicken_weight_kg IS NULL
+              AND l.avg_weight_g IS NOT NULL
+        """)
 
         _safe_add_column(conn, """
             CREATE TABLE IF NOT EXISTS user_farms (
