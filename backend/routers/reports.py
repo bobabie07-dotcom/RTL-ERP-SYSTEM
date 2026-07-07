@@ -38,16 +38,58 @@ def farm_finances(
     year = db.execute(text("SELECT YEAR(CURDATE())")).scalar()
 
     rev = db.execute(text("""
-        SELECT COALESCE(SUM(so.qty_kg * so.price_per_kg), 0)
-        FROM sales_orders so
-        JOIN batches b ON so.batch_id = b.id
-        WHERE b.farm_id = :fid AND so.status != 'cancelled'
-          AND YEAR(so.order_date) = :yr
+        SELECT
+            COALESCE(br.total_revenue, 0)
+          + COALESCE(legacy_sales.total_revenue, 0)
+          + COALESCE(legacy_spent_hens.total_revenue, 0)
+          + COALESCE(egg_sales.total_revenue, 0) AS total_revenue
+        FROM (SELECT 1) seed
+        LEFT JOIN (
+            SELECT SUM(br.amount) AS total_revenue
+            FROM batch_revenues br
+            JOIN batches b ON br.batch_id = b.id
+            WHERE b.farm_id = :fid
+              AND br.is_voided = FALSE
+              AND YEAR(br.revenue_date) = :yr
+        ) br ON 1=1
+        LEFT JOIN (
+            SELECT SUM(so.qty_kg * so.price_per_kg) AS total_revenue
+            FROM sales_orders so
+            JOIN batches b ON so.batch_id = b.id
+            LEFT JOIN batch_revenues br
+              ON br.sales_order_id = so.id AND br.is_voided = FALSE
+            WHERE b.farm_id = :fid
+              AND so.status != 'cancelled'
+              AND br.id IS NULL
+              AND YEAR(so.order_date) = :yr
+        ) legacy_sales ON 1=1
+        LEFT JOIN (
+            SELECT SUM(shs.total_amount) AS total_revenue
+            FROM spent_hen_sales shs
+            LEFT JOIN batch_revenues br
+              ON br.source_module = 'SPENT_HENS'
+             AND br.source_ref = CAST(shs.id AS CHAR)
+             AND br.is_voided = FALSE
+            WHERE shs.farm_id = :fid
+              AND br.id IS NULL
+              AND YEAR(shs.sale_date) = :yr
+        ) legacy_spent_hens ON 1=1
+        LEFT JOIN (
+            SELECT SUM(total_amount) AS total_revenue
+            FROM egg_sales_orders
+            WHERE farm_id = :fid
+              AND status != 'cancelled'
+              AND YEAR(order_date) = :yr
+        ) egg_sales ON 1=1
     """), {"fid": farm_id, "yr": year}).scalar()
 
     exp = db.execute(text("""
-        SELECT COALESCE(SUM(amount), 0) FROM expenses
-        WHERE farm_id = :fid AND YEAR(expense_date) = :yr
+        SELECT COALESCE(SUM(be.amount), 0)
+        FROM batch_expenses be
+        JOIN batches b ON be.batch_id = b.id
+        WHERE b.farm_id = :fid
+          AND be.is_voided = FALSE
+          AND YEAR(be.expense_date) = :yr
     """), {"fid": farm_id, "yr": year}).scalar()
 
     # Per-feed-type average pricing avoids skewing when different feed grades are used.
@@ -174,7 +216,9 @@ def mortality_impact(
         ) fi_agg ON b.id = fi_agg.batch_id
         LEFT JOIN (
             SELECT batch_id, SUM(amount) AS other_expenses
-            FROM expenses WHERE batch_id IS NOT NULL GROUP BY batch_id
+            FROM batch_expenses
+            WHERE is_voided = FALSE
+            GROUP BY batch_id
         ) exp_agg ON b.id = exp_agg.batch_id
         WHERE b.farm_id = :fid AND b.status IN ('active','harvest_soon')
         ORDER BY b.batch_no
@@ -333,21 +377,63 @@ def monthly_summary(
     """), params).scalar()
 
     revenue = db.execute(text("""
-        SELECT COALESCE(SUM(so.qty_kg * so.price_per_kg), 0) AS total
-        FROM sales_orders so
-        JOIN batches b ON so.batch_id = b.id
-        WHERE b.farm_id = :farm_id
-          AND so.status != 'cancelled'
-          AND YEAR(so.order_date)  = :year
-          AND MONTH(so.order_date) = :month
+        SELECT
+            COALESCE(br.total_revenue, 0)
+          + COALESCE(legacy_sales.total_revenue, 0)
+          + COALESCE(legacy_spent_hens.total_revenue, 0)
+          + COALESCE(egg_sales.total_revenue, 0) AS total
+        FROM (SELECT 1) seed
+        LEFT JOIN (
+            SELECT SUM(br.amount) AS total_revenue
+            FROM batch_revenues br
+            JOIN batches b ON br.batch_id = b.id
+            WHERE b.farm_id = :farm_id
+              AND br.is_voided = FALSE
+              AND YEAR(br.revenue_date)  = :year
+              AND MONTH(br.revenue_date) = :month
+        ) br ON 1=1
+        LEFT JOIN (
+            SELECT SUM(so.qty_kg * so.price_per_kg) AS total_revenue
+            FROM sales_orders so
+            JOIN batches b ON so.batch_id = b.id
+            LEFT JOIN batch_revenues br
+              ON br.sales_order_id = so.id AND br.is_voided = FALSE
+            WHERE b.farm_id = :farm_id
+              AND so.status != 'cancelled'
+              AND br.id IS NULL
+              AND YEAR(so.order_date)  = :year
+              AND MONTH(so.order_date) = :month
+        ) legacy_sales ON 1=1
+        LEFT JOIN (
+            SELECT SUM(shs.total_amount) AS total_revenue
+            FROM spent_hen_sales shs
+            LEFT JOIN batch_revenues br
+              ON br.source_module = 'SPENT_HENS'
+             AND br.source_ref = CAST(shs.id AS CHAR)
+             AND br.is_voided = FALSE
+            WHERE shs.farm_id = :farm_id
+              AND YEAR(shs.sale_date)  = :year
+              AND MONTH(shs.sale_date) = :month
+              AND br.id IS NULL
+        ) legacy_spent_hens ON 1=1
+        LEFT JOIN (
+            SELECT SUM(total_amount) AS total_revenue
+            FROM egg_sales_orders
+            WHERE farm_id = :farm_id
+              AND status != 'cancelled'
+              AND YEAR(order_date)  = :year
+              AND MONTH(order_date) = :month
+        ) egg_sales ON 1=1
     """), params).scalar()
 
     expenses = db.execute(text("""
-        SELECT COALESCE(SUM(amount), 0) AS total
-        FROM expenses
-        WHERE farm_id = :farm_id
-          AND YEAR(expense_date)  = :year
-          AND MONTH(expense_date) = :month
+        SELECT COALESCE(SUM(be.amount), 0) AS total
+        FROM batch_expenses be
+        JOIN batches b ON be.batch_id = b.id
+        WHERE b.farm_id = :farm_id
+          AND be.is_voided = FALSE
+          AND YEAR(be.expense_date)  = :year
+          AND MONTH(be.expense_date) = :month
     """), params).scalar()
 
     rev_f  = float(revenue)
@@ -445,12 +531,28 @@ def batch_comparison(
             FROM mortality_records GROUP BY batch_id
         ) mort ON b.id = mort.batch_id
         LEFT JOIN (
-            SELECT batch_id, SUM(qty_kg * price_per_kg) AS total_revenue
-            FROM sales_orders WHERE status != 'cancelled' GROUP BY batch_id
+            SELECT batch_id, SUM(total_revenue) AS total_revenue
+            FROM (
+                SELECT batch_id, SUM(amount) AS total_revenue
+                FROM batch_revenues
+                WHERE is_voided = FALSE
+                GROUP BY batch_id
+                UNION ALL
+                SELECT so.batch_id, SUM(so.qty_kg * so.price_per_kg) AS total_revenue
+                FROM sales_orders so
+                LEFT JOIN batch_revenues br
+                  ON br.sales_order_id = so.id AND br.is_voided = FALSE
+                WHERE so.status != 'cancelled'
+                  AND br.id IS NULL
+                GROUP BY so.batch_id
+            ) revenue_rows
+            GROUP BY batch_id
         ) rev ON b.id = rev.batch_id
         LEFT JOIN (
             SELECT batch_id, SUM(amount) AS other_expenses
-            FROM expenses WHERE batch_id IS NOT NULL GROUP BY batch_id
+            FROM batch_expenses
+            WHERE is_voided = FALSE
+            GROUP BY batch_id
         ) exp ON b.id = exp.batch_id
         LEFT JOIN harvest_records hr ON hr.batch_id = b.id
         WHERE b.farm_id = :farm_id

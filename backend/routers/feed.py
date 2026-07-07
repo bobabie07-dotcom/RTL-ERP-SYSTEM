@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Batch, FeedIssue, FeedPurchase, FeedStock, FeedType, House, InventoryItem, InventoryMovement, Farm
+from models import Batch, FeedIssue, FeedPurchase, FeedStock, FeedType, House, InventoryItem, InventoryMovement, Farm, Supplier
 from routers.auth import get_current_user, require_permission
 from utils import check_and_create_inventory_alerts
 from schemas.schemas import (
@@ -15,6 +15,40 @@ from schemas.schemas import (
 )
 
 router = APIRouter(prefix="/feed", tags=["feed"])
+
+
+def _ensure_batch_access(db: Session, batch_id: int, current_user) -> Batch:
+    batch = db.get(Batch, batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    if current_user.role_id != 6 and batch.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied to batch")
+    return batch
+
+
+def _ensure_house_for_batch(db: Session, house_id: int, batch: Batch):
+    house = db.get(House, house_id)
+    if not house:
+        raise HTTPException(status_code=404, detail="House not found")
+    if house.farm_id != batch.farm_id:
+        raise HTTPException(status_code=400, detail="House does not belong to selected batch farm")
+    return house
+
+
+def _ensure_supplier_access(db: Session, supplier_id: int | None, current_user):
+    if supplier_id is None:
+        return None
+    supplier = db.get(Supplier, supplier_id)
+    if not supplier or not supplier.is_active:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    if current_user.role_id != 6 and supplier.company_id not in (None, current_user.company_id):
+        raise HTTPException(status_code=403, detail="Access denied to supplier")
+    return supplier
+
+
+def _ensure_inventory_item_access(item: InventoryItem, current_user):
+    if current_user.role_id != 6 and item.company_id not in (None, current_user.company_id):
+        raise HTTPException(status_code=403, detail="Access denied to linked inventory item")
 
 
 @router.get("/types", response_model=list[FeedTypeOut])
@@ -72,6 +106,7 @@ def update_feed_type(
         stock = db.get(FeedStock, type_id)
         inv_item = db.get(InventoryItem, body.inventory_item_id)
         if stock and inv_item:
+            _ensure_inventory_item_access(inv_item, current_user)
             inv_qty = float(inv_item.qty_on_hand)
             old_feed_qty = float(stock.qty_on_hand_kg)
             stock.qty_on_hand_kg = inv_qty
@@ -128,6 +163,7 @@ def create_feed_purchase(
     ft = db.get(FeedType, body.feed_type_id)
     if not ft:
         raise HTTPException(status_code=404, detail="Feed type not found")
+    _ensure_supplier_access(db, body.supplier_id, current_user)
 
     purchase = FeedPurchase(**body.model_dump(), created_by=current_user.id)
     db.add(purchase)
@@ -144,6 +180,7 @@ def create_feed_purchase(
     if ft.inventory_item_id:
         inv_item = db.get(InventoryItem, ft.inventory_item_id)
         if inv_item:
+            _ensure_inventory_item_access(inv_item, current_user)
             inv_item.qty_on_hand = float(inv_item.qty_on_hand) + float(body.qty_kg)
             db.add(InventoryMovement(
                 item_id=ft.inventory_item_id,
@@ -217,8 +254,8 @@ def create_feed_issue(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "feed")),
 ):
-    if not db.get(Batch, body.batch_id):
-        raise HTTPException(status_code=404, detail="Batch not found")
+    batch = _ensure_batch_access(db, body.batch_id, current_user)
+    _ensure_house_for_batch(db, body.house_id, batch)
     ft = db.get(FeedType, body.feed_type_id)
     if not ft:
         raise HTTPException(status_code=404, detail="Feed type not found")
@@ -236,6 +273,7 @@ def create_feed_issue(
     if ft.inventory_item_id:
         inv_item = db.get(InventoryItem, ft.inventory_item_id)
         if inv_item:
+            _ensure_inventory_item_access(inv_item, current_user)
             inv_item.qty_on_hand = float(inv_item.qty_on_hand) - float(body.qty_kg)
             db.add(InventoryMovement(
                 item_id=ft.inventory_item_id,
@@ -263,11 +301,17 @@ def update_feed_issue(
     issue = db.get(FeedIssue, issue_id)
     if not issue:
         raise HTTPException(status_code=404, detail="Feed issue not found")
+    _ensure_batch_access(db, issue.batch_id, current_user)
+    new_batch = _ensure_batch_access(db, body.batch_id, current_user)
+    _ensure_house_for_batch(db, body.house_id, new_batch)
 
     old_qty = float(issue.qty_kg)
     old_ft_id = issue.feed_type_id
     new_qty = float(body.qty_kg)
     new_ft_id = body.feed_type_id
+    new_ft = db.get(FeedType, new_ft_id)
+    if not new_ft:
+        raise HTTPException(status_code=404, detail="Feed type not found")
 
     # Reverse old stock deduction
     old_stock = db.get(FeedStock, old_ft_id)
@@ -277,6 +321,7 @@ def update_feed_issue(
     if old_ft and old_ft.inventory_item_id:
         old_inv = db.get(InventoryItem, old_ft.inventory_item_id)
         if old_inv:
+            _ensure_inventory_item_access(old_inv, current_user)
             old_inv.qty_on_hand = float(old_inv.qty_on_hand) + old_qty
 
     # Apply updated fields
@@ -291,10 +336,10 @@ def update_feed_issue(
     new_stock = db.get(FeedStock, new_ft_id)
     if new_stock:
         new_stock.qty_on_hand_kg = float(new_stock.qty_on_hand_kg) - new_qty
-    new_ft = db.get(FeedType, new_ft_id)
-    if new_ft and new_ft.inventory_item_id:
+    if new_ft.inventory_item_id:
         new_inv = db.get(InventoryItem, new_ft.inventory_item_id)
         if new_inv:
+            _ensure_inventory_item_access(new_inv, current_user)
             new_inv.qty_on_hand = float(new_inv.qty_on_hand) - new_qty
             check_and_create_inventory_alerts(new_inv, db)
 

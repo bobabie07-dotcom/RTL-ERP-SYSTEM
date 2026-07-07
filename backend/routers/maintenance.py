@@ -9,7 +9,7 @@ from database import get_db
 from models import Batch, Expense, Farm, MaintenanceLog
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import MaintenanceLogCreate, MaintenanceLogOut, MaintenanceLogUpdate
-from utils import post_batch_expense
+from utils import post_batch_expense, void_batch_expenses_by_source
 
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 logger = logging.getLogger(__name__)
@@ -93,8 +93,18 @@ def update_log(
     for field, value in data.items():
         setattr(log, field, value)
 
-    # Post to batch_expenses when transitioning to completed with a cost
-    if not was_completed and new_status == "completed" and new_cost > 0:
+    if was_completed and new_status == "completed" and any(
+        field in data for field in ("cost", "category", "description", "batch_allocated", "house_id", "log_date")
+    ):
+        void_batch_expenses_by_source(
+            db,
+            "MAINTENANCE",
+            str(log.id),
+            "Maintenance log updated",
+            voided_by=current_user.id,
+        )
+
+    if new_status == "completed" and new_cost > 0:
         _attach_expense(log, _log_as_body(log, new_alloc), db, current_user.id)
 
     db.commit()
@@ -120,10 +130,13 @@ def delete_log(
         exp = db.get(Expense, log.expense_id)
         if exp:
             db.delete(exp)
-    # Remove linked batch_expenses entry (new system)
-    db.execute(text(
-        "DELETE FROM batch_expenses WHERE source_module = 'MAINTENANCE' AND source_ref = :ref"
-    ), {"ref": str(log_id)})
+    void_batch_expenses_by_source(
+        db,
+        "MAINTENANCE",
+        str(log_id),
+        "Maintenance log deleted",
+        voided_by=current_user.id,
+    )
     db.delete(log)
     db.commit()
 

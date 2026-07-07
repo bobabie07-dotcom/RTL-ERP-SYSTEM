@@ -12,11 +12,55 @@ from models import Batch, MortalityRecord, Farm
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import MortalityCreate, MortalityOut, MortalityRate7d, MortalityRow, MortalityUpdate
 from sync_helpers import _delete_sentinel, sync_mortality_to_log
-from utils import post_batch_expense
+from utils import post_batch_expense, void_batch_expense_for_mortality
 
 router = APIRouter(prefix="/mortality", tags=["mortality"])
 # current_count is derived in v_batch_summary from mortality_records directly —
 # no need to sync a stored column after each CUD operation.
+
+
+def _post_mortality_loss(record: MortalityRecord, db: Session, user_id: int | None = None):
+    batch_obj = db.get(Batch, record.batch_id)
+    initial = batch_obj.initial_count if batch_obj else 1
+
+    feed_cost = db.execute(text("""
+        SELECT COALESCE(SUM(fi.qty_kg * COALESCE(fp.avg_cost, 25.0)), 0)
+        FROM feed_issues fi
+        LEFT JOIN (SELECT feed_type_id, AVG(cost_per_kg) AS avg_cost
+                   FROM feed_purchases GROUP BY feed_type_id) fp
+            ON fp.feed_type_id = fi.feed_type_id
+        WHERE fi.batch_id = :bid
+    """), {"bid": record.batch_id}).scalar() or 0
+
+    legacy_exp = 0
+
+    other_be = db.execute(text("""
+        SELECT COALESCE(SUM(amount),0)
+        FROM batch_expenses
+        WHERE batch_id=:bid AND is_voided=FALSE
+          AND (mortality_record_id IS NULL OR mortality_record_id != :record_id)
+    """), {"bid": record.batch_id, "record_id": record.id}).scalar() or 0
+
+    total_cost = float(feed_cost) + float(legacy_exp) + float(other_be)
+    cost_per_bird = total_cost / initial if initial else 0
+    loss_value = cost_per_bird * record.count
+
+    return post_batch_expense(
+        batch_id=record.batch_id,
+        category_code="MORTALITY_LOSS",
+        amount=loss_value,
+        expense_date=record.record_date,
+        db=db,
+        qty=record.count,
+        unit="birds",
+        unit_cost=cost_per_bird,
+        description=f"Mortality loss - {record.count} birds ({record.cause})",
+        source_module="MORTALITY",
+        source_ref=str(record.id),
+        mortality_record_id=record.id,
+        house_id=record.house_id,
+        created_by=user_id,
+    )
 
 
 @router.get("", response_model=list[MortalityRow])
@@ -94,9 +138,7 @@ def create_mortality_record(
             WHERE fi.batch_id = :bid
         """), {"bid": record.batch_id}).scalar() or 0
 
-        legacy_exp = db.execute(text(
-            "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE batch_id=:bid"
-        ), {"bid": record.batch_id}).scalar() or 0
+        legacy_exp = 0
 
         other_be = db.execute(text(
             "SELECT COALESCE(SUM(amount),0) FROM batch_expenses WHERE batch_id=:bid AND is_voided=FALSE"
@@ -135,7 +177,7 @@ def update_mortality_record(
     record_id: int,
     body: MortalityUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "mortality")),
+    current_user=Depends(require_permission("write", "mortality")),
 ):
     record = db.get(MortalityRecord, record_id)
     if not record:
@@ -144,11 +186,21 @@ def update_mortality_record(
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(record, field, value)
     db.flush()
+    void_batch_expense_for_mortality(
+        db,
+        record.id,
+        "Mortality record updated",
+        voided_by=current_user.id,
+    )
     # If date changed, also sync the old date (record moved away from it)
     if old_date != record.record_date:
         sync_mortality_to_log(db, record.batch_id, old_date)
     _delete_sentinel(db, record.batch_id, record.record_date)
     sync_mortality_to_log(db, record.batch_id, record.record_date)
+    try:
+        _post_mortality_loss(record, db, current_user.id)
+    except Exception:
+        logger.warning("post_batch_expense failed for mortality record %s", record.id, exc_info=True)
     db.commit()
     db.refresh(record)
     return record
@@ -158,12 +210,18 @@ def update_mortality_record(
 def delete_mortality_record(
     record_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_permission("write", "mortality")),
+    current_user=Depends(require_permission("write", "mortality")),
 ):
     record = db.get(MortalityRecord, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
     batch_id, record_date = record.batch_id, record.record_date
+    void_batch_expense_for_mortality(
+        db,
+        record.id,
+        "Mortality record deleted",
+        voided_by=current_user.id,
+    )
     db.delete(record)
     db.flush()
     sync_mortality_to_log(db, batch_id, record_date)

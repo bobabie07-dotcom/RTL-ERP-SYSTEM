@@ -10,6 +10,7 @@ from database import get_db
 from models.models import Batch, Buyer, SpentHenSale, User
 from routers.auth import get_current_user, require_permission
 from schemas.schemas import SpentHenSaleCreate, SpentHenSaleOut, SpentHenSaleUpdate
+from utils import post_batch_revenue, void_batch_revenues_by_source
 
 router = APIRouter(prefix="/spent-hens", tags=["Spent Hens"])
 logger = logging.getLogger(__name__)
@@ -18,6 +19,26 @@ logger = logging.getLogger(__name__)
 def _verify_farm_access(farm_id: int, current_user: User):
     if current_user.role_id not in (1, 5, 6) and farm_id != current_user.farm_id:
         raise HTTPException(status_code=403, detail="Access denied to this farm's operations")
+
+
+def _post_spent_hen_revenue(sale: SpentHenSale, db: Session, user_id: int | None = None):
+    if not sale.batch_id:
+        return None
+    return post_batch_revenue(
+        batch_id=sale.batch_id,
+        amount=float(sale.total_amount),
+        revenue_date=sale.sale_date,
+        db=db,
+        category="SPENT_HENS",
+        qty_kg=float(sale.total_weight_kg or 0) or None,
+        qty_birds=sale.birds_sold,
+        price_per_kg=float(sale.price_per_kg),
+        description=f"Spent hen sale #{sale.id}",
+        source_module="SPENT_HENS",
+        source_ref=str(sale.id),
+        buyer_id=sale.buyer_id,
+        created_by=user_id,
+    )
 
 
 @router.get("", response_model=list[SpentHenSaleOut])
@@ -61,6 +82,8 @@ def create_sale(
         ).first()
         if not batch:
             raise HTTPException(status_code=404, detail="Batch not found")
+        if batch.farm_id != farm_id:
+            raise HTTPException(status_code=400, detail="Batch does not belong to selected farm")
 
     total_weight = None
     if body.avg_weight_kg and body.birds_sold:
@@ -86,6 +109,8 @@ def create_sale(
         created_by=current_user.id,
     )
     db.add(sale)
+    db.flush()
+    _post_spent_hen_revenue(sale, db, current_user.id)
     db.commit()
     db.refresh(sale)
     return sale
@@ -104,7 +129,10 @@ def update_sale(
     if current_user.role_id != 6 and sale.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "batch_id" in data:
+        raise HTTPException(status_code=400, detail="Batch cannot be changed after creating a spent hen sale")
+    for field, value in data.items():
         setattr(sale, field, value)
 
     # Recalculate total if weight or price changed
@@ -112,6 +140,14 @@ def update_sale(
         sale.total_weight_kg = round(float(sale.avg_weight_kg) * sale.birds_sold, 3)
     total = Decimal(str(sale.price_per_kg)) * Decimal(str(sale.total_weight_kg or sale.birds_sold))
     sale.total_amount = total - Decimal(str(sale.transport_cost or 0))
+    void_batch_revenues_by_source(
+        db,
+        "SPENT_HENS",
+        str(sale.id),
+        "Spent hen sale updated",
+        voided_by=current_user.id,
+    )
+    _post_spent_hen_revenue(sale, db, current_user.id)
 
     db.commit()
     db.refresh(sale)
@@ -129,6 +165,13 @@ def delete_sale(
         raise HTTPException(status_code=404, detail="Spent hen sale not found")
     if current_user.role_id != 6 and sale.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    void_batch_revenues_by_source(
+        db,
+        "SPENT_HENS",
+        str(sale.id),
+        "Spent hen sale deleted",
+        voided_by=current_user.id,
+    )
     db.delete(sale)
     db.commit()
 

@@ -5,11 +5,11 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import InventoryItem, InventoryMovement, PurchaseOrder, PurchaseOrderItem, Supplier
+from models import Batch, Farm, InventoryItem, InventoryMovement, PurchaseOrder, PurchaseOrderItem, Supplier
 from routers.auth import get_current_user, require_permission
 from utils import check_and_create_inventory_alerts, post_batch_expense
 from schemas.schemas import (
@@ -23,18 +23,52 @@ router = APIRouter(prefix="/procurement", tags=["procurement"])
 
 # ── Suppliers ────────────────────────────────────────────────────────────────
 
+def _ensure_farm_access(db: Session, farm_id: int, current_user) -> Farm:
+    farm = db.get(Farm, farm_id)
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    if current_user.role_id != 6 and farm.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied to farm")
+    return farm
+
+
+def _ensure_supplier_access(db: Session, supplier_id: int | None, current_user) -> Supplier | None:
+    if supplier_id is None:
+        return None
+    supplier = db.get(Supplier, supplier_id)
+    if not supplier or not supplier.is_active:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    if current_user.role_id != 6 and supplier.company_id not in (None, current_user.company_id):
+        raise HTTPException(status_code=403, detail="Access denied to supplier")
+    return supplier
+
+
+def _ensure_item_access(db: Session, item_id: int, farm_id: int, current_user) -> InventoryItem:
+    item = db.get(InventoryItem, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Inventory item {item_id} not found")
+    if item.farm_id != farm_id:
+        raise HTTPException(status_code=400, detail=f"Inventory item {item_id} does not belong to selected farm")
+    if current_user.role_id != 6 and item.company_id not in (None, current_user.company_id):
+        raise HTTPException(status_code=403, detail=f"Access denied to inventory item {item_id}")
+    return item
+
+
 @router.get("/suppliers", response_model=list[SupplierOut])
-def list_suppliers(db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Supplier).filter(Supplier.is_active == True).all()
+def list_suppliers(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    q = db.query(Supplier).filter(Supplier.is_active == True)
+    if current_user.role_id != 6:
+        q = q.filter(or_(Supplier.company_id == current_user.company_id, Supplier.company_id == None))
+    return q.order_by(Supplier.name).all()
 
 
 @router.post("/suppliers", response_model=SupplierOut, status_code=status.HTTP_201_CREATED)
 def create_supplier(
     body: SupplierCreate,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    supplier = Supplier(**body.model_dump())
+    supplier = Supplier(**body.model_dump(), company_id=current_user.company_id)
     db.add(supplier)
     db.commit()
     db.refresh(supplier)
@@ -117,9 +151,22 @@ def create_purchase_order(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "procurement")),
 ):
+    farm = _ensure_farm_access(db, body.farm_id, current_user)
+    _ensure_supplier_access(db, body.supplier_id, current_user)
+    if body.batch_id:
+        batch = db.get(Batch, body.batch_id)
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        if batch.farm_id != body.farm_id:
+            raise HTTPException(status_code=400, detail="Batch does not belong to selected farm")
+        if current_user.role_id != 6 and batch.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Access denied to batch")
+    for it in body.items:
+        _ensure_item_access(db, it.item_id, body.farm_id, current_user)
+
     latest_no = (
         db.query(func.max(PurchaseOrder.po_no))
-        .filter(PurchaseOrder.company_id == current_user.company_id)
+        .filter(PurchaseOrder.company_id == farm.company_id)
         .scalar()
     )
     try:
@@ -132,7 +179,7 @@ def create_purchase_order(
     total = sum(float(it.qty_ordered) * float(it.unit_price) for it in items_data) if items_data else (float(body.total_amount or 0))
 
     po = PurchaseOrder(
-        company_id=current_user.company_id,
+        company_id=farm.company_id,
         farm_id=body.farm_id,
         supplier_id=body.supplier_id,
         batch_id=body.batch_id,
@@ -170,21 +217,26 @@ def update_purchase_order(
     po = db.get(PurchaseOrder, po_id)
     if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
+    if po.status not in ("pending_approval", "draft"):
+        raise HTTPException(status_code=400, detail="Only draft or pending approval purchase orders can be edited")
 
     if body.farm_id is not None:
-        from models import Farm
-        new_farm = db.get(Farm, body.farm_id)
-        if not new_farm or (current_user.role_id != 6 and new_farm.company_id != current_user.company_id):
-            raise HTTPException(status_code=403, detail="New farm not found or access denied")
+        new_farm = _ensure_farm_access(db, body.farm_id, current_user)
         po.farm_id = body.farm_id
         po.company_id = new_farm.company_id
 
     if body.batch_id is not None:
-        from models import Batch
         new_batch = db.get(Batch, body.batch_id)
-        if not new_batch or (current_user.role_id != 6 and new_batch.company_id != current_user.company_id):
-            raise HTTPException(status_code=403, detail="New batch not found or access denied")
+        if not new_batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        if new_batch.farm_id != po.farm_id:
+            raise HTTPException(status_code=400, detail="Batch does not belong to selected farm")
+        if current_user.role_id != 6 and new_batch.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Access denied to batch")
         po.batch_id = body.batch_id
+
+    if body.supplier_id is not None:
+        _ensure_supplier_access(db, body.supplier_id, current_user)
 
     exclude = {"farm_id", "batch_id"}
     for field, value in body.model_dump(exclude_none=True).items():
@@ -254,6 +306,8 @@ def delete_purchase_order(
     po = db.get(PurchaseOrder, po_id)
     if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
+    if po.status not in ("pending_approval", "cancelled"):
+        raise HTTPException(status_code=400, detail="Only pending approval or cancelled purchase orders can be deleted")
     for item in db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all():
         db.delete(item)
     db.delete(po)
@@ -280,6 +334,7 @@ def receive_purchase_order(
             inv_item = db.get(InventoryItem, po_item.item_id)
             if not inv_item:
                 continue
+            _ensure_item_access(db, inv_item.id, po.farm_id, current_user)
             inv_item.qty_on_hand = float(inv_item.qty_on_hand) + delta
             if float(po_item.unit_price or 0) > 0:
                 inv_item.cost_per_unit = float(po_item.unit_price)
@@ -350,13 +405,17 @@ def sync_inventory_from_po(
         raise HTTPException(status_code=404, detail="Purchase order not found")
     if po.status != "received":
         raise HTTPException(status_code=400, detail="Only received POs can be synced to inventory")
+    existing_movement = db.query(InventoryMovement).filter(
+        InventoryMovement.reference_type == "purchase",
+        InventoryMovement.reference_id == po.id,
+    ).first()
+    if existing_movement:
+        raise HTTPException(status_code=409, detail="Purchase order is already synced to inventory")
 
     for it in body.items:
         if not it.item_id or float(it.qty_ordered) <= 0:
             continue
-        inv_item = db.get(InventoryItem, it.item_id)
-        if not inv_item:
-            continue
+        inv_item = _ensure_item_access(db, it.item_id, po.farm_id, current_user)
         inv_item.qty_on_hand = float(inv_item.qty_on_hand) + float(it.qty_ordered)
         if float(it.unit_price or 0) > 0:
             inv_item.cost_per_unit = float(it.unit_price)

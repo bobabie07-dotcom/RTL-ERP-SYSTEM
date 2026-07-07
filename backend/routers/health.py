@@ -17,7 +17,7 @@ from schemas.schemas import (
     UpcomingVaccination,
     VaccinationCreate, VaccinationOut, VaccinationStatusUpdate, VaccinationUpdate,
 )
-from utils import post_batch_expense
+from utils import post_batch_expense, void_batch_expenses_by_source
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -98,6 +98,15 @@ def update_vaccination(
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(vacc, field, value)
 
+    if prev_status == "done" and vacc.status != "done":
+        void_batch_expenses_by_source(
+            db,
+            "VACCINATION",
+            str(vacc.id),
+            "Vaccination no longer marked done",
+            voided_by=current_user.id,
+        )
+
     # Auto-post VACCINE expense when marking done with a cost
     if prev_status != "done" and vacc.status == "done":
         try:
@@ -135,6 +144,13 @@ def delete_vaccination(
         raise HTTPException(status_code=404, detail="Vaccination schedule not found")
     if vacc.created_by != current_user.id and current_user.role_id not in (1, 5):
         raise HTTPException(status_code=403, detail="You can only delete vaccination schedules you created")
+    void_batch_expenses_by_source(
+        db,
+        "VACCINATION",
+        str(vacc.id),
+        "Vaccination schedule deleted",
+        voided_by=current_user.id,
+    )
     db.delete(vacc)
     db.commit()
 

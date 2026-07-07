@@ -318,6 +318,11 @@ def run_startup_migrations():
                 INDEX idx_br_date  (revenue_date)
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
+        _safe_add_column(conn, "ALTER TABLE batch_revenues ADD COLUMN source_module VARCHAR(30) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE batch_revenues ADD COLUMN source_ref VARCHAR(50) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE batch_revenues ADD COLUMN void_reason VARCHAR(255) DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE batch_revenues ADD COLUMN voided_by INT DEFAULT NULL")
+        _safe_add_column(conn, "ALTER TABLE batch_revenues ADD COLUMN voided_at DATETIME DEFAULT NULL")
         # ── Recreate v_batch_summary to include chick cost fields ───────────
         conn.execute(text("""
             CREATE OR REPLACE VIEW v_batch_summary AS

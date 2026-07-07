@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -82,6 +82,21 @@ def post_batch_expense(
     cat = db.query(ExpenseCategory).filter(ExpenseCategory.code == category_code).first()
     if not cat:
         return None
+    if mortality_record_id is not None:
+        existing = db.query(BatchExpense).filter(
+            BatchExpense.mortality_record_id == mortality_record_id,
+            BatchExpense.is_voided == False,
+        ).first()
+        if existing:
+            return existing
+    if source_module in {"BATCH", "MAINTENANCE", "VACCINATION", "HEALTH_EVENT", "LEGACY_EXPENSE"} and source_ref:
+        existing = db.query(BatchExpense).filter(
+            BatchExpense.source_module == source_module,
+            BatchExpense.source_ref == str(source_ref),
+            BatchExpense.is_voided == False,
+        ).first()
+        if existing:
+            return existing
     exp = BatchExpense(
         batch_id=batch_id,
         house_id=house_id,
@@ -102,6 +117,50 @@ def post_batch_expense(
     return exp
 
 
+def void_batch_expenses_by_source(
+    db: Session,
+    source_module: str,
+    source_ref: str,
+    reason: str,
+    *,
+    voided_by=None,
+) -> int:
+    from models import BatchExpense
+
+    rows = db.query(BatchExpense).filter(
+        BatchExpense.source_module == source_module,
+        BatchExpense.source_ref == str(source_ref),
+        BatchExpense.is_voided == False,
+    ).all()
+    for row in rows:
+        row.is_voided = True
+        row.void_reason = reason
+        row.voided_by = voided_by
+        row.voided_at = datetime.utcnow()
+    return len(rows)
+
+
+def void_batch_expense_for_mortality(
+    db: Session,
+    mortality_record_id: int,
+    reason: str,
+    *,
+    voided_by=None,
+) -> int:
+    from models import BatchExpense
+
+    rows = db.query(BatchExpense).filter(
+        BatchExpense.mortality_record_id == mortality_record_id,
+        BatchExpense.is_voided == False,
+    ).all()
+    for row in rows:
+        row.is_voided = True
+        row.void_reason = reason
+        row.voided_by = voided_by
+        row.voided_at = datetime.utcnow()
+    return len(rows)
+
+
 def post_batch_revenue(
     batch_id: int,
     amount: float,
@@ -114,10 +173,27 @@ def post_batch_revenue(
     price_per_kg=None,
     description=None,
     sales_order_id=None,
+    source_module=None,
+    source_ref=None,
     buyer_id=None,
     created_by=None,
 ):
     from models import BatchRevenue
+    if sales_order_id is not None:
+        existing = db.query(BatchRevenue).filter(
+            BatchRevenue.sales_order_id == sales_order_id,
+            BatchRevenue.is_voided == False,
+        ).first()
+        if existing:
+            return existing
+    if source_module and source_ref:
+        existing = db.query(BatchRevenue).filter(
+            BatchRevenue.source_module == source_module,
+            BatchRevenue.source_ref == str(source_ref),
+            BatchRevenue.is_voided == False,
+        ).first()
+        if existing:
+            return existing
     rev = BatchRevenue(
         batch_id=batch_id,
         revenue_date=revenue_date,
@@ -128,12 +204,59 @@ def post_batch_revenue(
         price_per_kg=price_per_kg,
         description=description,
         sales_order_id=sales_order_id,
+        source_module=source_module,
+        source_ref=str(source_ref) if source_ref is not None else None,
         buyer_id=buyer_id,
         is_voided=False,
         created_by=created_by,
     )
     db.add(rev)
     return rev
+
+
+def void_batch_revenue_for_sales_order(
+    db: Session,
+    sales_order_id: int,
+    reason: str,
+) -> int:
+    from models import BatchRevenue
+
+    rows = db.query(BatchRevenue).filter(
+        BatchRevenue.sales_order_id == sales_order_id,
+        BatchRevenue.is_voided == False,
+    ).all()
+    for row in rows:
+        row.is_voided = True
+        row.void_reason = reason
+        row.voided_at = datetime.utcnow()
+        note = f"Voided: {reason}"
+        row.description = f"{row.description or ''} [{note}]".strip()
+    return len(rows)
+
+
+def void_batch_revenues_by_source(
+    db: Session,
+    source_module: str,
+    source_ref: str,
+    reason: str,
+    *,
+    voided_by=None,
+) -> int:
+    from models import BatchRevenue
+
+    rows = db.query(BatchRevenue).filter(
+        BatchRevenue.source_module == source_module,
+        BatchRevenue.source_ref == str(source_ref),
+        BatchRevenue.is_voided == False,
+    ).all()
+    for row in rows:
+        row.is_voided = True
+        row.void_reason = reason
+        row.voided_by = voided_by
+        row.voided_at = datetime.utcnow()
+        note = f"Voided: {reason}"
+        row.description = f"{row.description or ''} [{note}]".strip()
+    return len(rows)
 
 
 def generate_farm_alerts(farm_id: int, db: Session) -> int:

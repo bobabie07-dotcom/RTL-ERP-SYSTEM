@@ -4,13 +4,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 logger = logging.getLogger(__name__)
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Batch, Buyer, Expense, SalesOrder
+from models import Batch, Buyer, Expense, Farm, SalesOrder
 from routers.auth import get_current_user, require_permission
-from utils import post_batch_revenue
+from utils import post_batch_expense, post_batch_revenue, void_batch_expenses_by_source, void_batch_revenue_for_sales_order
 from schemas.schemas import (
     ApprovalAction,
     BuyerCreate, BuyerOut,
@@ -23,18 +23,52 @@ router = APIRouter(prefix="/sales", tags=["sales"])
 
 # ── Buyers ────────────────────────────────────────────────────────────────────
 
+def _ensure_batch_access(db: Session, batch_id: int, current_user) -> Batch:
+    batch = db.get(Batch, batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    if current_user.role_id != 6 and batch.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied to batch")
+    return batch
+
+
+def _ensure_buyer_access(db: Session, buyer_id: int | None, current_user) -> Buyer | None:
+    if buyer_id is None:
+        return None
+    buyer = db.get(Buyer, buyer_id)
+    if not buyer or not buyer.is_active:
+        raise HTTPException(status_code=404, detail="Buyer not found")
+    if current_user.role_id != 6 and buyer.company_id not in (None, current_user.company_id):
+        raise HTTPException(status_code=403, detail="Access denied to buyer")
+    return buyer
+
+
+def _expense_category_code(category: str) -> str:
+    return {
+        "labor": "LABOR",
+        "utilities": "MISC",
+        "maintenance": "MAINTENANCE",
+        "transport": "TRANSPORT",
+        "chicks": "CHICK",
+        "other": "MISC",
+    }.get(category, "MISC")
+
+
 @router.get("/buyers", response_model=list[BuyerOut])
-def list_buyers(db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return db.query(Buyer).filter(Buyer.is_active == True).all()
+def list_buyers(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    q = db.query(Buyer).filter(Buyer.is_active == True)
+    if current_user.role_id != 6:
+        q = q.filter(or_(Buyer.company_id == current_user.company_id, Buyer.company_id == None))
+    return q.order_by(Buyer.name).all()
 
 
 @router.post("/buyers", response_model=BuyerOut, status_code=status.HTTP_201_CREATED)
 def create_buyer(
     body: BuyerCreate,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    buyer = Buyer(**body.model_dump())
+    buyer = Buyer(**body.model_dump(), company_id=current_user.company_id)
     db.add(buyer)
     db.commit()
     db.refresh(buyer)
@@ -99,8 +133,8 @@ def create_order(
     db: Session = Depends(get_db),
     current_user=Depends(require_permission("write", "sales")),
 ):
-    if not db.get(Batch, body.batch_id):
-        raise HTTPException(status_code=404, detail="Batch not found")
+    batch = _ensure_batch_access(db, body.batch_id, current_user)
+    _ensure_buyer_access(db, body.buyer_id, current_user)
     if db.query(SalesOrder).filter(SalesOrder.order_no == body.order_no).first():
         raise HTTPException(status_code=400, detail="Order number already exists")
 
@@ -115,7 +149,12 @@ def create_order(
             detail="Batch has an active withdrawal period — sale blocked until withdrawal ends",
         )
 
-    order = SalesOrder(**body.model_dump(), created_by=current_user.id, status="pending_approval")
+    order = SalesOrder(
+        **body.model_dump(),
+        company_id=batch.company_id,
+        created_by=current_user.id,
+        status="pending_approval",
+    )
     db.add(order)
     db.commit()
     db.refresh(order)
@@ -133,6 +172,8 @@ def approve_order(
     order = db.get(SalesOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if current_user.role_id != 6 and order.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     if order.status != "pending_approval":
         raise HTTPException(status_code=400, detail=f"Order is already {order.status}")
     from datetime import datetime
@@ -175,6 +216,8 @@ def reject_order(
     order = db.get(SalesOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if current_user.role_id != 6 and order.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     if order.status != "pending_approval":
         raise HTTPException(status_code=400, detail=f"Order is already {order.status}")
     order.status           = "cancelled"
@@ -199,7 +242,14 @@ def update_order(
         raise HTTPException(status_code=404, detail="Order not found")
     if current_user.role_id != 6 and order.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    for field, value in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_none=True)
+    if order.status != "pending_approval" and any(field in data for field in ("delivery_date",)):
+        raise HTTPException(status_code=400, detail="Only pending approval orders can be edited")
+    if "status" in data and data["status"] != "cancelled":
+        raise HTTPException(status_code=400, detail="Use the approval endpoints to change sales order status")
+    if data.get("status") == "cancelled":
+        void_batch_revenue_for_sales_order(db, order.id, "Sales order cancelled")
+    for field, value in data.items():
         setattr(order, field, value)
     db.commit()
     db.refresh(order)
@@ -217,6 +267,10 @@ def delete_order(
     order = db.get(SalesOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if current_user.role_id != 6 and order.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if order.status != "pending_approval":
+        raise HTTPException(status_code=400, detail="Only pending approval orders can be deleted; cancel posted orders instead")
     db.delete(order)
     db.commit()
 
@@ -248,8 +302,31 @@ def create_expense(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+    farm = db.get(Farm, body.farm_id)
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    if current_user.role_id != 6 and farm.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Access denied to farm")
+    if body.batch_id:
+        batch = _ensure_batch_access(db, body.batch_id, current_user)
+        if batch.farm_id != body.farm_id:
+            raise HTTPException(status_code=400, detail="Batch does not belong to selected farm")
     expense = Expense(**body.model_dump(), recorded_by=current_user.id)
+    expense.company_id = farm.company_id
     db.add(expense)
+    db.flush()
+    if expense.batch_id:
+        post_batch_expense(
+            batch_id=expense.batch_id,
+            category_code=_expense_category_code(expense.category),
+            amount=float(expense.amount),
+            expense_date=expense.expense_date,
+            db=db,
+            description=expense.description,
+            source_module="LEGACY_EXPENSE",
+            source_ref=str(expense.id),
+            created_by=current_user.id,
+        )
     db.commit()
     db.refresh(expense)
     return expense
@@ -267,8 +344,41 @@ def update_expense(
         raise HTTPException(status_code=404, detail="Expense not found")
     if current_user.role_id != 6 and expense.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "farm_id" in data:
+        farm = db.get(Farm, data["farm_id"])
+        if not farm:
+            raise HTTPException(status_code=404, detail="Farm not found")
+        if current_user.role_id != 6 and farm.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Access denied to farm")
+        expense.company_id = farm.company_id
+    if data.get("batch_id"):
+        batch = _ensure_batch_access(db, data["batch_id"], current_user)
+        target_farm_id = data.get("farm_id", expense.farm_id)
+        if batch.farm_id != target_farm_id:
+            raise HTTPException(status_code=400, detail="Batch does not belong to selected farm")
+    void_batch_expenses_by_source(
+        db,
+        "LEGACY_EXPENSE",
+        str(expense.id),
+        "Legacy expense updated",
+        voided_by=current_user.id,
+    )
+    for field, value in data.items():
         setattr(expense, field, value)
+    db.flush()
+    if expense.batch_id:
+        post_batch_expense(
+            batch_id=expense.batch_id,
+            category_code=_expense_category_code(expense.category),
+            amount=float(expense.amount),
+            expense_date=expense.expense_date,
+            db=db,
+            description=expense.description,
+            source_module="LEGACY_EXPENSE",
+            source_ref=str(expense.id),
+            created_by=current_user.id,
+        )
     db.commit()
     db.refresh(expense)
     return expense
@@ -285,6 +395,13 @@ def delete_expense(
         raise HTTPException(status_code=404, detail="Expense not found")
     if current_user.role_id != 6 and expense.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    void_batch_expenses_by_source(
+        db,
+        "LEGACY_EXPENSE",
+        str(expense.id),
+        "Legacy expense deleted",
+        voided_by=current_user.id,
+    )
     db.delete(expense)
     db.commit()
 

@@ -73,10 +73,12 @@ def get_harvest_pnl(
         raise HTTPException(status_code=404, detail="No harvest record for this batch")
 
     exp_rows = db.execute(text("""
-        SELECT category, SUM(amount) AS total
-        FROM expenses
-        WHERE batch_id = :batch_id
-        GROUP BY category
+        SELECT ec.code AS category, SUM(be.amount) AS total
+        FROM batch_expenses be
+        JOIN expense_categories ec ON be.category_id = ec.id
+        WHERE be.batch_id = :batch_id
+          AND be.is_voided = FALSE
+        GROUP BY ec.code
     """), {"batch_id": batch_id}).mappings().all()
     expense_detail = {r["category"]: float(r["total"]) for r in exp_rows}
 

@@ -854,8 +854,13 @@ class BatchRevenue(Base):
     price_per_kg   = Column(Numeric(10, 4), nullable=True)
     description    = Column(String(500), nullable=True)
     sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=True)
+    source_module  = Column(String(30), nullable=True)
+    source_ref     = Column(String(50), nullable=True)
     buyer_id       = Column(Integer, ForeignKey("buyers.id"), nullable=True)
     is_voided      = Column(Boolean, nullable=False, default=False)
+    void_reason    = Column(String(255), nullable=True)
+    voided_by      = Column(Integer, ForeignKey("users.id"), nullable=True)
+    voided_at      = Column(DateTime, nullable=True)
     created_by     = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at     = Column(DateTime, default=func.now())
 
