@@ -372,6 +372,37 @@ def run_startup_migrations():
                 INDEX idx_br_date  (revenue_date)
             ) ENGINE=InnoDB CHARACTER SET utf8mb4
         """))
+        conn.execute(text("""
+            INSERT INTO batch_expenses (
+                batch_id, house_id, category_id, expense_date, amount,
+                qty, unit, unit_cost, description, source_module, source_ref, is_voided
+            )
+            SELECT
+                b.id,
+                b.house_id,
+                ec.id,
+                b.placed_date,
+                ROUND(b.initial_count * b.chick_cost_per_head, 2),
+                b.initial_count,
+                'birds',
+                b.chick_cost_per_head,
+                CONCAT('Chick purchase - ', b.initial_count, ' birds @ ', b.chick_cost_per_head, '/head'),
+                'BATCH',
+                CAST(b.id AS CHAR),
+                FALSE
+            FROM batches b
+            JOIN expense_categories ec ON ec.code = 'CHICK'
+            WHERE b.chick_cost_per_head IS NOT NULL
+              AND b.chick_cost_per_head > 0
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM batch_expenses be
+                  JOIN expense_categories bec ON bec.id = be.category_id
+                  WHERE be.batch_id = b.id
+                    AND be.is_voided = FALSE
+                    AND bec.code = 'CHICK'
+              )
+        """))
         _safe_add_column(conn, "ALTER TABLE batch_revenues ADD COLUMN source_module VARCHAR(30) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE batch_revenues ADD COLUMN source_ref VARCHAR(50) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE batch_revenues ADD COLUMN void_reason VARCHAR(255) DEFAULT NULL")

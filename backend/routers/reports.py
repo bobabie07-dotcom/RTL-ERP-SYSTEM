@@ -131,6 +131,23 @@ def farm_finances(
         WHERE b.farm_id = :fid AND YEAR(fi.issue_date) = :yr
     """), {"fid": farm_id, "yr": year}).scalar()
 
+    uncaptured_chick_cost = db.execute(text("""
+        SELECT COALESCE(SUM(b.initial_count * b.chick_cost_per_head), 0)
+        FROM batches b
+        WHERE b.farm_id = :fid
+          AND b.chick_cost_per_head IS NOT NULL
+          AND b.chick_cost_per_head > 0
+          AND YEAR(b.placed_date) = :yr
+          AND NOT EXISTS (
+              SELECT 1
+              FROM batch_expenses be
+              JOIN expense_categories ec ON ec.id = be.category_id
+              WHERE be.batch_id = b.id
+                AND be.is_voided = FALSE
+                AND ec.code = 'CHICK'
+          )
+    """), {"fid": farm_id, "yr": year}).scalar()
+
     active = db.execute(text("""
         SELECT COUNT(*) AS cnt,
                COALESCE(SUM(b.initial_count), 0) AS initial_birds
@@ -172,21 +189,24 @@ def farm_finances(
 
     total_rev = float(rev)
     feed_cost = float(feed_exp)
-    batch_expense_total = sum(float(r["amount"] or 0) for r in category_rows)
+    missing_chick_cost = float(uncaptured_chick_cost or 0)
+    batch_expense_total = sum(float(r["amount"] or 0) for r in category_rows) + missing_chick_cost
+    chick_cost = sum(float(r["amount"] or 0) for r in category_rows if r["code"] == "CHICK") + missing_chick_cost
     mortality_loss = sum(float(r["amount"] or 0) for r in category_rows if r["code"] == "MORTALITY_LOSS")
-    other_batch_expenses = batch_expense_total - mortality_loss
+    other_batch_expenses = batch_expense_total - mortality_loss - chick_cost
     total_exp = batch_expense_total + feed_cost
     deaths = int(mortality)
     initial = int(active["initial_birds"])
     placed = int(placed_year or 0)
-    cost_per_active_bird = (total_exp / initial) if initial > 0 else 0
+    live_birds = int(current_birds or 0)
+    cost_per_active_bird = (total_exp / live_birds) if live_birds > 0 else 0
     cost_per_placed_bird = (total_exp / placed) if placed > 0 else 0
-    estimated_mortality_cost = deaths * cost_per_active_bird
+    estimated_mortality_cost = deaths * cost_per_placed_bird
 
     return {
         "year": year,
         "active_batches": int(active["cnt"]),
-        "active_birds": int(current_birds or 0),
+        "active_birds": live_birds,
         "initial_birds": initial,
         "placed_birds_year": placed,
         "total_mortality": deaths,
@@ -196,7 +216,9 @@ def farm_finances(
         "revenue": round(total_rev, 2),
         "feed_cost": round(feed_cost, 2),
         "feed_used_kg": round(float(feed_kg), 2),
+        "chick_cost": round(chick_cost, 2),
         "batch_expenses": round(batch_expense_total, 2),
+        "uncaptured_chick_cost": round(missing_chick_cost, 2),
         "other_batch_expenses": round(other_batch_expenses, 2),
         "expenses": round(total_exp, 2),
         "gross_profit": round(total_rev - total_exp, 2),
@@ -204,6 +226,10 @@ def farm_finances(
         "cost_per_placed_bird": round(cost_per_placed_bird, 2),
         "by_category": [
             {"code": "FEED", "name": "Feed Consumption Cost", "amount": round(feed_cost, 2)},
+            *(
+                [{"code": "CHICK_UNPOSTED", "name": "Chick Purchase Cost (from batch records)", "amount": round(missing_chick_cost, 2)}]
+                if missing_chick_cost > 0 else []
+            ),
             *[
                 {"code": r["code"], "name": r["name"], "amount": round(float(r["amount"] or 0), 2)}
                 for r in category_rows

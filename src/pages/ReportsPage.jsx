@@ -257,13 +257,16 @@ function FinancialTable({ data }) {
     { label: 'Gross Profit', value: fmt(data.gross_profit), tone: data.gross_profit >= 0 ? 'success' : 'danger' },
     { label: 'Feed Consumption Cost', value: fmt(data.feed_cost), tone: 'danger' },
     { label: 'Feed Used', value: `${parseFloat(data.feed_used_kg||0).toLocaleString()} kg`, tone: 'neutral' },
+    { label: 'Chick Purchase Cost', value: fmt(data.chick_cost), tone: 'danger' },
     { label: 'Mortality Money Loss', value: fmt(data.mortality_loss ?? data.mortality_cost), tone: 'danger' },
     { label: 'Estimated Mortality Exposure', value: fmt(data.estimated_mortality_cost), tone: 'warning' },
+    { label: 'Unposted Chick Cost Included', value: fmt(data.uncaptured_chick_cost), tone: data.uncaptured_chick_cost > 0 ? 'warning' : 'neutral' },
     { label: 'Other Batch Expenses', value: fmt(data.other_batch_expenses), tone: 'danger' },
     { label: 'Total Mortalities', value: `${parseInt(data.total_mortality||0).toLocaleString()} birds`, tone: 'neutral' },
     { label: 'Active Birds', value: `${parseInt(data.active_birds||0).toLocaleString()} birds`, tone: 'neutral' },
+    { label: 'Placed Birds This Year', value: `${parseInt(data.placed_birds_year||0).toLocaleString()} birds`, tone: 'neutral' },
     { label: 'Cost / Active Bird', value: fmt(data.cost_per_active_bird), tone: 'neutral' },
-    { label: 'Cost / Placed Bird', value: fmt(data.cost_per_placed_bird), tone: 'neutral' },
+    { label: 'Cost / Placed Bird This Year', value: fmt(data.cost_per_placed_bird), tone: 'neutral' },
   ];
   const categoryRows = data.by_category || [];
   const sourceRows = data.by_source || [];

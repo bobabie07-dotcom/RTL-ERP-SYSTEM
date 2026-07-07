@@ -15,9 +15,31 @@ from schemas.schemas import (
     BreedOut, DailyLogCreate, DailyLogOut, DailyLogUpdate, FarmOut, HouseOut,
 )
 from sync_helpers import cleanup_sentinel_on_log_delete, sync_log_to_mortality
-from utils import post_batch_expense
+from utils import post_batch_expense, void_batch_expenses_by_source
 
 router = APIRouter(prefix="/batches", tags=["batches"])
+
+
+def _post_chick_cost(batch: Batch, db: Session, created_by: int | None = None):
+    if not batch.chick_cost_per_head or float(batch.chick_cost_per_head) <= 0:
+        return None
+    total_chick_cost = float(batch.chick_cost_per_head) * int(batch.initial_count or 0)
+    if total_chick_cost <= 0:
+        return None
+    return post_batch_expense(
+        batch_id=batch.id,
+        category_code="CHICK",
+        amount=total_chick_cost,
+        expense_date=batch.placed_date,
+        db=db,
+        qty=batch.initial_count,
+        unit="birds",
+        unit_cost=float(batch.chick_cost_per_head),
+        description=f"Chick purchase - {batch.initial_count} birds @ {batch.chick_cost_per_head}/head",
+        source_module="BATCH",
+        source_ref=str(batch.id),
+        created_by=created_by,
+    )
 
 
 @router.get("", response_model=list[BatchSummaryRow])
@@ -77,25 +99,10 @@ def create_batch(
     db.flush()
 
     # Auto-post chick purchase cost
-    if body.chick_cost_per_head and float(body.chick_cost_per_head) > 0:
-        try:
-            total_chick_cost = float(body.chick_cost_per_head) * body.initial_count
-            post_batch_expense(
-                batch_id=batch.id,
-                category_code="CHICK",
-                amount=total_chick_cost,
-                expense_date=body.placed_date,
-                db=db,
-                qty=body.initial_count,
-                unit="birds",
-                unit_cost=float(body.chick_cost_per_head),
-                description=f"Chick purchase — {body.initial_count} birds @ {body.chick_cost_per_head}/head",
-                source_module="BATCH",
-                source_ref=str(batch.id),
-                created_by=current_user.id,
-            )
-        except Exception:
-            logger.warning("post_batch_expense failed for chick cost on batch %s", batch.id, exc_info=True)
+    try:
+        _post_chick_cost(batch, db, current_user.id)
+    except Exception:
+        logger.warning("post_batch_expense failed for chick cost on batch %s", batch.id, exc_info=True)
 
     db.commit()
     db.refresh(batch)
@@ -136,8 +143,30 @@ def update_batch(
         raise HTTPException(status_code=404, detail="Batch not found")
     if current_user.role_id != 6 and batch.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    before = {
+        "chick_cost_per_head": batch.chick_cost_per_head,
+        "initial_count": batch.initial_count,
+        "placed_date": batch.placed_date,
+    }
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(batch, field, value)
+    after = {
+        "chick_cost_per_head": batch.chick_cost_per_head,
+        "initial_count": batch.initial_count,
+        "placed_date": batch.placed_date,
+    }
+    if before != after:
+        void_batch_expenses_by_source(
+            db,
+            "BATCH",
+            str(batch.id),
+            "Batch placement/chick cost updated",
+            voided_by=current_user.id,
+        )
+        try:
+            _post_chick_cost(batch, db, current_user.id)
+        except Exception:
+            logger.warning("post_batch_expense failed for updated chick cost on batch %s", batch.id, exc_info=True)
     db.commit()
     db.refresh(batch)
     return batch
