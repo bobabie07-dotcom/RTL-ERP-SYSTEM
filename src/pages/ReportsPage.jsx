@@ -1,9 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/data/Card';
 import { Button } from '../components/core/Button';
 import { feedApi, reportsApi } from '../api/client';
 import { useFarm } from '../context/FarmContext';
+import { useAuth } from '../context/AuthContext';
 import Icons from '../icons';
 
 const I = Icons;
@@ -363,40 +364,21 @@ function renderResult(id, data, navigate) {
   return null;
 }
 
-// ── Print styles injected into <head> ─────────────────────────────────────────
-const PRINT_STYLE = `
-@media print {
-  body * { visibility: hidden !important; }
-  #report-print-area, #report-print-area * { visibility: visible !important; }
-  #report-print-area {
-    position: fixed !important;
-    top: 0 !important; left: 0 !important;
-    width: 100% !important;
-    padding: 32px 40px !important;
-    background: white !important;
-    z-index: 99999 !important;
-  }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 6px 10px; font-size: 11pt; }
-  th { border-bottom: 2px solid #ccc; }
-  td { border-bottom: 1px solid #eee; }
-}
-`;
-
 // ── Main component ────────────────────────────────────────────────────────────
 const RANGES = ['This month', 'Last month', 'Last 3 months', 'Last 6 months', 'This year'];
 
 export default function ReportsPage() {
   const { farms, farmId } = useFarm();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const farmName = farms.find(f => f.id === farmId)?.name || 'Farm';
+  const generatedBy = user?.full_name || user?.email || 'System User';
 
   const [selected, setSelected] = useState(null);
   const [range,    setRange]    = useState(RANGES[0]);
   const [loading,  setLoading]  = useState(false);
   const [result,   setResult]   = useState(null);
   const [generatedAt, setGeneratedAt] = useState(null);
-  const printRef = useRef(null);
 
   const report = REPORTS.find(r => r.id === selected);
 
@@ -425,14 +407,14 @@ export default function ReportsPage() {
   }
 
   function handlePrint() {
-    // Inject print style if not present
-    if (!document.getElementById('report-print-style')) {
-      const s = document.createElement('style');
-      s.id = 'report-print-style';
-      s.textContent = PRINT_STYLE;
-      document.head.appendChild(s);
-    }
+    const prev = document.title;
+    document.title = report?.title || 'Report';
+    document.body.dataset.printOrientation = ['comparison', 'feedStandard', 'financial'].includes(selected) ? 'landscape' : 'auto';
     window.print();
+    setTimeout(() => {
+      document.title = prev;
+      delete document.body.dataset.printOrientation;
+    }, 500);
   }
 
   function handleCsv() {
@@ -447,7 +429,7 @@ export default function ReportsPage() {
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      <div className="no-print" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Reports & Analytics</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Select a report, choose a date range, and generate.</p>
@@ -461,7 +443,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Report selector */}
-      <div className="rpt-select-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div className="rpt-select-grid no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         {REPORTS.map(rc => {
           const Glyph = I[rc.icon];
           const isSelected = selected === rc.id;
@@ -491,7 +473,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Controls */}
-      <Card>
+      <Card className="no-print">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-strong)', minWidth: 120 }}>
             {report ? report.title : 'Select a report above'}
@@ -516,7 +498,7 @@ export default function ReportsPage() {
       {(result || loading) && (
         <Card>
           {/* Printable area */}
-          <div id="report-print-area" ref={printRef}>
+          <div id="report-print-area">
             {/* Print header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 16, borderBottom: '2px solid #16a34a' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -530,6 +512,7 @@ export default function ReportsPage() {
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-strong)' }}>{report?.title}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Period: {rangeLabel}</div>
                 {generatedAt && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Generated: {generatedAt.toLocaleString('en-PH')}</div>}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Generated By: {generatedBy}</div>
               </div>
             </div>
 

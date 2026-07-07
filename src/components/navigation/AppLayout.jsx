@@ -5,6 +5,7 @@ import { Topbar } from './Topbar';
 import { IconButton } from '../core/IconButton';
 import { Avatar } from '../core/Avatar';
 import { Badge } from '../core/Badge';
+import { PrintPageFooter } from '../core/PrintButton';
 import { useAuth } from '../../context/AuthContext';
 import { useFarm } from '../../context/FarmContext';
 import { alertsApi } from '../../api/client';
@@ -308,6 +309,7 @@ export function AppLayout({ children }) {
               </button>
             </div>
           ) : children}
+          <PrintPageFooter />
         </div>
       </div>
 

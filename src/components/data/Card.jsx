@@ -6,9 +6,9 @@ import React from 'react';
  * Optional title row with a right-aligned `action` node (e.g. a Select or
  * "View All" link).
  */
-export function Card({ title, subtitle, action, children, padding = 24, style = {}, bodyStyle = {} }) {
+export function Card({ title, subtitle, action, children, padding = 24, style = {}, bodyStyle = {}, className = '' }) {
   return (
-    <section style={{
+    <section className={`card-root ${className}`.trim()} style={{
       background: 'var(--surface-card)',
       border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)',

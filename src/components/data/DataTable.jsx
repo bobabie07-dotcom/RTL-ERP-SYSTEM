@@ -7,10 +7,10 @@ import { EmptyState } from '../core/EmptyState';
  * header label, key, optional align and a render(row) for custom cells
  * (badges, currency, actions). Hairline row dividers, gray-50 hover.
  */
-export function DataTable({ columns = [], rows = [], rowKey = 'id', style = {} }) {
+export function DataTable({ columns = [], rows = [], rowKey = 'id', style = {}, className = '' }) {
   return (
-    <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', ...style }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)' }}>
+    <div className={`data-table-wrap ${className}`.trim()} style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', ...style }}>
+      <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)' }}>
         <thead>
           <tr>
             {columns.map((c) => (

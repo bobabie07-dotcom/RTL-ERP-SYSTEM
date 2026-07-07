@@ -1,70 +1,179 @@
+.print-only {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 14mm 12mm 16mm;
+}
+
+@page landscape-page {
+  size: A4 landscape;
+  margin: 12mm 10mm 14mm;
+}
+
 @media print {
-  /* ── Hide UI chrome ─────────────────────────────────────────────────────── */
-  .no-print { display: none !important; }
-
-  /* ── Show print-only elements ───────────────────────────────────────────── */
-  .print-only { display: block !important; }
-
-  /* ── Page setup ─────────────────────────────────────────────────────────── */
-  @page { margin: 1.5cm 1.5cm 2cm; }
-
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  html, body {
+  html,
+  body {
+    width: auto !important;
+    min-width: 0 !important;
     height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #111827 !important;
+  }
+
+  body[data-print-orientation="landscape"] {
+    page: landscape-page;
+  }
+
+  body[data-print-orientation="auto"] table:has(th:nth-child(8)) {
+    page: landscape-page;
+  }
+
+  .no-print,
+  nav,
+  aside,
+  button,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [data-no-print="true"] {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .app-shell,
+  .page-content,
+  main,
+  section,
+  article {
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
     overflow: visible !important;
     background: #fff !important;
   }
 
-  /* ── App shell — override flex/overflow so content flows normally ──────── */
-  .app-shell {
-    display: block !important;
-    height: auto !important;
-    overflow: visible !important;
+  .app-shell > * {
+    transform: none !important;
   }
 
-  .page-content {
-    overflow: visible !important;
-    height: auto !important;
+  .print-document-header {
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
-  /* ── Cards ───────────────────────────────────────────────────────────────── */
+  .print-document-footer {
+    display: flex !important;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 18px;
+    padding-top: 8px;
+    border-top: 1px solid #d1d5db;
+    font-size: 9pt;
+    color: #6b7280;
+  }
+
   .card-root {
     box-shadow: none !important;
-    border: 1px solid #e5e7eb !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 0 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 10mm !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  .card-root header {
+    break-after: avoid;
+    page-break-after: avoid;
+    border-bottom: 1px solid #d1d5db !important;
+  }
+
+  .stat-grid {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  /* ── Tables ──────────────────────────────────────────────────────────────── */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    page-break-inside: auto;
+  .data-table-wrap,
+  [style*="overflow-x"],
+  [style*="overflowX"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
   }
 
-  thead { display: table-header-group; }
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+    font-size: 9pt !important;
+  }
 
-  tr { page-break-inside: avoid; page-break-after: auto; }
+  thead {
+    display: table-header-group;
+  }
 
-  th, td {
-    border: 1px solid #e5e7eb;
-    padding: 6px 10px;
-    font-size: 11pt;
-    text-align: left;
+  tfoot {
+    display: table-footer-group;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  th,
+  td {
+    border: 1px solid #d1d5db !important;
+    padding: 5px 7px !important;
+    color: #111827 !important;
+    vertical-align: top !important;
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: anywhere !important;
+    font-size: 9pt !important;
+    line-height: 1.25 !important;
+    background: transparent !important;
+    position: static !important;
+    box-shadow: none !important;
   }
 
   th {
-    background: #f9fafb !important;
-    font-weight: 700;
+    background: #f3f4f6 !important;
+    font-weight: 700 !important;
   }
 
-  /* ── Stat cards — keep on one line ──────────────────────────────────────── */
-  .stat-grid { break-inside: avoid; page-break-inside: avoid; }
+  img,
+  svg,
+  canvas {
+    max-width: 100% !important;
+    height: auto !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 
-  /* ── Charts — allow page break before if needed ─────────────────────────── */
-  .chart-split { page-break-before: auto; }
+  a {
+    color: #111827 !important;
+    text-decoration: none !important;
+  }
+
+  .chart-split {
+    page-break-before: auto;
+  }
 }
