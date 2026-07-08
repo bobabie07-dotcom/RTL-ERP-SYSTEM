@@ -89,7 +89,7 @@ def post_batch_expense(
         ).first()
         if existing:
             return existing
-    if source_module in {"BATCH", "MAINTENANCE", "VACCINATION", "HEALTH_EVENT", "LEGACY_EXPENSE"} and source_ref:
+    if source_module in {"BATCH", "MAINTENANCE", "VACCINATION", "HEALTH_EVENT", "LEGACY_EXPENSE", "PROCUREMENT"} and source_ref:
         existing = db.query(BatchExpense).filter(
             BatchExpense.source_module == source_module,
             BatchExpense.source_ref == str(source_ref),

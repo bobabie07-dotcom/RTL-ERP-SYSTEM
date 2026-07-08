@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -9,7 +9,7 @@ from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Batch, Farm, InventoryItem, InventoryMovement, PurchaseOrder, PurchaseOrderItem, Supplier
+from models import Batch, BatchExpense, Farm, InventoryItem, InventoryMovement, PurchaseOrder, PurchaseOrderItem, Supplier
 from routers.auth import get_current_user, require_permission
 from utils import check_and_create_inventory_alerts, post_batch_expense
 from schemas.schemas import (
@@ -21,7 +21,7 @@ from schemas.schemas import (
 router = APIRouter(prefix="/procurement", tags=["procurement"])
 
 
-# ── Suppliers ────────────────────────────────────────────────────────────────
+# Suppliers
 
 def _ensure_farm_access(db: Session, farm_id: int, current_user) -> Farm:
     farm = db.get(Farm, farm_id)
@@ -54,6 +54,66 @@ def _ensure_item_access(db: Session, item_id: int, farm_id: int, current_user) -
     return item
 
 
+def _po_expense_source_ref(po: PurchaseOrder, item_key: str | int) -> str:
+    return f"{po.po_no or f'PO-{po.id}'}:{item_key}"
+
+
+def _post_po_item_expense(
+    db: Session,
+    po: PurchaseOrder,
+    *,
+    item_id: int,
+    qty: float,
+    unit_price: float,
+    item_key: str | int,
+    created_by: int | None = None,
+):
+    if not po.batch_id:
+        return None
+    amount = float(qty or 0) * float(unit_price or 0)
+    if amount <= 0:
+        return None
+    inv_item = db.get(InventoryItem, item_id)
+    item_name = inv_item.name if inv_item else f"Item #{item_id}"
+    supplier_name = po.supplier.name if po.supplier else "Unknown supplier"
+    sync_date = date.today()
+    return post_batch_expense(
+        batch_id=po.batch_id,
+        category_code="PURCHASE",
+        amount=amount,
+        expense_date=sync_date,
+        db=db,
+        qty=float(qty or 0),
+        unit=inv_item.unit if inv_item else None,
+        unit_cost=float(unit_price or 0),
+        description=(
+            f"{po.po_no or f'PO-{po.id}'} | {supplier_name} | {item_name} | "
+            f"Qty {float(qty or 0):g} @ {float(unit_price or 0):.2f} | Synced {sync_date.isoformat()}"
+        ),
+        source_module="PROCUREMENT",
+        source_ref=_po_expense_source_ref(po, item_key),
+        created_by=created_by,
+    )
+
+
+def _void_po_batch_expenses(db: Session, po: PurchaseOrder, reason: str, voided_by: int | None = None) -> int:
+    po_key = po.po_no or f"PO-{po.id}"
+    rows = db.query(BatchExpense).filter(
+        BatchExpense.source_module == "PROCUREMENT",
+        BatchExpense.is_voided == False,
+        or_(
+            BatchExpense.source_ref == po_key,
+            BatchExpense.source_ref.like(f"{po_key}:%"),
+        ),
+    ).all()
+    for row in rows:
+        row.is_voided = True
+        row.void_reason = reason
+        row.voided_by = voided_by
+        row.voided_at = datetime.utcnow()
+    return len(rows)
+
+
 @router.get("/suppliers", response_model=list[SupplierOut])
 def list_suppliers(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     q = db.query(Supplier).filter(Supplier.is_active == True)
@@ -75,7 +135,7 @@ def create_supplier(
     return supplier
 
 
-# ── Purchase Orders ───────────────────────────────────────────────────────────
+# Purchase Orders
 
 _PO_ROW_SQL = """
     SELECT po.id, po.po_no, po.order_date, po.expected_date,
@@ -291,6 +351,7 @@ def reject_purchase_order(
     po.rejection_reason = body.rejection_reason
     po.approved_by      = current_user.id
     po.approved_at      = datetime.utcnow()
+    _void_po_batch_expenses(db, po, "Purchase order rejected", current_user.id)
     db.commit()
     return _fetch_po_row(db, po_id)
 
@@ -308,11 +369,11 @@ def delete_purchase_order(
         raise HTTPException(status_code=404, detail="Purchase order not found")
     if po.status not in ("pending_approval", "cancelled"):
         raise HTTPException(status_code=400, detail="Only pending approval or cancelled purchase orders can be deleted")
+    _void_po_batch_expenses(db, po, "Purchase order deleted", current_user.id)
     for item in db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all():
         db.delete(item)
     db.delete(po)
     db.commit()
-
 
 @router.post("/orders/{po_id}/receive", response_model=PurchaseOrderRow)
 def receive_purchase_order(
@@ -357,27 +418,16 @@ def receive_purchase_order(
             try:
                 posted = 0
                 for po_item in db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all():
-                    item_amount = float(po_item.qty_ordered) * float(po_item.unit_price or 0)
-                    if item_amount <= 0:
-                        continue
-                    inv_item = db.get(InventoryItem, po_item.item_id)
-                    item_name = inv_item.name if inv_item else f"Item #{po_item.item_id}"
-                    result = post_batch_expense(
-                        batch_id=po.batch_id,
-                        category_code="PURCHASE",
-                        amount=item_amount,
-                        expense_date=po.order_date,
-                        db=db,
+                    result = _post_po_item_expense(
+                        db,
+                        po,
+                        item_id=po_item.item_id,
                         qty=float(po_item.qty_ordered),
-                        unit_cost=float(po_item.unit_price or 0),
-                        description=f"{item_name} via {po.po_no}",
-                        source_module="PROCUREMENT",
-                        source_ref=po.po_no,
+                        unit_price=float(po_item.unit_price or 0),
+                        item_key=f"ITEM:{po_item.id}",
                         created_by=current_user.id,
                     )
-                    if result is None:
-                        logger.warning("PURCHASE category missing — expense not posted for %s item %s", po.po_no, po_item.item_id)
-                    else:
+                    if result is not None:
                         posted += 1
                 if posted > 0:
                     logger.info("Posted %d PURCHASE expense(s) to batch %s from %s", posted, po.batch_id, po.po_no)
@@ -412,7 +462,7 @@ def sync_inventory_from_po(
     if existing_movement:
         raise HTTPException(status_code=409, detail="Purchase order is already synced to inventory")
 
-    for it in body.items:
+    for idx, it in enumerate(body.items, start=1):
         if not it.item_id or float(it.qty_ordered) <= 0:
             continue
         inv_item = _ensure_item_access(db, it.item_id, po.farm_id, current_user)
@@ -428,5 +478,15 @@ def sync_inventory_from_po(
             notes=f"Backfilled from {po.po_no}",
             created_by=current_user.id,
         ))
+        if po.batch_id:
+            _post_po_item_expense(
+                db,
+                po,
+                item_id=it.item_id,
+                qty=float(it.qty_ordered),
+                unit_price=float(it.unit_price or 0),
+                item_key=f"SYNC:{idx}:{it.item_id}",
+                created_by=current_user.id,
+            )
 
     db.commit()

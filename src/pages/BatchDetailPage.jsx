@@ -1101,7 +1101,19 @@ export default function BatchDetailPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Badge tone={r.source_module === 'MANUAL' ? 'neutral' : 'info'}>{r.source_module || '—'}</Badge>
                         {r.source_ref && r.source_module !== 'MANUAL' && (
-                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{r.source_ref}</span>
+                          <span
+                            onClick={() => r.source_module === 'PROCUREMENT' && navigate('/sales')}
+                            title={r.source_module === 'PROCUREMENT' ? 'View source purchase order' : undefined}
+                            style={{
+                              fontSize: 11,
+                              color: r.source_module === 'PROCUREMENT' ? 'var(--text-brand)' : 'var(--text-secondary)',
+                              fontWeight: 600,
+                              cursor: r.source_module === 'PROCUREMENT' ? 'pointer' : 'default',
+                              textDecoration: r.source_module === 'PROCUREMENT' ? 'underline' : 'none',
+                            }}
+                          >
+                            {r.source_ref}
+                          </span>
                         )}
                       </div>
                     )},
