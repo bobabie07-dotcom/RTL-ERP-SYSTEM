@@ -277,8 +277,10 @@ def update_purchase_order(
     po = db.get(PurchaseOrder, po_id)
     if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
+    data = body.model_dump(exclude_none=True)
     if po.status not in ("pending_approval", "draft"):
-        raise HTTPException(status_code=400, detail="Only draft or pending approval purchase orders can be edited")
+        if set(data.keys()) - {"batch_id"}:
+            raise HTTPException(status_code=400, detail="Only the linked batch can be edited after ordering")
 
     if body.farm_id is not None:
         new_farm = _ensure_farm_access(db, body.farm_id, current_user)
@@ -299,7 +301,7 @@ def update_purchase_order(
         _ensure_supplier_access(db, body.supplier_id, current_user)
 
     exclude = {"farm_id", "batch_id"}
-    for field, value in body.model_dump(exclude_none=True).items():
+    for field, value in data.items():
         if field not in exclude:
             setattr(po, field, value)
 
@@ -460,7 +462,42 @@ def sync_inventory_from_po(
         InventoryMovement.reference_id == po.id,
     ).first()
     if existing_movement:
-        raise HTTPException(status_code=409, detail="Purchase order is already synced to inventory")
+        if not po.batch_id:
+            raise HTTPException(status_code=409, detail="Purchase order is already synced to inventory. Link a batch first to backfill batch cost.")
+        posted = 0
+        po_items = db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all()
+        if po_items:
+            for po_item in po_items:
+                result = _post_po_item_expense(
+                    db,
+                    po,
+                    item_id=po_item.item_id,
+                    qty=float(po_item.qty_ordered),
+                    unit_price=float(po_item.unit_price or 0),
+                    item_key=f"ITEM:{po_item.id}",
+                    created_by=current_user.id,
+                )
+                if result is not None:
+                    posted += 1
+        else:
+            for idx, it in enumerate(body.items, start=1):
+                if not it.item_id or float(it.qty_ordered) <= 0:
+                    continue
+                result = _post_po_item_expense(
+                    db,
+                    po,
+                    item_id=it.item_id,
+                    qty=float(it.qty_ordered),
+                    unit_price=float(it.unit_price or 0),
+                    item_key=f"SYNC:{idx}:{it.item_id}",
+                    created_by=current_user.id,
+                )
+                if result is not None:
+                    posted += 1
+        if posted == 0:
+            logger.info("No new batch expenses posted for already-synced PO %s", po.po_no)
+        db.commit()
+        return
 
     for idx, it in enumerate(body.items, start=1):
         if not it.item_id or float(it.qty_ordered) <= 0:

@@ -123,10 +123,10 @@ export default function SalesPage() {
     setEditPoSaving(true);
     setEditPoError('');
     try {
-      await procurementApi.updateOrder(editPoTarget.id, {
-        farm_id: Number(editPoFarmId),
-        batch_id: editPoBatchId ? Number(editPoBatchId) : null,
-      });
+      const payload = editPoTarget?.status === 'received'
+        ? { batch_id: editPoBatchId ? Number(editPoBatchId) : null }
+        : { farm_id: Number(editPoFarmId), batch_id: editPoBatchId ? Number(editPoBatchId) : null };
+      await procurementApi.updateOrder(editPoTarget.id, payload);
       const updated = await procurementApi.orders({ farm_id: farmId });
       setPos(updated);
       setEditPoTarget(null);
@@ -514,11 +514,11 @@ export default function SalesPage() {
               <Button variant="ghost" size="sm" onClick={() => navigate('/inventory')} style={{ color: 'var(--text-brand)' }}>View Inventory</Button>
             </>
           )}
-          {(r.status === 'pending_approval' || r.status === 'ordered') && isManager && (
+          {['pending_approval', 'ordered', 'received'].includes(r.status) && isManager && (
             <Button variant="ghost" size="sm" icon={<I.farm w={12} />}
               style={{ color: 'var(--text-brand)' }}
               onClick={() => openEditFarmModal(r)}>
-              Edit Farm
+              Edit Batch
             </Button>
           )}
           {isManager && (
@@ -978,6 +978,7 @@ export default function SalesPage() {
         <FormRow label="Assign to Farm" required>
           <FieldSelect
             value={editPoFarmId}
+            disabled={editPoTarget?.status === 'received'}
             onChange={e => {
               setEditPoFarmId(e.target.value);
               setEditPoBatchId(''); // reset batch selection when farm changes
