@@ -13,7 +13,13 @@ export function AuthProvider({ children }) {
 
     authApi.me()
       .then(setUser)
-      .catch(() => localStorage.removeItem('erp_token'))
+      .catch(err => {
+        // On timeout (cold start) keep the token and let the user retry;
+        // only clear on an actual auth error (401 clears token in client.js already).
+        if (!err.message?.includes('waking up')) {
+          localStorage.removeItem('erp_token');
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 

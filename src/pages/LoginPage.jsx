@@ -59,6 +59,7 @@ export default function LoginPage() {
   const [remember, setRemember]   = useState(false);
   const [error, setError]         = useState('');
   const [loading, setLoading]     = useState(false);
+  const [slowWarn, setSlowWarn]   = useState(false);
   const [showContact, setContact] = useState(false);
 
   const features = [
@@ -70,14 +71,18 @@ export default function LoginPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setSlowWarn(false);
     setLoading(true);
+    const slowTimer = setTimeout(() => setSlowWarn(true), 8000);
     try {
       const me = await login(email, pass);
       window.location.replace(me.is_first_login ? '/change-password' : '/dashboard');
     } catch (err) {
       setError(err.message || 'Invalid credentials');
     } finally {
+      clearTimeout(slowTimer);
       setLoading(false);
+      setSlowWarn(false);
     }
   }
 
@@ -157,8 +162,13 @@ export default function LoginPage() {
             </button>
           </div>
           <Button type="submit" variant="primary" size="lg" fullWidth disabled={loading}>
-            {loading ? 'Signing in...' : 'Login'}
+            {loading ? (slowWarn ? 'Server waking up, please wait…' : 'Signing in...') : 'Login'}
           </Button>
+          {slowWarn && (
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', margin: '-8px 0 0' }}>
+              The server is starting up after inactivity — this may take up to 60 seconds on first login.
+            </p>
+          )}
           <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
             Don't have an account?{' '}
             <button
