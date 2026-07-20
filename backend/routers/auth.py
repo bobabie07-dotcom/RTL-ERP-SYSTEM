@@ -155,7 +155,7 @@ def get_current_user(
             .order_by(Subscription.expires_at.desc())
             .first()
         )
-        if sub and sub.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+        if sub and sub.status == "expired":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Your subscription has expired. Please contact your system administrator.",
