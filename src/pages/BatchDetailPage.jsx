@@ -73,6 +73,7 @@ export default function BatchDetailPage() {
   // Daily log modal
   const [logModal,    setLogModal]    = useState(false);
   const [logForm,     setLogForm]     = useState(BLANK_LOG);
+  const [logBaseline, setLogBaseline] = useState(0); // bird count before today's mortality/culls
   const [logSaving,   setLogSaving]   = useState(false);
   const [logErr,      setLogErr]      = useState('');
   const [editLogId,      setEditLogId]      = useState(null);
@@ -209,6 +210,13 @@ export default function BatchDetailPage() {
   }
 
   // ── Daily Log ──────────────────────────────────────────────────────────────
+  function openNewLog() {
+    setLogForm({ ...BLANK_LOG, current_count: String(batch.current_count || '') });
+    setLogBaseline(batch.current_count || 0);
+    setEditLogId(null);
+    setLogErr('');
+    setLogModal(true);
+  }
   function openEditLog(log) {
     setLogForm({
       log_date:        String(log.log_date),
@@ -218,9 +226,25 @@ export default function BatchDetailPage() {
       culls:           String(log.culls),
       notes:           log.notes || '',
     });
+    // Reconstruct the pre-loss count so editing mortality/culls recalculates correctly
+    setLogBaseline((log.current_count || 0) + (log.mortality_count || 0) + (log.culls || 0));
     setEditLogId(log.id);
     setLogErr('');
     setLogModal(true);
+  }
+  function lfLoss(k) {
+    return e => {
+      const value = e.target.value;
+      setLogForm(p => {
+        const mortality = parseInt(k === 'mortality_count' ? value : p.mortality_count) || 0;
+        const culls     = parseInt(k === 'culls'           ? value : p.culls)           || 0;
+        return {
+          ...p,
+          [k]:             value,
+          current_count:   String(Math.max(0, logBaseline - mortality - culls)),
+        };
+      });
+    };
   }
   async function handleLogSave() {
     if (!logForm.current_count) { setLogErr('Current count is required.'); return; }
@@ -600,7 +624,7 @@ export default function BatchDetailPage() {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <PrintButton title={`Batch: ${batch.batch_no}`} />
-          <Button variant="secondary" size="md" icon={<I.plus w={16} />} onClick={() => { setLogForm({ ...BLANK_LOG, current_count: String(batch.current_count || '') }); setLogErr(''); setEditLogId(null); setLogModal(true); }}>Log Today</Button>
+          <Button variant="secondary" size="md" icon={<I.plus w={16} />} onClick={openNewLog}>Log Today</Button>
           <Button variant="secondary" size="md" icon={<I.syringe w={16} />} onClick={() => { setRecForm(BLANK_EVENT); setRecErr(''); setRecordModal(true); }}>Add Record</Button>
           {batch.status !== 'harvested' && (
             <Button variant="primary" size="md" icon={<I.harvest w={16} />} onClick={openHarvestCreate}>Mark Harvest</Button>
@@ -708,7 +732,7 @@ export default function BatchDetailPage() {
 
       {/* ── Daily Logs ──────────────────────────────────────────────────── */}
       <Card title="Daily Logs" action={
-        <Button variant="secondary" size="sm" icon={<I.plus w={15} />} onClick={() => { setLogForm({ ...BLANK_LOG, current_count: String(batch.current_count || '') }); setLogErr(''); setEditLogId(null); setLogModal(true); }}>
+        <Button variant="secondary" size="sm" icon={<I.plus w={15} />} onClick={openNewLog}>
           Log Today
         </Button>
       }>
@@ -1169,8 +1193,8 @@ export default function BatchDetailPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
           <FormRow label="Date" required><FieldInput type="date" value={logForm.log_date} onChange={lf('log_date')} /></FormRow>
           <FormRow label="Current Bird Count" required><FieldInput type="number" value={logForm.current_count} onChange={lf('current_count')} min="0" /></FormRow>
-          <FormRow label="Mortality Count"><FieldInput type="number" value={logForm.mortality_count} onChange={lf('mortality_count')} min="0" /></FormRow>
-          <FormRow label="Culls"><FieldInput type="number" value={logForm.culls} onChange={lf('culls')} min="0" /></FormRow>
+          <FormRow label="Mortality Count"><FieldInput type="number" value={logForm.mortality_count} onChange={lfLoss('mortality_count')} min="0" /></FormRow>
+          <FormRow label="Culls"><FieldInput type="number" value={logForm.culls} onChange={lfLoss('culls')} min="0" /></FormRow>
           <FormRow label="Avg Weight (grams)"><FieldInput type="number" value={logForm.avg_weight_g} onChange={lf('avg_weight_g')} min="0" step="0.01" placeholder="e.g. 1200.50" /></FormRow>
           <FormRow label="Notes"><FieldInput value={logForm.notes} onChange={lf('notes')} placeholder="Optional…" /></FormRow>
         </div>
