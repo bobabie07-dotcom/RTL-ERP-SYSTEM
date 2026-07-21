@@ -157,7 +157,7 @@ def run_startup_migrations():
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN updated_by INT DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
         _safe_add_column(conn, "ALTER TABLE users ADD COLUMN deleted_at DATETIME DEFAULT NULL")
-        _safe_add_column(conn, "ALTER TABLE users MODIFY COLUMN farm_id SMALLINT NULL")
+        _safe_add_column(conn, "ALTER TABLE users MODIFY COLUMN farm_id SMALLINT UNSIGNED NULL")
         # Roles extended fields
         _safe_add_column(conn, "ALTER TABLE roles ADD COLUMN description VARCHAR(255) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE roles ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1")
