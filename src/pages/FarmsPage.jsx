@@ -255,8 +255,8 @@ export default function FarmsPage() {
               </div>
               <div style={kpiBox}>
                 <span style={kpiLabel}>Total Deaths</span>
-                <span style={{ ...kpiValue, color: 'var(--danger)' }}>{(finances.total_deaths ?? 0).toLocaleString()}</span>
-                <span style={kpiSub}>active batches only</span>
+                <span style={{ ...kpiValue, color: 'var(--danger)' }}>{(finances.total_mortality ?? 0).toLocaleString()}</span>
+                <span style={kpiSub}>year to date</span>
               </div>
               <div style={kpiBox}>
                 <span style={kpiLabel}>Mortality Cost</span>
