@@ -213,6 +213,20 @@ def run_startup_migrations():
         _safe_add_column(conn, "ALTER TABLE purchase_orders ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
         # Allow pending_approval / draft statuses if schema predates them
         _safe_add_column(conn, "ALTER TABLE purchase_orders MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'pending_approval'")
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS purchase_order_audit_logs (
+                id           INT AUTO_INCREMENT PRIMARY KEY,
+                po_id        INT NOT NULL,
+                po_no        VARCHAR(30) DEFAULT NULL,
+                action       VARCHAR(50) NOT NULL,
+                old_value    VARCHAR(255) DEFAULT NULL,
+                new_value    VARCHAR(255) DEFAULT NULL,
+                performed_by INT NOT NULL,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_poal_po    (po_id),
+                INDEX idx_poal_actor (performed_by)
+            ) ENGINE=InnoDB CHARACTER SET utf8mb4
+        """))
         # sales_orders optional columns (may be missing in older installs)
         _safe_add_column(conn, "ALTER TABLE sales_orders ADD COLUMN rejection_reason VARCHAR(500) DEFAULT NULL")
         _safe_add_column(conn, "ALTER TABLE sales_orders ADD COLUMN approved_by INT DEFAULT NULL")

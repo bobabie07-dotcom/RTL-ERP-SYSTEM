@@ -109,7 +109,8 @@ export default function SalesPage() {
   const [editPoBatchId, setEditPoBatchId] = useState('');
   const [editPoSaving, setEditPoSaving] = useState(false);
   const [editPoError,  setEditPoError]  = useState('');
-  const [allCompanyBatches, setAllCompanyBatches] = useState([]);
+  const [editPoActiveBatches,  setEditPoActiveBatches]  = useState([]);
+  const [editPoBatchesLoading, setEditPoBatchesLoading] = useState(false);
 
   function openEditFarmModal(po) {
     setEditPoTarget(po);
@@ -177,6 +178,7 @@ export default function SalesPage() {
   // Delete confirmation modal
   const [delTarget,  setDelTarget]  = useState(null); // { type: 'sale'|'po', id, label }
   const [deleting,   setDeleting]   = useState(false);
+  const [delError,   setDelError]   = useState('');
 
   function loadAll() {
     return Promise.all([
@@ -199,11 +201,20 @@ export default function SalesPage() {
     setLoading(true);
     loadAll().catch(e => setLoadError(e.message || 'Failed to load sales data.')).finally(() => setLoading(false));
     batchesApi.list({ farm_id: farmId }).then(setBatches).catch(() => {});
-    batchesApi.list().then(setAllCompanyBatches).catch(() => {});
     batchesApi.buyers().then(setBuyers).catch(() => {});
     procurementApi.suppliers().then(setSuppliers).catch(() => {});
     loadReceivables();
   }, [farmId]);
+
+  // Dynamically load active batches for the farm selected inside the Edit PO modal
+  useEffect(() => {
+    if (!editPoTarget || !editPoFarmId) { setEditPoActiveBatches([]); return; }
+    setEditPoBatchesLoading(true);
+    batchesApi.list({ farm_id: Number(editPoFarmId), status: 'active' })
+      .then(setEditPoActiveBatches)
+      .catch(() => setEditPoActiveBatches([]))
+      .finally(() => setEditPoBatchesLoading(false));
+  }, [editPoTarget, editPoFarmId]);
 
   useEffect(() => {
     if (tab === 'receivables') loadReceivables();
@@ -396,15 +407,20 @@ export default function SalesPage() {
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
+  function openDeleteConfirm(target) {
+    setDelTarget(target);
+    setDelError('');
+  }
   async function handleDelete() {
     if (!delTarget) return;
     setDeleting(true);
+    setDelError('');
     try {
       if (delTarget.type === 'sale') await salesApi.deleteOrder(delTarget.id);
       else await procurementApi.deleteOrder(delTarget.id);
       await loadAll();
       setDelTarget(null);
-    } catch (err) { setLoadError(err.message || 'Delete failed.'); }
+    } catch (err) { setDelError(err.message || 'Delete failed.'); }
     finally { setDeleting(false); }
   }
 
@@ -467,7 +483,7 @@ export default function SalesPage() {
           {isManager && (
             <Button variant="ghost" size="sm" icon={<I.trash w={12} />}
               style={{ color: 'var(--danger)' }}
-              onClick={() => setDelTarget({ type: 'sale', id: r.id, label: r.order_no })}>
+              onClick={() => openDeleteConfirm({ type: 'sale', id: r.id, label: r.order_no })}>
               Delete
             </Button>
           )}
@@ -521,10 +537,10 @@ export default function SalesPage() {
               Edit Batch
             </Button>
           )}
-          {isManager && (
+          {isManager && !r.batch_id && (
             <Button variant="ghost" size="sm" icon={<I.trash w={12} />}
               style={{ color: 'var(--danger)' }}
-              onClick={() => setDelTarget({ type: 'po', id: r.id, label: r.po_no || `PO-${String(r.id).padStart(6,'0')}` })}>
+              onClick={() => openDeleteConfirm({ type: 'po', id: r.id, label: r.po_no || `PO-${String(r.id).padStart(6,'0')}` })}>
               Delete
             </Button>
           )}
@@ -867,13 +883,14 @@ export default function SalesPage() {
       <Modal
         open={!!delTarget}
         title={`Delete ${delTarget?.type === 'sale' ? 'Sales Order' : 'Purchase Order'}`}
-        onClose={() => setDelTarget(null)}
+        onClose={() => { setDelTarget(null); setDelError(''); }}
         onConfirm={handleDelete}
         confirmLabel="Delete"
         confirmVariant="danger"
         loading={deleting}
         width={420}
       >
+        {delError && <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--danger-bg)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>{delError}</div>}
         <p style={{ margin: 0, fontSize: 14, color: 'var(--text-body)', lineHeight: 1.6 }}>
           Are you sure you want to permanently delete{' '}
           <b style={{ color: 'var(--text-strong)' }}>{delTarget?.label}</b>?
@@ -990,14 +1007,14 @@ export default function SalesPage() {
           </FieldSelect>
         </FormRow>
         <FormRow label="Link to Batch">
-          <FieldSelect value={editPoBatchId} onChange={e => setEditPoBatchId(e.target.value)}>
-            <option value="">No batch (farm-level PO)</option>
-            {allCompanyBatches
-              .filter(b => b.farm_id === Number(editPoFarmId) && ['active', 'harvest_soon'].includes(b.status))
-              .map(b => (
-                <option key={b.id} value={b.id}>{b.batch_no} — {b.house}</option>
-              ))
-            }
+          <FieldSelect value={editPoBatchId} onChange={e => setEditPoBatchId(e.target.value)} disabled={editPoBatchesLoading}>
+            <option value="">No Batch (Farm-level PO)</option>
+            {editPoActiveBatches.length === 0 && !editPoBatchesLoading && (
+              <option value="" disabled>No active batches available</option>
+            )}
+            {editPoActiveBatches.map(b => (
+              <option key={b.id} value={b.id}>{b.batch_no}</option>
+            ))}
           </FieldSelect>
         </FormRow>
       </Modal>

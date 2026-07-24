@@ -668,6 +668,22 @@ class PurchaseOrderItem(Base):
     item:  InventoryItem = relationship("InventoryItem")
 
 
+class PurchaseOrderAuditLog(Base):
+    __tablename__ = "purchase_order_audit_logs"
+
+    # po_id is intentionally not a FK — this log must survive PO deletion.
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    po_id        = Column(Integer, nullable=False)
+    po_no        = Column(String(30), nullable=True)
+    action       = Column(String(50), nullable=False)  # Linked to Batch / Unlinked / Deleted
+    old_value    = Column(String(255), nullable=True)
+    new_value    = Column(String(255), nullable=True)
+    performed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at   = Column(DateTime, default=func.now())
+
+    actor = relationship("User")
+
+
 # ── Sales & Finance ──────────────────────────────────────────────────────────
 
 class Buyer(Base):

@@ -9,12 +9,15 @@ from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Batch, BatchExpense, Farm, InventoryItem, InventoryMovement, PurchaseOrder, PurchaseOrderItem, Supplier
+from models import (
+    Batch, BatchExpense, Farm, InventoryItem, InventoryMovement,
+    PurchaseOrder, PurchaseOrderAuditLog, PurchaseOrderItem, Supplier,
+)
 from routers.auth import get_current_user, require_permission
 from utils import check_and_create_inventory_alerts, post_batch_expense
 from schemas.schemas import (
     ApprovalAction,
-    POItemCreate, PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
+    POItemCreate, PurchaseOrderAuditLogOut, PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
     SupplierCreate, SupplierOut, SyncInventoryPayload,
 )
 
@@ -277,6 +280,7 @@ def update_purchase_order(
     po = db.get(PurchaseOrder, po_id)
     if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
+    fields_set = body.model_fields_set
     data = body.model_dump(exclude_none=True)
     if po.status not in ("pending_approval", "draft"):
         if set(data.keys()) - {"batch_id"}:
@@ -287,15 +291,19 @@ def update_purchase_order(
         po.farm_id = body.farm_id
         po.company_id = new_farm.company_id
 
-    if body.batch_id is not None:
-        new_batch = db.get(Batch, body.batch_id)
-        if not new_batch:
-            raise HTTPException(status_code=404, detail="Batch not found")
-        if new_batch.farm_id != po.farm_id:
-            raise HTTPException(status_code=400, detail="Batch does not belong to selected farm")
-        if current_user.role_id != 6 and new_batch.company_id != current_user.company_id:
-            raise HTTPException(status_code=403, detail="Access denied to batch")
-        po.batch_id = body.batch_id
+    old_batch_id = po.batch_id
+    if "batch_id" in fields_set:
+        if body.batch_id is not None:
+            new_batch = db.get(Batch, body.batch_id)
+            if not new_batch:
+                raise HTTPException(status_code=404, detail="Batch not found")
+            if new_batch.farm_id != po.farm_id:
+                raise HTTPException(status_code=400, detail="Batch does not belong to selected farm")
+            if current_user.role_id != 6 and new_batch.company_id != current_user.company_id:
+                raise HTTPException(status_code=403, detail="Access denied to batch")
+            po.batch_id = body.batch_id
+        else:
+            po.batch_id = None
 
     if body.supplier_id is not None:
         _ensure_supplier_access(db, body.supplier_id, current_user)
@@ -304,6 +312,16 @@ def update_purchase_order(
     for field, value in data.items():
         if field not in exclude:
             setattr(po, field, value)
+
+    if "batch_id" in fields_set and po.batch_id != old_batch_id:
+        db.add(PurchaseOrderAuditLog(
+            po_id=po.id,
+            po_no=po.po_no,
+            action="Linked to Batch" if po.batch_id else "Unlinked",
+            old_value=str(old_batch_id) if old_batch_id else None,
+            new_value=str(po.batch_id) if po.batch_id else None,
+            performed_by=current_user.id,
+        ))
 
     db.commit()
     return _fetch_po_row(db, po_id)
@@ -369,13 +387,49 @@ def delete_purchase_order(
     po = db.get(PurchaseOrder, po_id)
     if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
-    if po.status not in ("pending_approval", "cancelled"):
-        raise HTTPException(status_code=400, detail="Only pending approval or cancelled purchase orders can be deleted")
+    if po.batch_id:
+        raise HTTPException(
+            status_code=400,
+            detail="This Purchase Order cannot be deleted because it is linked to an active batch.",
+        )
     _void_po_batch_expenses(db, po, "Purchase order deleted", current_user.id)
+    db.add(PurchaseOrderAuditLog(
+        po_id=po.id,
+        po_no=po.po_no,
+        action="Deleted",
+        performed_by=current_user.id,
+    ))
     for item in db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po_id).all():
         db.delete(item)
     db.delete(po)
     db.commit()
+
+
+@router.get("/orders/{po_id}/audit-log", response_model=list[PurchaseOrderAuditLogOut])
+def list_po_audit_log(
+    po_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    po = db.get(PurchaseOrder, po_id)
+    if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    rows = (
+        db.query(PurchaseOrderAuditLog)
+        .filter(PurchaseOrderAuditLog.po_id == po_id)
+        .order_by(PurchaseOrderAuditLog.created_at.desc())
+        .all()
+    )
+    return [
+        PurchaseOrderAuditLogOut(
+            id=r.id, po_id=r.po_id, po_no=r.po_no, action=r.action,
+            old_value=r.old_value, new_value=r.new_value, performed_by=r.performed_by,
+            actor_name=r.actor.full_name if r.actor else None,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
 
 @router.post("/orders/{po_id}/receive", response_model=PurchaseOrderRow)
 def receive_purchase_order(

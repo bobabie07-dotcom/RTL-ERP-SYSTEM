@@ -1142,6 +1142,18 @@ class PurchaseOrderRow(BaseModel):
     notes:            Optional[str]
 
 
+class PurchaseOrderAuditLogOut(BaseModel):
+    id:           int
+    po_id:        int
+    po_no:        Optional[str]
+    action:       str
+    old_value:    Optional[str]
+    new_value:    Optional[str]
+    performed_by: int
+    actor_name:   Optional[str] = None
+    created_at:   datetime
+
+
 # ── Batch Finance ─────────────────────────────────────────────────────────────
 
 class BatchExpenseCreate(BaseModel):
