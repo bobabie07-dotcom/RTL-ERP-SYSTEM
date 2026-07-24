@@ -1142,6 +1142,26 @@ class PurchaseOrderRow(BaseModel):
     notes:            Optional[str]
 
 
+class POStatusSummary(BaseModel):
+    total_purchase_orders:       int
+    total_purchase_order_value:  float
+    pending_purchase_orders:     int
+    approved_purchase_orders:    int
+    completed_purchase_orders:   int
+    outstanding_purchase_orders: int
+
+
+class BatchPOSummary(POStatusSummary):
+    batch_id: int
+    batch_no: str
+
+
+class ProcurementSummaryOut(BaseModel):
+    batches:    list[BatchPOSummary]
+    farm_level: POStatusSummary
+    overall:    POStatusSummary
+
+
 class PurchaseOrderAuditLogOut(BaseModel):
     id:           int
     po_id:        int

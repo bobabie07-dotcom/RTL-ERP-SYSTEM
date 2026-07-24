@@ -61,6 +61,7 @@ function TabBar({ active, onChange, overdueCount }) {
   const tabs = [
     { key: 'sales',       label: 'Sales Orders',    icon: <I.sales w={15} /> },
     { key: 'purchase',    label: 'Purchase Orders', icon: <I.procurement w={15} /> },
+    { key: 'po-summary',  label: 'PO Summary',      icon: <I.procurement w={15} /> },
     { key: 'receivables', label: `Receivables${overdueCount > 0 ? ` (${overdueCount})` : ''}`, icon: <I.wallet w={15} /> },
   ];
   return (
@@ -97,6 +98,7 @@ export default function SalesPage() {
   const [buyers,       setBuyers]       = useState([]);
   const [suppliers,    setSuppliers]    = useState([]);
   const [receivables,  setReceivables]  = useState(null);
+  const [poSummary,    setPoSummary]    = useState(null);
   const [recvLoading,  setRecvLoading]  = useState(false);
   // Payment recording modal
   const [payTarget,    setPayTarget]    = useState(null);
@@ -130,6 +132,7 @@ export default function SalesPage() {
       await procurementApi.updateOrder(editPoTarget.id, payload);
       const updated = await procurementApi.orders({ farm_id: farmId });
       setPos(updated);
+      procurementApi.poSummary({ farm_id: farmId }).then(setPoSummary).catch(() => {});
       setEditPoTarget(null);
     } catch (e) {
       setEditPoError(e.message || 'Failed to update Purchase Order.');
@@ -185,10 +188,12 @@ export default function SalesPage() {
       salesApi.orders({ limit: 100, farm_id: farmId }),
       salesApi.summary(farmId),
       procurementApi.orders({ farm_id: farmId }),
-    ]).then(([o, s, p]) => {
+      procurementApi.poSummary({ farm_id: farmId }).catch(() => null),
+    ]).then(([o, s, p, ps]) => {
       setOrders(o || []);
       setSummary(s);
       setPos(p || []);
+      setPoSummary(ps);
     });
   }
 
@@ -637,6 +642,42 @@ export default function SalesPage() {
             </div>
             <DataTable columns={poCols} rows={pos} rowKey="id" />
           </>}
+          {tab === 'po-summary' && (
+            !poSummary ? (
+              <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>Loading procurement summary…</div>
+            ) : (
+              <>
+                <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  Reporting view only — reflects existing Purchase Order data and does not affect batch expenses, inventory, or accounting records.
+                </p>
+
+                <PoSummaryRow label="Overall Procurement Summary" data={poSummary.overall} />
+
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', margin: '20px 0 8px' }}>Per Active Batch</div>
+                {poSummary.batches.length === 0 ? (
+                  <div style={{ padding: '16px 0', color: 'var(--text-muted)', fontSize: 13 }}>No active batches.</div>
+                ) : (
+                  <DataTable
+                    rowKey="batch_id"
+                    rows={poSummary.batches}
+                    columns={[
+                      { key: 'batch_no',                    header: 'Batch Code', strong: true,
+                        render: r => <span onClick={() => navigate(`/batches/${r.batch_id}`)} style={{ color: 'var(--text-brand)', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>{r.batch_no}</span> },
+                      { key: 'total_purchase_orders',       header: 'Total POs', align: 'right' },
+                      { key: 'total_purchase_order_value',  header: 'Total PO Value', align: 'right', render: r => fmt(r.total_purchase_order_value) },
+                      { key: 'pending_purchase_orders',     header: 'Pending', align: 'right' },
+                      { key: 'approved_purchase_orders',    header: 'Approved', align: 'right' },
+                      { key: 'completed_purchase_orders',   header: 'Completed/Received', align: 'right' },
+                      { key: 'outstanding_purchase_orders', header: 'Outstanding', align: 'right' },
+                    ]}
+                  />
+                )}
+
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', margin: '20px 0 8px' }}>Farm-Level Purchase Orders (Unlinked)</div>
+                <PoSummaryRow label={null} data={poSummary.farm_level} />
+              </>
+            )
+          )}
           {tab === 'receivables' && (
             recvLoading ? (
               <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>Loading receivables…</div>
@@ -1018,6 +1059,30 @@ export default function SalesPage() {
           </FieldSelect>
         </FormRow>
       </Modal>
+    </div>
+  );
+}
+
+function PoSummaryRow({ label, data }) {
+  const cards = [
+    { key: 'total_purchase_orders',       label: 'Total POs',    value: data.total_purchase_orders },
+    { key: 'total_purchase_order_value',  label: 'Total Value',  value: fmt(data.total_purchase_order_value) },
+    { key: 'pending_purchase_orders',     label: 'Pending',      value: data.pending_purchase_orders },
+    { key: 'approved_purchase_orders',    label: 'Approved',     value: data.approved_purchase_orders },
+    { key: 'completed_purchase_orders',   label: 'Completed',    value: data.completed_purchase_orders },
+    { key: 'outstanding_purchase_orders', label: 'Outstanding',  value: data.outstanding_purchase_orders },
+  ];
+  return (
+    <div>
+      {label && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>{label}</div>}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {cards.map(c => (
+          <div key={c.key} style={{ padding: '10px 16px', background: 'var(--surface-raised,rgba(0,0,0,.03))', borderRadius: 8, minWidth: 130 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{c.label}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>{c.value}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -16,8 +16,9 @@ from models import (
 from routers.auth import get_current_user, require_permission
 from utils import check_and_create_inventory_alerts, post_batch_expense
 from schemas.schemas import (
-    ApprovalAction,
-    POItemCreate, PurchaseOrderAuditLogOut, PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
+    ApprovalAction, BatchPOSummary,
+    POItemCreate, POStatusSummary, ProcurementSummaryOut,
+    PurchaseOrderAuditLogOut, PurchaseOrderCreate, PurchaseOrderRow, PurchaseOrderUpdate,
     SupplierCreate, SupplierOut, SyncInventoryPayload,
 )
 
@@ -97,6 +98,29 @@ def _post_po_item_expense(
         source_ref=_po_expense_source_ref(po, item_key),
         created_by=created_by,
     )
+
+
+def _po_has_postings(db: Session, po: PurchaseOrder) -> bool:
+    """True once a PO has generated inventory receipts, expense records, or accounting entries.
+    Used to freeze batch linkage and block deletion per the batch-linking data-integrity rules."""
+    if po.status in ("received", "partial"):
+        return True
+    has_movement = db.query(InventoryMovement).filter(
+        InventoryMovement.reference_type == "purchase",
+        InventoryMovement.reference_id == po.id,
+    ).first() is not None
+    if has_movement:
+        return True
+    po_key = po.po_no or f"PO-{po.id}"
+    has_expense = db.query(BatchExpense).filter(
+        BatchExpense.source_module == "PROCUREMENT",
+        BatchExpense.is_voided == False,
+        or_(
+            BatchExpense.source_ref == po_key,
+            BatchExpense.source_ref.like(f"{po_key}:%"),
+        ),
+    ).first() is not None
+    return has_expense
 
 
 def _void_po_batch_expenses(db: Session, po: PurchaseOrder, reason: str, voided_by: int | None = None) -> int:
@@ -208,6 +232,66 @@ def list_purchase_orders(
     return [PurchaseOrderRow(**dict(r)) for r in rows]
 
 
+def _po_bucket_summary(orders: list[PurchaseOrder]) -> dict:
+    return {
+        "total_purchase_orders":       len(orders),
+        "total_purchase_order_value":  float(sum(float(o.total_amount or 0) for o in orders)),
+        "pending_purchase_orders":     sum(1 for o in orders if o.status in ("draft", "pending_approval")),
+        "approved_purchase_orders":    sum(1 for o in orders if o.status == "ordered"),
+        "completed_purchase_orders":   sum(1 for o in orders if o.status == "received"),
+        "outstanding_purchase_orders": sum(1 for o in orders if o.status not in ("received", "cancelled")),
+    }
+
+
+@router.get("/po-summary", response_model=ProcurementSummaryOut)
+def get_po_summary(
+    farm_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Read-only procurement reporting: PO totals per active batch plus a separate
+    farm-level (unlinked) bucket. Does not touch expenses, inventory, or accounting."""
+    if current_user.role_id not in (1, 5, 6):
+        farm_id = current_user.farm_id
+        if not farm_id:
+            empty = POStatusSummary(**_po_bucket_summary([]))
+            return ProcurementSummaryOut(batches=[], farm_level=empty, overall=empty)
+
+    batch_q = db.query(Batch).filter(Batch.status == "active")
+    if current_user.role_id != 6:
+        batch_q = batch_q.filter(Batch.company_id == current_user.company_id)
+    if farm_id:
+        batch_q = batch_q.filter(Batch.farm_id == farm_id)
+    active_batches = batch_q.order_by(Batch.batch_no).all()
+    active_batch_ids = {b.id for b in active_batches}
+
+    po_q = db.query(PurchaseOrder)
+    if current_user.role_id != 6:
+        po_q = po_q.filter(PurchaseOrder.company_id == current_user.company_id)
+    if farm_id:
+        po_q = po_q.filter(PurchaseOrder.farm_id == farm_id)
+    all_pos = po_q.all()
+
+    by_batch: dict[int, list[PurchaseOrder]] = {bid: [] for bid in active_batch_ids}
+    farm_level_pos: list[PurchaseOrder] = []
+    for po in all_pos:
+        if po.batch_id and po.batch_id in active_batch_ids:
+            by_batch[po.batch_id].append(po)
+        elif po.batch_id is None:
+            farm_level_pos.append(po)
+        # POs linked to a non-active (e.g. harvested) batch are out of scope for this dashboard
+
+    batches_out = [
+        BatchPOSummary(batch_id=b.id, batch_no=b.batch_no, **_po_bucket_summary(by_batch[b.id]))
+        for b in active_batches
+    ]
+    farm_level_out = POStatusSummary(**_po_bucket_summary(farm_level_pos))
+    overall_pos = [po for group in by_batch.values() for po in group] + farm_level_pos
+    overall_out = POStatusSummary(**_po_bucket_summary(overall_pos))
+
+    return ProcurementSummaryOut(batches=batches_out, farm_level=farm_level_out, overall=overall_out)
+
+
 @router.post("/orders", response_model=PurchaseOrderRow, status_code=status.HTTP_201_CREATED)
 def create_purchase_order(
     body: PurchaseOrderCreate,
@@ -292,6 +376,12 @@ def update_purchase_order(
         po.company_id = new_farm.company_id
 
     old_batch_id = po.batch_id
+    if "batch_id" in fields_set and body.batch_id != old_batch_id and _po_has_postings(db, po):
+        raise HTTPException(
+            status_code=400,
+            detail="This Purchase Order's linked batch cannot be changed because it has already generated "
+                   "inventory receipts, expense records, or accounting entries.",
+        )
     if "batch_id" in fields_set:
         if body.batch_id is not None:
             new_batch = db.get(Batch, body.batch_id)
@@ -387,10 +477,11 @@ def delete_purchase_order(
     po = db.get(PurchaseOrder, po_id)
     if not po or (current_user.role_id != 6 and po.company_id != current_user.company_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
-    if po.batch_id:
+    if _po_has_postings(db, po):
         raise HTTPException(
             status_code=400,
-            detail="This Purchase Order cannot be deleted because it is linked to an active batch.",
+            detail="This Purchase Order cannot be deleted because it has already generated inventory "
+                   "receipts, expense records, or accounting entries.",
         )
     _void_po_batch_expenses(db, po, "Purchase order deleted", current_user.id)
     db.add(PurchaseOrderAuditLog(

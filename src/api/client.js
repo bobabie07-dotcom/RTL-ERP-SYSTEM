@@ -184,6 +184,7 @@ export const procurementApi = {
   receiveOrder:    (id)          => post(`/api/procurement/orders/${id}/receive`),
   syncInventory:   (id, items)   => post(`/api/procurement/orders/${id}/sync-inventory`, { items }),
   deleteOrder:     (id)          => del(`/api/procurement/orders/${id}`),
+  poSummary:       (params)      => get('/api/procurement/po-summary', params),
 };
 
 export const alertsApi = {
