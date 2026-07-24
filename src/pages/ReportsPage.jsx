@@ -14,6 +14,7 @@ const REPORTS = [
   { id: 'pnl',        title: 'Batch P&L',           description: 'Revenue, feed cost, expenses, and gross profit per batch.', icon: 'batch',     color: 'var(--green-500)', bg: 'var(--green-50)' },
   { id: 'feed',       title: 'Feed Efficiency',      description: 'FCR, total feed consumption, and cost analysis per batch.', icon: 'feed',      color: 'var(--warning)',   bg: 'var(--warning-bg)' },
   { id: 'feedStandard', title: 'Feed Standard Variance', description: 'Expected feed, actual releases, variance, alerts, and feed cost by batch.', icon: 'feed', color: 'var(--info)', bg: 'var(--info-bg)' },
+  { id: 'reconciliation', title: 'ERP Reconciliation', description: 'Find missing or duplicate sync postings across procurement, finance, sales, feed, and mortality.', icon: 'reports', color: 'var(--danger)', bg: 'var(--danger-bg)' },
   { id: 'mortality',  title: 'Mortality Analysis',   description: 'Mortality trends and cause breakdown for the period.', icon: 'mortality', color: 'var(--danger)',    bg: 'var(--danger-bg)' },
   { id: 'monthly',    title: 'Monthly Summary',      description: 'KPIs, revenue, feed, and mortality overview for the month.', icon: 'reports',   color: 'var(--info)',      bg: 'var(--info-bg)' },
   { id: 'inventory',  title: 'Inventory Snapshot',   description: 'Stock levels, low-stock items, and reorder recommendations.', icon: 'inventory', color: 'var(--viz-labor)', bg: 'var(--info-bg)' },
@@ -196,6 +197,75 @@ function FeedStandardTable({ rows, navigate }) {
         </tr>
       </tbody>
     </table>
+  );
+}
+
+function ReconciliationReport({ data, navigate }) {
+  const issues = data?.issues || [];
+  const badge = (severity) => {
+    const color = severity === 'danger' ? 'var(--danger)' : severity === 'warning' ? 'var(--warning)' : 'var(--info)';
+    const bg = severity === 'danger' ? 'var(--danger-bg)' : severity === 'warning' ? 'var(--warning-bg)' : 'var(--info-bg)';
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 8px', borderRadius: 999, background: bg, color, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
+        {severity}
+      </span>
+    );
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+        <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--surface-page)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Total Issues</div>
+          <div style={{ marginTop: 4, fontSize: 22, color: 'var(--text-strong)', fontWeight: 800 }}>{data?.total_issues ?? 0}</div>
+        </div>
+        <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--danger-bg)' }}>
+          <div style={{ fontSize: 11, color: 'var(--danger)', fontWeight: 700, textTransform: 'uppercase' }}>Critical</div>
+          <div style={{ marginTop: 4, fontSize: 22, color: 'var(--danger)', fontWeight: 800 }}>{data?.danger_count ?? 0}</div>
+        </div>
+        <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--warning-bg)' }}>
+          <div style={{ fontSize: 11, color: 'var(--warning)', fontWeight: 700, textTransform: 'uppercase' }}>Warnings</div>
+          <div style={{ marginTop: 4, fontSize: 22, color: 'var(--warning)', fontWeight: 800 }}>{data?.warning_count ?? 0}</div>
+        </div>
+      </div>
+
+      {!issues.length ? (
+        <div style={{ padding: '28px 0', textAlign: 'center', color: 'var(--success)', fontSize: 14, fontWeight: 700 }}>No reconciliation issues found.</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <TH>Severity</TH>
+              <TH>Module</TH>
+              <TH>Check</TH>
+              <TH>Source</TH>
+              <TH>Batch</TH>
+              <TH>Issue</TH>
+              <TH right>Expected</TH>
+              <TH right>Actual</TH>
+              <TH right>Diff</TH>
+              <TH>Recommended Action</TH>
+            </tr>
+          </thead>
+          <tbody>
+            {issues.map((r, i) => (
+              <tr key={`${r.module}-${r.check}-${r.source_ref}-${i}`}>
+                <TD>{badge(r.severity)}</TD>
+                <TD strong>{r.module}</TD>
+                <TD>{r.check}</TD>
+                <TD>{r.source_ref || 'N/A'}</TD>
+                <TD>{r.batch_id ? <BatchLink id={r.batch_id} name={r.batch_no || `Batch #${r.batch_id}`} navigate={navigate} /> : 'N/A'}</TD>
+                <TD>{r.message}</TD>
+                <TD right>{r.expected_amount == null ? 'N/A' : fmt(r.expected_amount)}</TD>
+                <TD right>{r.actual_amount == null ? 'N/A' : fmt(r.actual_amount)}</TD>
+                <TD right tone={r.difference == null ? 'neutral' : Math.abs(parseFloat(r.difference || 0)) > 0.05 ? 'warning' : 'success'}>{r.difference == null ? 'N/A' : fmt(r.difference)}</TD>
+                <TD>{r.action || 'Review the source record.'}</TD>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }
 
@@ -396,6 +466,7 @@ function renderResult(id, data, navigate) {
   if (id === 'pnl')        return <PnlTable rows={data} navigate={navigate} />;
   if (id === 'feed')       return <FeedTable rows={data} navigate={navigate} />;
   if (id === 'feedStandard') return <FeedStandardTable rows={data} navigate={navigate} />;
+  if (id === 'reconciliation') return <ReconciliationReport data={data} navigate={navigate} />;
   if (id === 'mortality')  return <MortalityTable rows={data} navigate={navigate} />;
   if (id === 'monthly')    return <MonthlySummaryCards data={data} />;
   if (id === 'inventory')  return <InventoryTable rows={data} />;
@@ -430,6 +501,7 @@ export default function ReportsPage() {
       const { year, month } = resolveRange(range);
       let data;
       if (selected === 'pnl')             data = await reportsApi.batchPnl(farmId);
+      else if (selected === 'reconciliation') data = await reportsApi.reconciliation(farmId);
       else if (selected === 'feed')        data = await reportsApi.feedConsumption({ farm_id: farmId });
       else if (selected === 'feedStandard') data = await feedApi.standardReport({ farm_id: farmId, ...resolveFeedStandardRange(range) });
       else if (selected === 'mortality')   data = await reportsApi.mortalityAnalysis({ farm_id: farmId });
@@ -449,7 +521,7 @@ export default function ReportsPage() {
   function handlePrint() {
     const prev = document.title;
     document.title = report?.title || 'Report';
-    document.body.dataset.printOrientation = ['comparison', 'feedStandard', 'financial'].includes(selected) ? 'landscape' : 'auto';
+    document.body.dataset.printOrientation = ['comparison', 'feedStandard', 'financial', 'reconciliation'].includes(selected) ? 'landscape' : 'auto';
     window.print();
     setTimeout(() => {
       document.title = prev;
@@ -459,7 +531,8 @@ export default function ReportsPage() {
 
   function handleCsv() {
     if (!result || result.error) return;
-    exportCsv(result, `${selected}-report-${farmName.replace(/\s+/g,'-')}.csv`);
+    const payload = selected === 'reconciliation' ? (result.issues || []) : result;
+    exportCsv(payload, `${selected}-report-${farmName.replace(/\s+/g,'-')}.csv`);
   }
 
   const rangeLabel = resolveRange(range).label;

@@ -27,6 +27,321 @@ def _verify_farm_access(farm_id: int, db: Session, current_user):
 FALLBACK_FEED_PRICE = 25.0  # ₱/kg
 
 
+def _issue(
+    *,
+    severity: str,
+    module: str,
+    check: str,
+    message: str,
+    source_ref: str | None = None,
+    batch_id: int | None = None,
+    batch_no: str | None = None,
+    expected_amount: float | None = None,
+    actual_amount: float | None = None,
+    action: str | None = None,
+):
+    difference = None
+    if expected_amount is not None and actual_amount is not None:
+        difference = round(float(actual_amount or 0) - float(expected_amount or 0), 2)
+    return {
+        "severity": severity,
+        "module": module,
+        "check": check,
+        "source_ref": source_ref,
+        "batch_id": batch_id,
+        "batch_no": batch_no,
+        "message": message,
+        "expected_amount": round(float(expected_amount), 2) if expected_amount is not None else None,
+        "actual_amount": round(float(actual_amount), 2) if actual_amount is not None else None,
+        "difference": difference,
+        "action": action,
+    }
+
+
+@router.get("/reconciliation")
+def reconciliation_report(
+    farm_id: int = Query(1),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    farm_id = _verify_farm_access(farm_id, db, current_user)
+    issues = []
+
+    po_rows = db.execute(text("""
+        SELECT
+            po.id,
+            COALESCE(po.po_no, CONCAT('PO-', po.id)) AS po_no,
+            po.batch_id,
+            b.batch_no,
+            COALESCE(po_items.expected_amount, po.total_amount, 0) AS expected_amount,
+            COALESCE(po_exp.actual_amount, 0) AS actual_amount,
+            COALESCE(inv_mov.movement_count, 0) AS movement_count
+        FROM purchase_orders po
+        JOIN batches b ON b.id = po.batch_id
+        LEFT JOIN (
+            SELECT po_id, SUM(qty_ordered * unit_price) AS expected_amount
+            FROM purchase_order_items
+            GROUP BY po_id
+        ) po_items ON po_items.po_id = po.id
+        LEFT JOIN (
+            SELECT reference_id, COUNT(*) AS movement_count
+            FROM inventory_movements
+            WHERE reference_type = 'purchase'
+            GROUP BY reference_id
+        ) inv_mov ON inv_mov.reference_id = po.id
+        LEFT JOIN (
+            SELECT po.id AS po_id, SUM(be.amount) AS actual_amount
+            FROM purchase_orders po
+            JOIN batch_expenses be
+              ON be.source_module = 'PROCUREMENT'
+             AND be.is_voided = FALSE
+             AND (
+                be.source_ref COLLATE utf8mb4_unicode_ci = COALESCE(po.po_no, CONCAT('PO-', po.id)) COLLATE utf8mb4_unicode_ci
+                OR be.source_ref COLLATE utf8mb4_unicode_ci LIKE CONCAT(COALESCE(po.po_no, CONCAT('PO-', po.id)) COLLATE utf8mb4_unicode_ci, ':%')
+             )
+            GROUP BY po.id
+        ) po_exp ON po_exp.po_id = po.id
+        WHERE po.farm_id = :fid
+          AND po.batch_id IS NOT NULL
+          AND (po.status = 'received' OR COALESCE(inv_mov.movement_count, 0) > 0)
+        HAVING actual_amount = 0 OR ABS(expected_amount - actual_amount) > 0.05
+        ORDER BY po.order_date DESC, po.id DESC
+    """), {"fid": farm_id}).mappings().all()
+    for r in po_rows:
+        expected = float(r["expected_amount"] or 0)
+        actual = float(r["actual_amount"] or 0)
+        issues.append(_issue(
+            severity="danger" if actual == 0 else "warning",
+            module="Procurement",
+            check="PO batch expense",
+            source_ref=r["po_no"],
+            batch_id=r["batch_id"],
+            batch_no=r["batch_no"],
+            message=(
+                f"{r['po_no']} is linked to {r['batch_no']} but the posted batch expense "
+                f"{'is missing' if actual == 0 else 'does not match the PO total'}."
+            ),
+            expected_amount=expected,
+            actual_amount=actual,
+            action="Open the PO and Sync Inventory again to backfill the batch expense.",
+        ))
+
+    orphan_procurement = db.execute(text("""
+        SELECT be.id, be.batch_id, b.batch_no, be.source_ref, be.amount
+        FROM batch_expenses be
+        JOIN batches b ON b.id = be.batch_id
+        LEFT JOIN purchase_orders po
+          ON COALESCE(po.po_no, CONCAT('PO-', po.id)) COLLATE utf8mb4_unicode_ci = SUBSTRING_INDEX(be.source_ref, ':', 1) COLLATE utf8mb4_unicode_ci
+        WHERE b.farm_id = :fid
+          AND be.source_module = 'PROCUREMENT'
+          AND be.is_voided = FALSE
+          AND po.id IS NULL
+        ORDER BY be.created_at DESC
+    """), {"fid": farm_id}).mappings().all()
+    for r in orphan_procurement:
+        issues.append(_issue(
+            severity="warning",
+            module="Procurement",
+            check="Orphan batch expense",
+            source_ref=r["source_ref"],
+            batch_id=r["batch_id"],
+            batch_no=r["batch_no"],
+            message="A procurement batch expense exists but its source PO cannot be found.",
+            actual_amount=float(r["amount"] or 0),
+            action="Review the batch expense source reference and void it if the PO was removed.",
+        ))
+
+    sales_rows = db.execute(text("""
+        SELECT
+            so.id,
+            so.order_no,
+            so.batch_id,
+            b.batch_no,
+            so.qty_kg * so.price_per_kg AS expected_amount,
+            COALESCE(SUM(br.amount), 0) AS actual_amount
+        FROM sales_orders so
+        JOIN batches b ON b.id = so.batch_id
+        LEFT JOIN batch_revenues br
+          ON br.sales_order_id = so.id
+         AND br.is_voided = FALSE
+        WHERE b.farm_id = :fid
+          AND so.status NOT IN ('pending_approval', 'cancelled')
+        GROUP BY so.id, so.order_no, so.batch_id, b.batch_no, so.qty_kg, so.price_per_kg
+        HAVING actual_amount = 0 OR ABS(expected_amount - actual_amount) > 0.05
+        ORDER BY so.order_date DESC, so.id DESC
+    """), {"fid": farm_id}).mappings().all()
+    for r in sales_rows:
+        actual = float(r["actual_amount"] or 0)
+        issues.append(_issue(
+            severity="danger" if actual == 0 else "warning",
+            module="Sales",
+            check="Sales batch revenue",
+            source_ref=r["order_no"],
+            batch_id=r["batch_id"],
+            batch_no=r["batch_no"],
+            message=(
+                f"{r['order_no']} is posted but the batch revenue "
+                f"{'is missing' if actual == 0 else 'does not match the sales amount'}."
+            ),
+            expected_amount=float(r["expected_amount"] or 0),
+            actual_amount=actual,
+            action="Review the sales order status; cancel/reapprove or backfill revenue if needed.",
+        ))
+
+    mortality_rows = db.execute(text("""
+        SELECT m.id, m.batch_id, b.batch_no, m.count, m.record_date
+        FROM mortality_records m
+        JOIN batches b ON b.id = m.batch_id
+        LEFT JOIN batch_expenses be
+          ON be.mortality_record_id = m.id
+         AND be.is_voided = FALSE
+        WHERE b.farm_id = :fid
+          AND be.id IS NULL
+        ORDER BY m.record_date DESC, m.id DESC
+        LIMIT 200
+    """), {"fid": farm_id}).mappings().all()
+    for r in mortality_rows:
+        issues.append(_issue(
+            severity="warning",
+            module="Mortality",
+            check="Mortality loss posting",
+            source_ref=str(r["id"]),
+            batch_id=r["batch_id"],
+            batch_no=r["batch_no"],
+            message=f"Mortality record #{r['id']} has {r['count']} deaths but no active mortality loss expense.",
+            action="Open the mortality record and save it again to repost the loss.",
+        ))
+
+    chick_rows = db.execute(text("""
+        SELECT
+            b.id AS batch_id,
+            b.batch_no,
+            b.initial_count * b.chick_cost_per_head AS expected_amount,
+            COALESCE(SUM(be.amount), 0) AS actual_amount
+        FROM batches b
+        LEFT JOIN batch_expenses be
+          ON be.batch_id = b.id
+         AND be.is_voided = FALSE
+         AND be.source_module = 'BATCH'
+         AND be.source_ref COLLATE utf8mb4_unicode_ci = CONCAT('CHICK:', b.id) COLLATE utf8mb4_unicode_ci
+        WHERE b.farm_id = :fid
+          AND b.chick_cost_per_head IS NOT NULL
+          AND b.chick_cost_per_head > 0
+        GROUP BY b.id, b.batch_no, b.initial_count, b.chick_cost_per_head
+        HAVING actual_amount = 0 OR ABS(expected_amount - actual_amount) > 0.05
+        ORDER BY b.placed_date DESC
+    """), {"fid": farm_id}).mappings().all()
+    for r in chick_rows:
+        issues.append(_issue(
+            severity="warning",
+            module="Batch",
+            check="Chick cost posting",
+            source_ref=f"CHICK:{r['batch_id']}",
+            batch_id=r["batch_id"],
+            batch_no=r["batch_no"],
+            message=f"{r['batch_no']} has chick cost per head but the posted chick cost is missing or different.",
+            expected_amount=float(r["expected_amount"] or 0),
+            actual_amount=float(r["actual_amount"] or 0),
+            action="Open the batch and save the chick cost fields to repost the batch cost.",
+        ))
+
+    duplicate_expenses = db.execute(text("""
+        SELECT
+            be.source_module,
+            be.source_ref,
+            MIN(be.batch_id) AS batch_id,
+            MIN(b.batch_no) AS batch_no,
+            COUNT(*) AS row_count,
+            SUM(be.amount) AS total_amount
+        FROM batch_expenses be
+        JOIN batches b ON b.id = be.batch_id
+        WHERE b.farm_id = :fid
+          AND be.is_voided = FALSE
+          AND be.source_module IS NOT NULL
+          AND be.source_ref IS NOT NULL
+        GROUP BY be.source_module, be.source_ref
+        HAVING COUNT(*) > 1
+        ORDER BY row_count DESC, total_amount DESC
+    """), {"fid": farm_id}).mappings().all()
+    for r in duplicate_expenses:
+        issues.append(_issue(
+            severity="danger",
+            module="Finance",
+            check="Duplicate active expense",
+            source_ref=f"{r['source_module']}:{r['source_ref']}",
+            batch_id=r["batch_id"],
+            batch_no=r["batch_no"],
+            message=f"{r['row_count']} active expense rows share the same source reference.",
+            actual_amount=float(r["total_amount"] or 0),
+            action="Void the duplicate row and keep only one active source posting.",
+        ))
+
+    duplicate_revenues = db.execute(text("""
+        SELECT
+            COALESCE(source_module, 'SALES_ORDER') AS source_module,
+            COALESCE(source_ref, CAST(sales_order_id AS CHAR)) AS source_ref,
+            MIN(batch_id) AS batch_id,
+            MIN(b.batch_no) AS batch_no,
+            COUNT(*) AS row_count,
+            SUM(amount) AS total_amount
+        FROM batch_revenues br
+        JOIN batches b ON b.id = br.batch_id
+        WHERE b.farm_id = :fid
+          AND br.is_voided = FALSE
+          AND (br.sales_order_id IS NOT NULL OR (br.source_module IS NOT NULL AND br.source_ref IS NOT NULL))
+        GROUP BY COALESCE(source_module, 'SALES_ORDER'), COALESCE(source_ref, CAST(sales_order_id AS CHAR))
+        HAVING COUNT(*) > 1
+        ORDER BY row_count DESC, total_amount DESC
+    """), {"fid": farm_id}).mappings().all()
+    for r in duplicate_revenues:
+        issues.append(_issue(
+            severity="danger",
+            module="Finance",
+            check="Duplicate active revenue",
+            source_ref=f"{r['source_module']}:{r['source_ref']}",
+            batch_id=r["batch_id"],
+            batch_no=r["batch_no"],
+            message=f"{r['row_count']} active revenue rows share the same source reference.",
+            actual_amount=float(r["total_amount"] or 0),
+            action="Void the duplicate row and keep only one active source posting.",
+        ))
+
+    feed_stock_rows = db.execute(text("""
+        SELECT
+            ft.id,
+            ft.name,
+            fs.qty_on_hand_kg AS feed_stock_kg,
+            ii.qty_on_hand AS inventory_qty
+        FROM feed_types ft
+        JOIN feed_stock fs ON fs.feed_type_id = ft.id
+        JOIN inventory_items ii ON ii.id = ft.inventory_item_id
+        WHERE ii.farm_id = :fid
+          AND ABS(COALESCE(fs.qty_on_hand_kg, 0) - COALESCE(ii.qty_on_hand, 0)) > 0.05
+        ORDER BY ft.name
+    """), {"fid": farm_id}).mappings().all()
+    for r in feed_stock_rows:
+        issues.append(_issue(
+            severity="warning",
+            module="Feed",
+            check="Feed stock inventory mismatch",
+            source_ref=str(r["id"]),
+            message=f"{r['name']} feed stock does not match its linked inventory item quantity.",
+            expected_amount=float(r["inventory_qty"] or 0),
+            actual_amount=float(r["feed_stock_kg"] or 0),
+            action="Open Feed Types and save the inventory link to resync feed stock.",
+        ))
+
+    severity_rank = {"danger": 0, "warning": 1, "info": 2}
+    issues.sort(key=lambda row: (severity_rank.get(row["severity"], 9), row["module"], row["check"]))
+    return {
+        "farm_id": farm_id,
+        "total_issues": len(issues),
+        "danger_count": sum(1 for row in issues if row["severity"] == "danger"),
+        "warning_count": sum(1 for row in issues if row["severity"] == "warning"),
+        "issues": issues,
+    }
+
+
 @router.get("/farm-finances")
 def farm_finances(
     farm_id: int = Query(1),

@@ -243,6 +243,7 @@ export const spentHensApi = {
 
 export const reportsApi = {
   batchPnl:          (farm_id)             => get('/api/reports/batch-pnl', { farm_id }),
+  reconciliation:    (farm_id)             => get('/api/reports/reconciliation', { farm_id }),
   feedConsumption:   (params)              => get('/api/reports/feed-consumption', params),
   mortalityAnalysis: (params)              => get('/api/reports/mortality-analysis', params),
   salesPerformance:  (farm_id, year, month) => get('/api/reports/sales-performance', { farm_id, year, month }),
